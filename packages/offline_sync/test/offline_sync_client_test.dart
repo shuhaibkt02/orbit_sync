@@ -166,5 +166,36 @@ void main() {
       // Assert calling close again is safe and idempotent
       await client.close();
     });
+
+    test('Test Case 5: attachConnectivity triggers sync and logs are captured', () async {
+      final logs = <String>[];
+      final loggedClient = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/logged.db',
+        serverUrl: server.baseUrl,
+        onLog: logs.add,
+      );
+      await loggedClient.registerTable('tasks', {'title': 'TEXT'});
+
+      final connectivityController = StreamController<bool>.broadcast();
+      final sub = loggedClient.attachConnectivity(connectivityController.stream);
+
+      // Save an item locally while offline
+      final id = UuidV7.generate();
+      await loggedClient.save(entity: 'tasks', id: id, data: {'title': 'Online trigger task'});
+
+      expect(server.records.containsKey('tasks:$id'), isFalse);
+
+      // Emit connectivity restored
+      connectivityController.add(true);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      // Assert synced automatically upon connectivity event
+      expect(server.records.containsKey('tasks:$id'), isTrue);
+      expect(logs.any((l) => l.contains('Successfully pushed')), isTrue);
+
+      await sub.cancel();
+      await connectivityController.close();
+      await loggedClient.close();
+    });
   });
 }

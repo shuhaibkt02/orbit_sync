@@ -34,6 +34,7 @@ class OfflineSyncClient {
     String? Function(String entity, Map<String, dynamic> record)? validateInvariants,
     int currentSchemaVersion = 1,
     MutationMigrator? migrator,
+    void Function(String message)? onLog,
   }) async {
     final storage = await SyncStorage.open(
       path: databasePath,
@@ -51,6 +52,7 @@ class OfflineSyncClient {
       validateInvariants: validateInvariants,
       currentSchemaVersion: currentSchemaVersion,
       migrator: migrator,
+      onLog: onLog,
     );
 
     return OfflineSyncClient._(
@@ -164,6 +166,30 @@ class OfflineSyncClient {
   }
 
   bool get isPaused => _isPaused;
+
+  /// Listens to [isOnlineStream] and automatically triggers [sync] upon reconnection.
+  StreamSubscription<bool> attachConnectivity(Stream<bool> isOnlineStream) {
+    return isOnlineStream.listen((isOnline) {
+      if (isOnline && !_isPaused) {
+        sync();
+      }
+    });
+  }
+
+  /// Live reactive stream of all mutations that encountered errors during sync
+  /// (e.g. poison pills, validation rejections, or DLQ quarantine).
+  Stream<ResultSet> watchFailedMutations() {
+    return watch(
+      "SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC",
+    );
+  }
+
+  /// Returns all currently failed or quarantined mutations from the outbox.
+  Future<List<Row>> getFailedMutations() async {
+    return query(
+      "SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC",
+    );
+  }
 
   /// Closes database connections and stops periodic timers.
   Future<void> close() async {

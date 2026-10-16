@@ -65,6 +65,7 @@ class SyncWorker {
   /// Current application schema version and lazy upcast migrator
   int currentSchemaVersion;
   MutationMigrator? migrator;
+  final void Function(String message)? onLog;
 
   SyncWorker({
     required this.storage,
@@ -78,6 +79,7 @@ class SyncWorker {
     this.validateInvariants,
     this.currentSchemaVersion = 1,
     this.migrator,
+    this.onLog,
   }) : httpClient = client ?? HttpClient();
 
   /// Gets the last checkpointed cursor from metadata.
@@ -242,10 +244,12 @@ class SyncWorker {
             remaining,
           );
         }
+        onLog?.call('Orbit: Poison pill error (HTTP 400). Quarantined mutation to DLQ: $respBody');
         return SyncPushResult(status: SyncPushStatus.poisonPill, errorMessage: respBody);
       }
 
       if (resp.statusCode == HttpStatus.conflict) {
+        onLog?.call('Orbit: Conflict detected (HTTP 409): $respBody');
         return SyncPushResult(status: SyncPushStatus.conflict, details: bodyJson);
       }
 
@@ -256,6 +260,7 @@ class SyncWorker {
           'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
           [respBody, mutationIds.first],
         );
+        onLog?.call('Orbit: Validation error (HTTP 422). Rolled back active row: $respBody');
         return SyncPushResult(status: SyncPushStatus.validationError, details: bodyJson);
       }
 
@@ -264,6 +269,7 @@ class SyncWorker {
           "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id IN ($placeholders)",
           mutationIds,
         );
+        onLog?.call('Orbit: Successfully pushed ${mutations.length} mutation(s).');
         return SyncPushResult(status: SyncPushStatus.success, applied: mutations.length);
       }
 
@@ -273,6 +279,7 @@ class SyncWorker {
         "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
         mutationIds,
       );
+      onLog?.call('Orbit: Network or push error: $e');
       return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
     }
   }
