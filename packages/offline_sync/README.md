@@ -250,6 +250,24 @@ Fetches incremental delta changes from the server monotonic change feed.
 
 ---
 
+## Design Philosophy: What Was Intentionally Skipped (And Why)
+
+Many Flutter database and sync libraries suffer from dependency bloat, fragile build steps, and native runtime crashes. `offline_sync` was engineered with a strict **lean architecture**:
+
+### 1. Why We Skipped `build_runner` Code Generation
+- **The Problem:** Compiling static model annotations via `build_runner` adds 15–30 seconds of build latency on every edit, frequently corrupts `.dart_tool` build caches, and breaks hot reload workflows.
+- **Our Solution:** Powered by `sqlite_async`, `offline_sync` inspects SQL queries dynamically at runtime and delivers real-time reactive streams (`client.watch()`) with **zero generated code**. Type safety is preserved with zero build latency via standard Dart constructors (`Task.fromRow` / `task.toMap`).
+
+### 2. Why We Skipped Bundled Native Background Schedulers (WorkManager)
+- **The Problem:** If a database library bundles its own native Android `WorkManager` or iOS `BGTaskScheduler` channels, both the main Flutter engine and the native headless background task attempt to initialize and lock the SQLite database file simultaneously, causing fatal `SQLITE_BUSY` database lock crashes.
+- **Our Solution:** We decoupled scheduling from data storage. `offline_sync` runs in WAL mode with connection pooling. Developers pair it with the official [`workmanager`](https://pub.dev/packages/workmanager) package in just 10 lines of code (see [Production Recipes](#production-recipes)), ensuring the main app and background tasks share the database safely without lock conflicts.
+
+### 3. Why We Skipped Bundling an Encrypted Keystore / Keychain
+- **The Problem:** Bundling native Keychain/Keystore wrappers increases binary size, introduces native build failures across platforms, and forces an opinionated auth architecture onto the developer.
+- **Our Solution:** We provide an asynchronous `getAuthToken: () async => ...` callback. Developers plug in [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage), Firebase Auth, or in-memory JWTs in two lines of code without extra package bloat.
+
+---
+
 ## Production Recipes
 
 ### 1. OS Background Sync (Android WorkManager & iOS BGTaskScheduler)
