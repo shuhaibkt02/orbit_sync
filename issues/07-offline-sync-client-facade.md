@@ -10,11 +10,12 @@ A high-level DX client facade (`OfflineSyncClient`) unifying storage, sync worke
 **Blocked by:**
 - 06: Schema Evolution & In-Flight Queued Mutation Upgrades (Challenge 8)
 
-**Status:** in-progress
+**Status:** done
 
 ### Acceptance Criteria & Test Cases:
-- [ ] **One-line Initialization:** `OfflineSyncClient.initialize()` creates storage, system schemas, and sync worker.
-- [ ] **Test Case 1 (Integrated CRUD & Reactivity):** Saving and deleting records updates local tables, appends outbox envelopes, and fires reactive `client.watch()` stream emissions.
-- [ ] **Test Case 2 (Coordinated Bidirectional Sync):** Calling `client.sync()` drains local outbox mutations to the server, then pulls incoming remote changes.
-- [ ] **Test Case 3 (Periodic Sync & Lifecycle Pause/Resume):** Client runs automatic periodic background sync. `pauseSync()` halts periodic execution; `resumeSync()` unpauses it.
-- [ ] **Test Case 4 (Clean Shutdown):** `client.close()` shuts down active background timers, cancels connections, and frees database resources cleanly.
+- [x] **One-line Initialization:** `OfflineSyncClient.initialize()` creates storage, system schemas, and sync worker.
+- [x] **Test Case 1 (Integrated CRUD & Reactivity):** Saving and deleting records updates local tables, appends outbox envelopes, and fires reactive `client.watch()` stream emissions.
+- [x] **Test Case 2 (Coordinated Bidirectional Sync):** Calling `client.sync()` drains local outbox mutations to the server, then pulls incoming remote changes.
+- [x] **Test Case 3 (Periodic Sync & Lifecycle Pause/Resume):** Client runs automatic periodic background sync. `pauseSync()` halts periodic execution; `resumeSync()` unpauses it.
+- [x] **Test Case 4 (Clean Shutdown):** `client.close()` shuts down active background timers, cancels connections, and frees database resources cleanly.
+
