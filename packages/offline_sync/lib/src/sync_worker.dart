@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
+import 'sync_profile.dart';
 
 enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized, needsUpgrade }
 enum SyncPullStatus { success, networkError, expiredCursor, unauthorized }
@@ -51,6 +52,7 @@ class SyncWorker {
   final SyncStorage storage;
   final String serverUrl;
   final HttpClient httpClient;
+  final SyncProfile profile;
   final int pullPageLimit;
   final Map<String, dynamic>? scopeFilter;
   Future<String?> Function()? getAuthToken;
@@ -67,6 +69,7 @@ class SyncWorker {
   SyncWorker({
     required this.storage,
     required this.serverUrl,
+    this.profile = SyncProfile.enterprise,
     HttpClient? client,
     this.pullPageLimit = 50,
     this.scopeFilter,
@@ -99,12 +102,14 @@ class SyncWorker {
   /// Enforces DAG dependencies: selectively holds children if their parent is quarantined in DLQ/conflict.
   Future<SyncPushResult> pushBatch({int batchSize = 10, String? chaos}) async {
     // 0. Automatically unblock any held mutations whose parent has successfully synced
-    await storage.db.execute('''
-      UPDATE _sync_outbox 
-      SET status = 'pending' 
-      WHERE status = 'held' 
-        AND depends_on_mutation_id IN (SELECT mutation_id FROM _sync_outbox WHERE status = 'synced');
-    ''');
+    if (profile == SyncProfile.enterprise) {
+      await storage.db.execute('''
+        UPDATE _sync_outbox 
+        SET status = 'pending' 
+        WHERE status = 'held' 
+          AND depends_on_mutation_id IN (SELECT mutation_id FROM _sync_outbox WHERE status = 'synced');
+      ''');
+    }
 
     // 1. Fetch pending candidates
     final pendingRaw = await storage.db.getAll(
@@ -116,23 +121,25 @@ class SyncWorker {
       return const SyncPushResult(status: SyncPushStatus.success, applied: 0);
     }
 
-    // 2. Selective holding: filter out mutations whose parent is quarantined (dlq/conflict/held)
+    // 2. Selective holding (Enterprise only): filter out mutations whose parent is quarantined (dlq/conflict/held)
     final pending = <Row>[];
     for (final r in pendingRaw) {
-      final parentId = r['depends_on_mutation_id'] as String?;
-      if (parentId != null) {
-        final parentRows = await storage.db.getAll(
-          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
-          [parentId],
-        );
-        if (parentRows.isNotEmpty) {
-          final pStatus = parentRows.first['status'] as String;
-          if (pStatus == 'dlq' || pStatus == 'conflict' || pStatus == 'held') {
-            await storage.db.execute(
-              "UPDATE _sync_outbox SET status = 'held' WHERE mutation_id = ?",
-              [r['mutation_id']],
-            );
-            continue;
+      if (profile == SyncProfile.enterprise) {
+        final parentId = r['depends_on_mutation_id'] as String?;
+        if (parentId != null) {
+          final parentRows = await storage.db.getAll(
+            'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+            [parentId],
+          );
+          if (parentRows.isNotEmpty) {
+            final pStatus = parentRows.first['status'] as String;
+            if (pStatus == 'dlq' || pStatus == 'conflict' || pStatus == 'held') {
+              await storage.db.execute(
+                "UPDATE _sync_outbox SET status = 'held' WHERE mutation_id = ?",
+                [r['mutation_id']],
+              );
+              continue;
+            }
           }
         }
       }
@@ -220,11 +227,12 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.badRequest) {
+        final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
         await storage.db.execute('''
           UPDATE _sync_outbox 
-          SET status = 'dlq', error_details_json = ? 
+          SET status = ?, error_details_json = ? 
           WHERE mutation_id = ?
-        ''', [respBody, mutationIds.first]);
+        ''', [targetStatus, respBody, mutationIds.first]);
 
         if (mutationIds.length > 1) {
           final remaining = mutationIds.sublist(1);
@@ -325,8 +333,20 @@ class SyncWorker {
           if (pendingRows.isEmpty) {
             // No local conflict: directly write remote data
             await _upsertRow(tx, entity, id, remoteData, version, now, null);
+          } else if (profile == SyncProfile.basic) {
+            // Last-Write-Wins (LWW): Remote state overwrites local table; outbox mutation marked conflict
+            await _upsertRow(tx, entity, id, remoteData, version, now, null);
+            await tx.execute('''
+              UPDATE _sync_outbox 
+              SET status = 'conflict', error_details_json = ? 
+              WHERE entity_name = ? AND entity_id = ? AND status = 'pending'
+            ''', [
+              jsonEncode({'title': 'Overwritten by LWW remote change'}),
+              entity,
+              id,
+            ]);
           } else {
-            // Pending local mutation exists: perform 3-way field merge
+            // Standard & Enterprise: 3-way field merge
             final pendingMut = pendingRows.first;
             final mutId = pendingMut['mutation_id'] as String;
             final baseJson = pendingMut['base_snapshot_json'] as String?;

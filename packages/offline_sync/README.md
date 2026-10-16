@@ -21,6 +21,27 @@ You can pair it with any standard HTTP/JSON backend written in Node, Go, Rails, 
 
 ---
 
+## Unified Plugin Profiles
+
+`offline_sync` provides 3 configuration presets to match your application's requirements:
+
+| Profile | Conflict Strategy | Quarantine / DLQ | Queue Dependencies | Best For |
+| :--- | :---: | :---: | :---: | :--- |
+| `SyncProfile.basic` | Last-Write-Wins (LWW) | Simple Retry / Failed | FIFO | Simple single-user offline apps |
+| `SyncProfile.standard` *(Default)* | 3-Way Column Auto-Merge | DLQ (Poison Pill Isolation) | FIFO | Consumer apps with collaborative edits |
+| `SyncProfile.enterprise` | 3-Way Merge + Invariant Hooks | DLQ (Poison Pill Isolation) | Parent-Child DAG Selective Holding | Mission-critical apps with complex relational schemas |
+
+Switch behavior in one line:
+```dart
+final client = await OfflineSyncClient.initialize(
+  databasePath: dbPath,
+  serverUrl: 'https://api.example.com',
+  profile: SyncProfile.enterprise, // or basic / standard
+);
+```
+
+---
+
 ## Installation
 
 Add `offline_sync` to your `pubspec.yaml`:

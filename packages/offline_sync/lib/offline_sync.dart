@@ -5,4 +5,5 @@ export 'src/uuid_v7.dart';
 export 'src/sync_storage.dart';
 export 'src/sync_worker.dart';
 export 'src/offline_sync_client.dart';
+export 'src/sync_profile.dart';
 

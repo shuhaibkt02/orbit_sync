@@ -3,11 +3,13 @@ import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
 import 'uuid_v7.dart';
 import 'sync_storage.dart';
 import 'sync_worker.dart';
+import 'sync_profile.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient {
   final SyncStorage storage;
   final SyncWorker worker;
+  final SyncProfile profile;
   Timer? _periodicTimer;
   Duration _periodicInterval = const Duration(seconds: 30);
   bool _isPaused = false;
@@ -16,12 +18,14 @@ class OfflineSyncClient {
   OfflineSyncClient._({
     required this.storage,
     required this.worker,
+    required this.profile,
   });
 
   /// Initializes storage, outbox schema, connection pools, and sync worker.
   static Future<OfflineSyncClient> initialize({
     required String databasePath,
     required String serverUrl,
+    SyncProfile profile = SyncProfile.standard,
     int maxReaders = 4,
     int pullPageLimit = 50,
     Map<String, dynamic>? scopeFilter,
@@ -39,6 +43,7 @@ class OfflineSyncClient {
     final worker = SyncWorker(
       storage: storage,
       serverUrl: serverUrl,
+      profile: profile,
       pullPageLimit: pullPageLimit,
       scopeFilter: scopeFilter,
       getAuthToken: getAuthToken,
@@ -51,6 +56,7 @@ class OfflineSyncClient {
     return OfflineSyncClient._(
       storage: storage,
       worker: worker,
+      profile: profile,
     );
   }
 
@@ -129,9 +135,14 @@ class OfflineSyncClient {
     }
   }
 
-  /// Starts automatic periodic background syncing.
-  void startPeriodicSync({Duration interval = const Duration(seconds: 30)}) {
-    _periodicInterval = interval;
+  /// Starts automatic periodic background syncing with profile-aware defaults.
+  void startPeriodicSync({Duration? interval}) {
+    final defaultInterval = profile == SyncProfile.basic
+        ? const Duration(seconds: 60)
+        : profile == SyncProfile.standard
+            ? const Duration(seconds: 30)
+            : const Duration(seconds: 15);
+    _periodicInterval = interval ?? defaultInterval;
     _periodicTimer?.cancel();
     _periodicTimer = Timer.periodic(_periodicInterval, (_) {
       if (!_isPaused) {

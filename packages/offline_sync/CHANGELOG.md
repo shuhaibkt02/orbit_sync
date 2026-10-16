@@ -27,5 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Generation swap resync for expired cursors (HTTP 410 Gone).
   - Schema evolution migrators with lazy in-flight mutation upcasting on dequeue (v1 -> v2).
   - Server version floor enforcement on HTTP 426 (`client_too_old`) halting retries cleanly.
+- **Unified Plugin Profiles (`SyncProfile`):**
+  - Added `SyncProfile.basic` (LWW conflict resolution, simple retry, FIFO).
+  - Added `SyncProfile.standard` (3-way column merge, exponential backoff, DLQ).
+  - Added `SyncProfile.enterprise` (DAG selective holding, invariant validation, DLQ, multi-tenant).
 - **Acceptance Test Suite:**
-  - 26 comprehensive automated integration tests covering all distributed synchronization edge cases.
+  - 29 comprehensive automated integration tests covering all distributed synchronization edge cases and profile tiers.
