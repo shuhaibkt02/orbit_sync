@@ -51,6 +51,22 @@ class FakeSyncServer {
         }
 
         if (request.method == 'POST' && path == '/sync/push') {
+          if (chaos == 'unauthorized' || request.headers.value('Authorization') == 'Bearer expired') {
+            _sendJson(request.response, HttpStatus.unauthorized, {
+              'error': 'unauthorized',
+              'detail': 'Access token expired or invalid',
+            });
+            return;
+          }
+
+          if (chaos == 'bad_request') {
+            _sendJson(request.response, HttpStatus.badRequest, {
+              'error': 'bad_request',
+              'detail': 'Malformed mutation envelope',
+            });
+            return;
+          }
+
           if (chaos == 'conflict') {
             _sendJson(request.response, HttpStatus.conflict, {
               'error': 'conflict',
@@ -77,6 +93,14 @@ class FakeSyncServer {
           final dynamic body = bodyStr.isNotEmpty ? jsonDecode(bodyStr) : {};
           final List<dynamic> rawMutations = body is List ? body : (body['mutations'] as List? ?? []);
           final mutations = rawMutations.cast<Map<String, dynamic>>();
+
+          if (mutations.any((m) => m['id'] == 'poison-pill')) {
+            _sendJson(request.response, HttpStatus.badRequest, {
+              'error': 'bad_request',
+              'detail': 'Poison pill rejected by schema validator'
+            });
+            return;
+          }
 
           final idempotencyKey = request.headers.value('Idempotency-Key');
 

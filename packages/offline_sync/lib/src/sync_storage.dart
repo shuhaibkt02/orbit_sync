@@ -217,8 +217,12 @@ class SyncStorage {
     return db.watch(query, parameters: parameters);
   }
 
+  bool _closed = false;
+
   /// Closes database connections.
   Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
     await db.close();
   }
 }
