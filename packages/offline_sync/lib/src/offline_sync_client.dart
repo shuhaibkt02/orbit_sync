@@ -172,3 +172,6 @@ class OfflineSyncClient {
     await storage.close();
   }
 }
+
+/// Friendly alias for [OfflineSyncClient].
+typedef OrbitClient = OfflineSyncClient;
