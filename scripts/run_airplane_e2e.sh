@@ -6,7 +6,9 @@ DEVICE="${DEVICE:-}"
 SERVER="${SYNC_TEST_SERVER:-http://127.0.0.1:8080}"
 MUTATIONS="${MUTATIONS:-50}"
 
-ADB="adb ${DEVICE:+-s $DEVICE}"
+ADB_BIN="${ADB_BIN:-$(which adb 2>/dev/null || echo "$HOME/Library/Android/sdk/platform-tools/adb")}"
+FLUTTER_BIN="${FLUTTER_BIN:-$(which flutter 2>/dev/null || echo "$HOME/development/flutter/bin/flutter")}"
+ADB="$ADB_BIN ${DEVICE:+-s $DEVICE}"
 APP_DIR="packages/offline_sync/example"
 TARGET="integration_test/airplane_mode_test.dart"
 
@@ -19,7 +21,11 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Checking connected Android device"
-$ADB get-state >/dev/null
+if ! $ADB get-state >/dev/null 2>&1; then
+  echo "ERROR: No Android device or emulator detected via $ADB_BIN."
+  echo "Please connect an Android device with USB debugging or launch an emulator, then re-run."
+  exit 1
+fi
 
 echo "==> Resetting app state"
 $ADB shell am force-stop "$PKG" 2>/dev/null || true
@@ -31,7 +37,7 @@ $ADB shell svc data disable 2>/dev/null || true
 sleep 2
 
 echo "==> Phase 1: Queuing $MUTATIONS mutations offline"
-(cd "$APP_DIR" && flutter test "$TARGET" --dart-define=SYNC_TEST_SERVER="$SERVER" ${DEVICE:+-d "$DEVICE"}) || true
+(cd "$APP_DIR" && $FLUTTER_BIN test "$TARGET" --dart-define=SYNC_TEST_SERVER="$SERVER" ${DEVICE:+-d "$DEVICE"}) || true
 
 echo "==> Hard-killing app process via OS"
 $ADB shell am force-stop "$PKG"
@@ -51,7 +57,7 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
-(cd "$APP_DIR" && flutter test "$TARGET" --dart-define=SYNC_TEST_SERVER="$SERVER" ${DEVICE:+-d "$DEVICE"})
+(cd "$APP_DIR" && $FLUTTER_BIN test "$TARGET" --dart-define=SYNC_TEST_SERVER="$SERVER" ${DEVICE:+-d "$DEVICE"})
 
 echo "==> Verifying backend server-side receipt"
 if command -v curl >/dev/null 2>&1; then
