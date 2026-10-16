@@ -122,6 +122,25 @@ class SyncWorker {
     );
   }
 
+  /// Parses Retry-After header supporting both delta-seconds and RFC 7231/9110 HTTP-date.
+  int _parseNextRetryAfter(String? header, int nowMs) {
+    if (header == null || header.trim().isEmpty) {
+      return nowMs + backoffPolicy.delayFor(1).inMilliseconds;
+    }
+    final clean = header.trim();
+    final seconds = int.tryParse(clean);
+    if (seconds != null) {
+      return nowMs + (seconds * 1000);
+    }
+    try {
+      final date = HttpDate.parse(clean);
+      final epochMs = date.millisecondsSinceEpoch;
+      return epochMs > nowMs ? epochMs : nowMs + backoffPolicy.delayFor(1).inMilliseconds;
+    } catch (_) {
+      return nowMs + backoffPolicy.delayFor(1).inMilliseconds;
+    }
+  }
+
   /// Drains up to [batchSize] pending outbox mutations to POST /sync/push.
   /// Enforces DAG dependencies: selectively holds children if their parent is quarantined in DLQ/conflict.
   Future<SyncPushResult> pushBatch({
@@ -288,9 +307,7 @@ class SyncWorker {
             await _handleAuthExpired();
             return const SyncPushResult(status: SyncPushStatus.unauthorized);
           } else if (resp.statusCode == HttpStatus.tooManyRequests) {
-            final retryAfter = resp.headers['retry-after'];
-            final retrySec = int.tryParse(retryAfter ?? '') ?? backoffPolicy.delayFor(1).inSeconds;
-            final nextRetry = nowMs + (retrySec * 1000);
+            final nextRetry = _parseNextRetryAfter(resp.headers['retry-after'], nowMs);
             await storage.db.execute(
               "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id = ?",
               [nextRetry, mutationId],
@@ -303,10 +320,10 @@ class SyncWorker {
                 remIds,
               );
             }
-            onLog?.call('Orbit: Rate limited (HTTP 429). Pausing queue until $nextRetry. Retry-After: $retrySec seconds.');
-            return SyncPushResult(
+            onLog?.call('Orbit: Rate limited (HTTP 429). Pausing queue until $nextRetry.');
+            return const SyncPushResult(
               status: SyncPushStatus.networkError,
-              errorMessage: 'Rate limited (HTTP 429). Retry-After: $retrySec',
+              errorMessage: 'Rate limited (HTTP 429)',
             );
           } else if (resp.statusCode >= 500) {
             final currentRetry = (r['retry_count'] as int?) ?? 0;
@@ -440,17 +457,15 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.tooManyRequests) {
-        final retryAfterHeader = resp.headers['retry-after'];
-        final retrySec = int.tryParse(retryAfterHeader ?? '') ?? backoffPolicy.delayFor(1).inSeconds;
-        final nextRetry = nowMs + (retrySec * 1000);
+        final nextRetry = _parseNextRetryAfter(resp.headers['retry-after'], nowMs);
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id IN ($placeholders)",
           [nextRetry, ...mutationIds],
         );
-        onLog?.call('Orbit: Rate limited (HTTP 429). Pausing batch until $nextRetry. Retry-After: $retrySec seconds.');
-        return SyncPushResult(
+        onLog?.call('Orbit: Rate limited (HTTP 429). Pausing batch until $nextRetry.');
+        return const SyncPushResult(
           status: SyncPushStatus.networkError,
-          errorMessage: 'Rate limited (HTTP 429). Retry-After: $retrySec',
+          errorMessage: 'Rate limited (HTTP 429)',
         );
       }
 

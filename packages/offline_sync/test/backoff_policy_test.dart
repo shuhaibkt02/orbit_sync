@@ -299,5 +299,48 @@ void main() {
       await client.close();
       faultClient.close();
     });
+
+    test('Test 9: Large retry_count (10^6) does not cause integer overflow or negative duration', () {
+      final policy = BackoffPolicy(
+        base: const Duration(seconds: 1),
+        max: const Duration(minutes: 15),
+        jitterFraction: 0,
+      );
+
+      final delay = policy.delayFor(1000000);
+      expect(delay, equals(const Duration(minutes: 15)), reason: 'Exponential shift clamped without overflow');
+      expect(delay.isNegative, isFalse);
+    });
+
+    test('Test 10: HTTP 429 Retry-After in RFC 7231 HTTP-date format correctly parses and sets next_retry_at', () async {
+      final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
+      // HTTP-date 60 seconds into the future
+      final httpDateHeader = HttpDate.format(DateTime.utc(2026, 10, 17, 12, 1, 0));
+
+      final faultClient = FaultInjectionHttpClient(
+        script: [
+          ReturnStatus(429, headers: {'retry-after': httpDateHeader}, body: 'Rate limited'),
+          const ReturnStatus(200, body: '{"status":"ok"}'),
+        ],
+      );
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/http_date_backoff.db',
+        httpClient: faultClient,
+        nowMsProvider: () => clock.millisecondsSinceEpoch,
+      );
+      await client.registerEntity('items', url: 'https://example.com/api/items');
+
+      final itemId = await client.store('items', {'name': 'Date Test'});
+      await client.sync();
+
+      final rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      expect(rows.first['status'], equals('pending'));
+      final expectedTargetMs = DateTime.utc(2026, 10, 17, 12, 1, 0).millisecondsSinceEpoch;
+      expect(rows.first['next_retry_at'], equals(expectedTargetMs));
+
+      await client.close();
+      faultClient.close();
+    });
   });
 }
