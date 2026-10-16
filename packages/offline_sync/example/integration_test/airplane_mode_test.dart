@@ -45,19 +45,21 @@ void main() {
 
     if (phase == null) {
       // ---- PHASE 1: Queue mutations offline ----
+      // DO NOT call client.close()! We intentionally leave the SQLite connection open
+      // so 'adb shell am force-stop' kills a live, uncheckpointed DB process.
       for (var i = 0; i < mutationCount; i++) {
-        await client.store(entity, {
-          'id': 'order-$i',
-          'item': 'SKU-$i',
-          'price': i * 10,
-        });
+        await client.store(
+          entity,
+          {'item': 'SKU-$i', 'price': i * 10},
+          id: 'order-$i',
+        );
       }
 
       await client.storage.db.execute(
         "INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES ('e2e_phase', 'ready_for_kill')",
       );
 
-      await client.close();
+      // Return immediately without closing client or DB
       return;
     }
 
@@ -72,6 +74,12 @@ void main() {
         equals(mutationCount),
         reason: 'All mutations must survive OS process kill in pending state',
       );
+
+      // Verify next_retry_at column is queried cleanly on-device
+      final backoffRows = await client.query(
+        "SELECT next_retry_at FROM _sync_outbox WHERE status = 'pending' LIMIT 1",
+      );
+      expect(backoffRows, isNotEmpty);
 
       await client.sync(force: true);
 
