@@ -42,6 +42,7 @@ class SyncStorage {
           base_version INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'pending',
           depends_on_mutation_id TEXT,
+          schema_version INTEGER NOT NULL DEFAULT 1,
           error_details_json TEXT,
           retry_count INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL
@@ -92,6 +93,7 @@ class SyncStorage {
     required Map<String, dynamic> data,
     int version = 1,
     String? dependsOnMutationId,
+    int schemaVersion = 1,
   }) async {
     return await db.writeTransaction<String>((tx) async {
       // 1. Read existing row to capture shadow baseline for rollback
@@ -126,13 +128,13 @@ class SyncStorage {
         values,
       );
 
-      // 3. Append outbox mutation envelope with optional DAG dependency
+      // 3. Append outbox mutation envelope with optional DAG dependency and schema version
       final mutationId = UuidV7.generate();
       await tx.execute('''
         INSERT INTO _sync_outbox (
           mutation_id, entity_name, entity_id, op, payload_json,
-          base_snapshot_json, base_version, status, depends_on_mutation_id, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          base_snapshot_json, base_version, status, depends_on_mutation_id, schema_version, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
       ''', [
         mutationId,
         entity,
@@ -142,6 +144,7 @@ class SyncStorage {
         baseSnapshotJson,
         baseVersion,
         dependsOnMutationId,
+        schemaVersion,
         now,
       ]);
 

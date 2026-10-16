@@ -5,8 +5,15 @@ import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
 
-enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized }
+enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized, needsUpgrade }
 enum SyncPullStatus { success, networkError, expiredCursor, unauthorized }
+
+typedef MutationMigrator = Map<String, dynamic> Function(
+  int fromVersion,
+  int toVersion,
+  String entity,
+  Map<String, dynamic> payload,
+);
 
 class SyncPushResult {
   final SyncPushStatus status;
@@ -53,6 +60,10 @@ class SyncWorker {
   /// Returns null if valid, or an RFC 9457 error message string if invalid.
   String? Function(String entity, Map<String, dynamic> mergedRecord)? validateInvariants;
 
+  /// Current application schema version and lazy upcast migrator
+  int currentSchemaVersion;
+  MutationMigrator? migrator;
+
   SyncWorker({
     required this.storage,
     required this.serverUrl,
@@ -62,6 +73,8 @@ class SyncWorker {
     this.getAuthToken,
     this.onAuthExpired,
     this.validateInvariants,
+    this.currentSchemaVersion = 1,
+    this.migrator,
   }) : httpClient = client ?? HttpClient();
 
   /// Gets the last checkpointed cursor from metadata.
@@ -140,16 +153,33 @@ class SyncWorker {
       mutationIds,
     );
 
-    final mutations = pending.map((r) {
+    final mutations = <Map<String, dynamic>>[];
+    for (final r in pending) {
+      final fromVersion = (r['schema_version'] as int?) ?? 1;
       final payloadJson = r['payload_json'] as String?;
-      return {
+      var payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : <String, dynamic>{};
+      var targetVersion = fromVersion;
+
+      if (fromVersion < currentSchemaVersion && migrator != null) {
+        payload = migrator!(fromVersion, currentSchemaVersion, r['entity_name'] as String, payload);
+        targetVersion = currentSchemaVersion;
+
+        await storage.db.execute('''
+          UPDATE _sync_outbox 
+          SET payload_json = ?, schema_version = ? 
+          WHERE mutation_id = ?
+        ''', [jsonEncode(payload), currentSchemaVersion, r['mutation_id']]);
+      }
+
+      mutations.add({
         'entity': r['entity_name'],
         'id': r['entity_id'],
         'op': r['op'],
-        'payload': payloadJson != null ? jsonDecode(payloadJson) : null,
+        'payload': payload,
         'version': r['base_version'],
-      };
-    }).toList();
+        'schema_version': targetVersion,
+      });
+    }
 
     final idempotencyKey = mutationIds.length == 1 ? mutationIds.first : 'batch-${mutationIds.first}';
 
@@ -168,6 +198,15 @@ class SyncWorker {
       final resp = await req.close();
       final respBody = await utf8.decoder.bind(resp).join();
       final bodyJson = respBody.isNotEmpty ? (jsonDecode(respBody) as Map<String, dynamic>) : <String, dynamic>{};
+
+      if (resp.statusCode == HttpStatus.upgradeRequired) {
+        // Client schema is below server minimum floor; pause queue without burning retry count
+        await storage.db.execute(
+          "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
+          mutationIds,
+        );
+        return SyncPushResult(status: SyncPushStatus.needsUpgrade, errorMessage: respBody);
+      }
 
       if (resp.statusCode == HttpStatus.unauthorized) {
         await storage.db.execute(

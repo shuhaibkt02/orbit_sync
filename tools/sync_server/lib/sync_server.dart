@@ -6,6 +6,7 @@ import 'dart:io';
 class FakeSyncServer {
   final HttpServer server;
   int retentionCursor = 0;
+  int minSchemaVersion = 1;
   int cursor = 0;
   final Map<String, Map<String, dynamic>> records = {};
   final List<Map<String, dynamic>> changelog = [];
@@ -98,6 +99,15 @@ class FakeSyncServer {
             _sendJson(request.response, HttpStatus.badRequest, {
               'error': 'bad_request',
               'detail': 'Poison pill rejected by schema validator'
+            });
+            return;
+          }
+
+          // Minimum schema version floor check (HTTP 426)
+          if (mutations.any((m) => ((m['schema_version'] as int?) ?? 1) < minSchemaVersion)) {
+            _sendJson(request.response, HttpStatus.upgradeRequired, {
+              'error': 'client_too_old',
+              'detail': 'Schema version $minSchemaVersion required, older client schema rejected'
             });
             return;
           }
