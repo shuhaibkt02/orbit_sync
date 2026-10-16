@@ -51,6 +51,25 @@ class FakeSyncServer {
           return;
         }
 
+        if (path == '/orders') {
+          if (request.method == 'POST') {
+            final bodyStr = await utf8.decoder.bind(request).join();
+            final data = bodyStr.isNotEmpty ? jsonDecode(bodyStr) as Map<String, dynamic> : <String, dynamic>{};
+            final id = data['id']?.toString() ?? 'order-${records.length}';
+            records['orders:$id'] = data;
+            _sendJson(request.response, HttpStatus.created, {'id': id, 'status': 'created'});
+            return;
+          }
+          if (request.method == 'GET') {
+            final orderList = records.entries
+                .where((e) => e.key.startsWith('orders:'))
+                .map((e) => e.value)
+                .toList();
+            _sendJson(request.response, HttpStatus.ok, {'orders': orderList, 'count': orderList.length});
+            return;
+          }
+        }
+
         if (request.method == 'POST' && path == '/sync/push') {
           if (chaos == 'unauthorized' || request.headers.value('Authorization') == 'Bearer expired') {
             _sendJson(request.response, HttpStatus.unauthorized, {
