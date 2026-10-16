@@ -57,6 +57,21 @@ class SyncWorker {
   final Map<String, dynamic>? scopeFilter;
   Future<String?> Function()? getAuthToken;
   Future<void> Function()? onAuthExpired;
+  Future<void>? _refreshFuture;
+
+  Future<void> _handleAuthExpired() async {
+    if (onAuthExpired == null) return;
+    if (_refreshFuture != null) {
+      await _refreshFuture;
+      return;
+    }
+    _refreshFuture = onAuthExpired!();
+    try {
+      await _refreshFuture;
+    } finally {
+      _refreshFuture = null;
+    }
+  }
 
   /// Business invariant validator across co-dependent fields.
   /// Returns null if valid, or an RFC 9457 error message string if invalid.
@@ -244,11 +259,32 @@ class SyncWorker {
             appliedCount++;
           } else if (resp.statusCode == HttpStatus.unauthorized) {
             await storage.db.execute(
-              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
-              [mutationId],
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
+              mutationIds,
             );
-            if (onAuthExpired != null) await onAuthExpired!();
+            await _handleAuthExpired();
             return const SyncPushResult(status: SyncPushStatus.unauthorized);
+          } else if (resp.statusCode == HttpStatus.tooManyRequests) {
+            final retryAfter = resp.headers.value('retry-after') ?? '30';
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
+              mutationIds,
+            );
+            onLog?.call('Orbit: Rate limited (HTTP 429). Pausing queue. Retry-After: $retryAfter seconds.');
+            return SyncPushResult(
+              status: SyncPushStatus.networkError,
+              errorMessage: 'Rate limited (HTTP 429). Retry-After: $retryAfter',
+            );
+          } else if (resp.statusCode >= 500) {
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
+              mutationIds,
+            );
+            onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}) for $targetUrl. Remains pending.');
+            return SyncPushResult(
+              status: SyncPushStatus.networkError,
+              errorMessage: 'Server error (HTTP ${resp.statusCode}): $respBody',
+            );
           } else if (resp.statusCode == HttpStatus.badRequest) {
             final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
             final structuredError = jsonEncode({
@@ -293,8 +329,8 @@ class SyncWorker {
           }
         } catch (e) {
           await storage.db.execute(
-            "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id = ?",
-            [mutationId],
+            "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
+            mutationIds,
           );
           onLog?.call('Orbit: Network or push error for $targetUrl: $e');
           return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
@@ -335,10 +371,33 @@ class SyncWorker {
           "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
           mutationIds,
         );
-        if (onAuthExpired != null) {
-          await onAuthExpired!();
-        }
+        await _handleAuthExpired();
         return const SyncPushResult(status: SyncPushStatus.unauthorized);
+      }
+
+      if (resp.statusCode == HttpStatus.tooManyRequests) {
+        final retryAfter = resp.headers.value('retry-after') ?? '30';
+        await storage.db.execute(
+          "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
+          mutationIds,
+        );
+        onLog?.call('Orbit: Rate limited (HTTP 429). Pausing batch. Retry-After: $retryAfter seconds.');
+        return SyncPushResult(
+          status: SyncPushStatus.networkError,
+          errorMessage: 'Rate limited (HTTP 429). Retry-After: $retryAfter',
+        );
+      }
+
+      if (resp.statusCode >= 500) {
+        await storage.db.execute(
+          "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders)",
+          mutationIds,
+        );
+        onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}). Remains pending.');
+        return SyncPushResult(
+          status: SyncPushStatus.networkError,
+          errorMessage: 'Server error (HTTP ${resp.statusCode}): $respBody',
+        );
       }
 
       if (resp.statusCode == HttpStatus.badRequest) {
@@ -437,6 +496,25 @@ class SyncWorker {
 
           if (isDeleted || isLeftScope) {
             await tx.execute('DELETE FROM $entity WHERE id = ?', [id]);
+            final pendingRows = await tx.getAll(
+              "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending'",
+              [entity, id],
+            );
+            if (pendingRows.isNotEmpty) {
+              await tx.execute('''
+                UPDATE _sync_outbox 
+                SET status = 'conflict', error_details_json = ? 
+                WHERE entity_name = ? AND entity_id = ? AND status = 'pending'
+              ''', [
+                jsonEncode({
+                  'type': 'https://offline-sync.dev/errors/delete-conflict',
+                  'title': 'Update vs Delete Conflict',
+                  'detail': 'Record was deleted on the server while modified offline locally.',
+                }),
+                entity,
+                id,
+              ]);
+            }
             continue;
           }
 
@@ -453,6 +531,24 @@ class SyncWorker {
           if (pendingRows.isEmpty) {
             // No local conflict: directly write remote data
             await _upsertRow(tx, entity, id, remoteData, version, now, null);
+          } else if (pendingRows.first['op'] == 'delete') {
+            // Delete vs Update conflict: client deleted locally, remote updated.
+            // Do not resurrect into active table.
+            if (profile != SyncProfile.basic) {
+              await tx.execute('''
+                UPDATE _sync_outbox 
+                SET status = 'conflict', error_details_json = ? 
+                WHERE mutation_id = ?
+              ''', [
+                jsonEncode({
+                  'type': 'https://offline-sync.dev/errors/delete-vs-update',
+                  'title': 'Delete vs Update Conflict',
+                  'detail': 'Record was deleted locally while modified remotely on the server.',
+                }),
+                pendingRows.first['mutation_id'],
+              ]);
+            }
+            continue;
           } else if (profile == SyncProfile.basic) {
             // Last-Write-Wins (LWW): Remote state overwrites local table; outbox mutation marked conflict
             await _upsertRow(tx, entity, id, remoteData, version, now, null);

@@ -9,7 +9,8 @@ class UuidV7 {
 
   static String generate() {
     int now = DateTime.now().millisecondsSinceEpoch;
-    if (now == _lastMillis) {
+    if (now <= _lastMillis) {
+      now = _lastMillis;
       _seq = (_seq + 1) & 0x0FFF;
     } else {
       _lastMillis = now;

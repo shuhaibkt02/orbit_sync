@@ -208,21 +208,21 @@ class OfflineSyncClient {
     return storage.watch(query, parameters: parameters);
   }
 
-  /// Performs a full bidirectional sync: drains pending outbox push, then pulls incoming changes.
+  /// Performs a full bidirectional sync: pulls incoming changes, then drains pending outbox push.
   Future<void> sync() async {
     if (_isSyncing || _isPaused) return;
     _isSyncing = true;
     try {
-      // 1. Drain pending outbox mutations
+      // 1. Pull remote delta changes first (resolve remote changes & deletions before pushing)
+      await worker.pullAll();
+
+      // 2. Drain pending outbox mutations
       while (true) {
         final pushRes = await worker.pushBatch(batchSize: 20);
         if (pushRes.status != SyncPushStatus.success || pushRes.applied == 0) {
           break;
         }
       }
-
-      // 2. Pull remote delta changes
-      await worker.pullAll();
     } finally {
       _isSyncing = false;
     }
