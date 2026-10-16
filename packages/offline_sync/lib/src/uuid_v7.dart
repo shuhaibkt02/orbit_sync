@@ -1,6 +1,7 @@
 import 'dart:math';
 
 /// Generates time-ordered RFC 9562 UUIDv7 strings.
+/// ponytail: millisecond timestamp + 74 random bits; upgrade to sub-millisecond monoseq if generating >4096 IDs/ms per isolate.
 class UuidV7 {
   static final Random _rng = Random.secure();
   static int _lastMillis = 0;

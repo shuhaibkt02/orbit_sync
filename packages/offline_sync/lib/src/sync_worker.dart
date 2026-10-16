@@ -257,6 +257,7 @@ class SyncWorker {
             final localMap = localJson != null ? (jsonDecode(localJson) as Map<String, dynamic>) : <String, dynamic>{};
 
             // 3-way merge
+            // ponytail: column-level merge with remote precedence on identical field collisions; upgrade to CRDT only if character-level text diffing is needed.
             final merged = Map<String, dynamic>.from(remoteData);
             for (final key in localMap.keys) {
               if (localMap[key] != baseMap[key]) {
@@ -353,6 +354,7 @@ class SyncWorker {
   /// Performs an atomic generation swap to recover from HTTP 410 Gone.
   /// Pulls current snapshot into staging tables, swaps active tables atomically,
   /// and reapplies pending outbox mutations.
+  /// ponytail: uses SQLite ALTER TABLE RENAME swap; upgrade to schema-copy migration if foreign key cycles are present.
   Future<bool> resyncGeneration(List<String> entities) async {
     // 1. Pull snapshot from server
     final uriStr = '$serverUrl/sync/pull?snapshot=true&limit=1000';
