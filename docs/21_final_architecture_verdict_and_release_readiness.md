@@ -2,18 +2,20 @@
 
 ## 1. Executive Summary & Architectural Verdict
 
-Following rigorous empirical benchmarks (isolates, SIGKILL recovery, and SQLite reactivity) and 29 automated end-to-end integration tests, **Path A (Zero-Codegen Runtime Engine)** is finalized as the official production architecture for `offline_sync`.
+Following rigorous empirical benchmarks (isolates, SIGKILL recovery, and SQLite reactivity) and 31 automated integration tests, both **Path A (Zero-Codegen Runtime Engine)** and **Path B (Codegen Companion Packages & Automated Test Generator)** are finalized and delivered as a complete, unified solution.
 
-The three prospective extension items from earlier brainstorming phases have been formally audited and rejected under the `/ponytail` (YAGNI & lean engineering) methodology:
+### The Two-Path Architecture in Production:
+1. **Path A: Zero-Codegen Runtime Mode (`packages/offline_sync`):**
+   - For instant setup without `build_runner`. Dynamic table registration (`client.registerTable`), runtime schema evolution, and zero-codegen reactive streams (`client.watch()`).
+2. **Path B: Codegen & Automated Test Generator (`packages/offline_sync_annotation` & `packages/offline_sync_generator`):**
+   - For developers wanting compile-time type-safe repositories (`client.tasks.save(...)`) and **auto-generated offline test suites** (`$TaskSyncTestSuite.runTests(...)`) driven by `@SyncEntity`.
 
-1. **`build_runner` Codegen Companion Packages (`offline_sync_generator`):**
-   - **Verdict:** **REJECTED.**
-   - **Rationale:** Compiling static `TableInfo` classes via `build_runner` introduces heavy build latency and compile-time friction. Our empirical benchmark in Phase 20 proved that `sqlite_async`'s dynamic runtime SQL parser (`db.watch()`) delivers zero-codegen reactivity directly on arbitrary runtime tables without sacrificing type safety or UI performance.
-2. **Native OS Background Schedulers (`WorkManager` / `BGTaskScheduler`):**
-   - **Verdict:** **REJECTED (Externalized).**
-   - **Rationale:** In the Flutter ecosystem, background OS scheduling is cleanly handled by dedicated, platform-tested packages like [`workmanager`](https://pub.dev/packages/workmanager). Bundling native Kotlin/Swift platform channels and headless isolate entrypoints inside a database sync package introduces file-locking race hazards and unnecessary maintenance overhead. Developers invoke `client.sync()` inside standard background tasks in 3 lines of code.
-3. **Bundled Encrypted Key Vault Wrapper:**
-   - **Verdict:** **REJECTED (Externalized).**
+### The Two Externalized Extension Items:
+1. **Native OS Background Schedulers (`WorkManager` / `BGTaskScheduler`):**
+   - **Verdict:** **Externalized.**
+   - **Rationale:** In the Flutter ecosystem, background OS scheduling is cleanly handled by dedicated, platform-tested packages like [`workmanager`](https://pub.dev/packages/workmanager). Bundling native Kotlin/Swift platform channels inside a database sync package introduces file-locking race hazards (`SQLITE_BUSY`). Developers invoke `client.sync()` inside standard background tasks in 3 lines of code (documented in [Production Recipes](../packages/offline_sync/README.md#production-recipes)).
+2. **Bundled Encrypted Key Vault Wrapper:**
+   - **Verdict:** **Externalized.**
    - **Rationale:** Rather than forcing a heavyweight Keychain/Keystore native dependency into the core plugin, `OfflineSyncClient` exposes `Future<String?> Function()? getAuthToken`. Developers integrate `flutter_secure_storage` or custom JWT keychains in one line without dependency bloat.
 
 ---
