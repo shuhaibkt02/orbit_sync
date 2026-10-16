@@ -42,16 +42,54 @@ final client = await OfflineSyncClient.initialize(
 
 ---
 
+## Package Ecosystem & Architecture
+
+`offline_sync` follows the standard Flutter multi-package architecture (similar to `freezed` and `json_serializable`) to ensure maximum speed, clean architecture isolation, and zero binary bloat:
+
+```
+packages/
+├── offline_sync             ──> Core runtime engine (WAL SQLite, outbox, 3-way merge, client facade)
+├── offline_sync_annotation  ──> Zero-dependency annotations (@SyncEntity, @PrimaryKey for domain models)
+└── offline_sync_generator   ──> Dev-only build_runner generator (type-safe repos & auto-generated tests)
+```
+
+### Why 3 Separate Packages?
+1. **0 MB App Download Bloat:** `offline_sync_generator` relies on heavy compiler tooling (`analyzer`, `source_gen`). Because it is placed exclusively under `dev_dependencies`, it is **completely stripped** from your release APK/IPA.
+2. **Clean Architecture Separation:** `offline_sync_annotation` has **zero external dependencies**. Pure business domain models (`User`, `Order`) can import annotations without pulling in SQLite, FFI, or Flutter framework dependencies.
+3. **The Two-Path Choice:**
+   - **Path A (Zero-Codegen / Instant):** Install only `offline_sync`. Define tables dynamically and query reactively without running `build_runner`.
+   - **Path B (Codegen & Auto-Tests):** Install `offline_sync_annotation` and add `offline_sync_generator` to `dev_dependencies`. Generates type-safe repositories (`client.tasks.save(...)`) and automated test suites (`$TaskSyncTestSuite.runTests(...)`).
+
+---
+
 ## Installation
+
+### Path A: Zero-Codegen Runtime Mode (Fastest Setup)
 
 Add `offline_sync` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   offline_sync: ^0.1.0
-  # For Flutter platforms (iOS, Android, macOS, Linux, Windows), include sqlite3 libraries:
+  # Platform SQLite binaries for Flutter:
   sqlite3_flutter_libs: ^0.5.24
   path_provider: ^2.1.2
+```
+
+### Path B: Codegen & Automated Test Mode (Type-Safe Repositories)
+
+Add annotations to `dependencies:` and generator to `dev_dependencies:`:
+
+```yaml
+dependencies:
+  offline_sync: ^0.1.0
+  offline_sync_annotation: ^0.1.0
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.2
+
+dev_dependencies:
+  offline_sync_generator: ^0.1.0
+  build_runner: ^2.4.0
 ```
 
 ---
@@ -174,6 +212,64 @@ client.resumeSync();
 // Close cleanly on app termination
 await client.close();
 ```
+
+---
+
+## Path B: Code Generation & Automated Test Suite
+
+If your team prefers compile-time type-safe repositories (`client.tasks.save(...)`) and automated test generation over raw SQL strings, use Path B with `offline_sync_annotation` and `offline_sync_generator`:
+
+### 1. Annotate Your Domain Model
+```dart
+import 'package:offline_sync_annotation/offline_sync_annotation.dart';
+
+@SyncEntity(endpoint: '/tasks', profile: 'standard')
+class Task {
+  @PrimaryKey()
+  final String id;
+  final String title;
+  final bool isCompleted;
+
+  Task({required this.id, required this.title, required this.isCompleted});
+}
+```
+
+### 2. Run `build_runner`
+```bash
+dart run build_runner build
+```
+This automatically generates `task.sync.g.dart` containing:
+- Table schema definition (`$TaskTableSchema`).
+- Type-safe repository (`$TaskRepository`) and client extension (`client.tasks`).
+- Automated offline sync acceptance test suite (`$TaskSyncTestSuite`).
+
+### 3. Use Generated Type-Safe Repository
+```dart
+// Register table with 1 line
+await client.tasks.registerTable();
+
+// Type-safe save
+await client.tasks.save(Task(id: 'task-1', title: 'Buy milk', isCompleted: false));
+
+// Type-safe get and reactive streaming
+final task = await client.tasks.getById('task-1');
+Stream<List<Task>> tasksStream = client.tasks.watchAll();
+```
+
+### 4. Run the Auto-Generated Test Suite
+In your test directory (e.g. `test/task_sync_test.dart`), run the generated test suite:
+```dart
+import 'package:test/test.dart';
+import 'task.sync.g.dart';
+
+void main() {
+  $TaskSyncTestSuite.runTests(
+    createClient: () => OfflineSyncClient.initialize(...),
+    createEntity: (id, label) => Task(id: id, title: label, isCompleted: false),
+  );
+}
+```
+Automatically tests offline save, outbox verification, push drain, and tombstone deletion for your exact model!
 
 ---
 
