@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
@@ -51,7 +52,7 @@ class SyncPullResult {
 class SyncWorker {
   final SyncStorage storage;
   final String serverUrl;
-  final HttpClient httpClient;
+  final http.Client httpClient;
   final SyncProfile profile;
   final int pullPageLimit;
   final Map<String, dynamic>? scopeFilter;
@@ -86,7 +87,7 @@ class SyncWorker {
     required this.storage,
     required this.serverUrl,
     this.profile = SyncProfile.enterprise,
-    HttpClient? client,
+    http.Client? client,
     this.pullPageLimit = 50,
     this.scopeFilter,
     this.getAuthToken,
@@ -95,7 +96,7 @@ class SyncWorker {
     this.currentSchemaVersion = 1,
     this.migrator,
     this.onLog,
-  }) : httpClient = client ?? HttpClient();
+  }) : httpClient = client ?? http.Client();
 
   /// Gets the last checkpointed cursor from metadata.
   Future<int> getLastSyncedCursor() async {
@@ -222,33 +223,35 @@ class SyncWorker {
         }
 
         try {
-          final req = await httpClient.openUrl(method, Uri.parse(targetUrl));
-          req.headers.contentType = ContentType.json;
-          req.headers.set('Idempotency-Key', mutationId);
-          req.headers.set('X-Client-Mutation-Id', mutationId);
-          req.headers.set('X-Offline-Sync', 'true');
+          final req = http.Request(method, Uri.parse(targetUrl));
+          req.headers['content-type'] = 'application/json';
+          req.headers['idempotency-key'] = mutationId;
+          req.headers['x-client-mutation-id'] = mutationId;
+          req.headers['x-offline-sync'] = 'true';
           final createdAtIso = DateTime.fromMillisecondsSinceEpoch(r['created_at'] as int).toUtc().toIso8601String();
-          req.headers.set('X-Offline-Created-At', createdAtIso);
+          req.headers['x-offline-created-at'] = createdAtIso;
 
           if (getAuthToken != null) {
             final token = await getAuthToken!();
-            if (token != null) req.headers.set('Authorization', 'Bearer $token');
+            if (token != null) req.headers['authorization'] = 'Bearer $token';
           }
 
           if (method != 'DELETE') {
             final payloadJson = r['payload_json'] as String?;
             var payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : <String, dynamic>{};
             final bodyMap = Map<String, dynamic>.from(payload);
+            bodyMap['id'] ??= entityId;
             bodyMap['_offline_meta'] = {
               'is_offline': true,
               'offline_created_at': createdAtIso,
               'mutation_id': mutationId,
             };
-            req.add(utf8.encode(jsonEncode(bodyMap)));
+            req.body = jsonEncode(bodyMap);
           }
 
-          final resp = await req.close();
-          final respBody = await utf8.decoder.bind(resp).join();
+          final streamed = await httpClient.send(req);
+          final resp = await http.Response.fromStream(streamed);
+          final respBody = resp.body;
 
           if (resp.statusCode >= 200 && resp.statusCode < 300) {
             await storage.db.execute(
@@ -265,7 +268,7 @@ class SyncWorker {
             await _handleAuthExpired();
             return const SyncPushResult(status: SyncPushStatus.unauthorized);
           } else if (resp.statusCode == HttpStatus.tooManyRequests) {
-            final retryAfter = resp.headers.value('retry-after') ?? '30';
+            final retryAfter = resp.headers['retry-after'] ?? '30';
             await storage.db.execute(
               "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
               mutationIds,
@@ -343,18 +346,19 @@ class SyncWorker {
 
     try {
       final uriStr = '$serverUrl/sync/push${chaos != null ? '?chaos=$chaos' : ''}';
-      final req = await httpClient.openUrl('POST', Uri.parse(uriStr));
-      req.headers.contentType = ContentType.json;
-      req.headers.set('Idempotency-Key', idempotencyKey);
+      final req = http.Request('POST', Uri.parse(uriStr));
+      req.headers['content-type'] = 'application/json';
+      req.headers['idempotency-key'] = idempotencyKey;
 
       if (getAuthToken != null) {
         final token = await getAuthToken!();
-        if (token != null) req.headers.set('Authorization', 'Bearer $token');
+        if (token != null) req.headers['authorization'] = 'Bearer $token';
       }
 
-      req.add(utf8.encode(jsonEncode(mutations)));
-      final resp = await req.close();
-      final respBody = await utf8.decoder.bind(resp).join();
+      req.body = jsonEncode(mutations);
+      final streamed = await httpClient.send(req);
+      final resp = await http.Response.fromStream(streamed);
+      final respBody = resp.body;
       final bodyJson = respBody.isNotEmpty ? (jsonDecode(respBody) as Map<String, dynamic>) : <String, dynamic>{};
 
       if (resp.statusCode == HttpStatus.upgradeRequired) {
@@ -376,7 +380,7 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.tooManyRequests) {
-        final retryAfter = resp.headers.value('retry-after') ?? '30';
+        final retryAfter = resp.headers['retry-after'] ?? '30';
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
           mutationIds,
@@ -467,13 +471,14 @@ class SyncWorker {
     }
 
     try {
-      final req = await httpClient.openUrl('GET', Uri.parse(uriStr));
+      final req = http.Request('GET', Uri.parse(uriStr));
       if (getAuthToken != null) {
         final token = await getAuthToken!();
-        if (token != null) req.headers.set('Authorization', 'Bearer $token');
+        if (token != null) req.headers['authorization'] = 'Bearer $token';
       }
 
-      final resp = await req.close();
+      final streamed = await httpClient.send(req);
+      final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode == HttpStatus.gone) {
         return const SyncPullResult(status: SyncPullStatus.expiredCursor);
       }
@@ -481,7 +486,7 @@ class SyncWorker {
         return const SyncPullResult(status: SyncPullStatus.unauthorized);
       }
 
-      final respBody = await utf8.decoder.bind(resp).join();
+      final respBody = resp.body;
       final bodyJson = jsonDecode(respBody) as Map<String, dynamic>;
       final changes = (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
       final nextCursor = bodyJson['next_cursor'] as int;
@@ -672,11 +677,12 @@ class SyncWorker {
   Future<bool> resyncGeneration(List<String> entities) async {
     // 1. Pull snapshot from server
     final uriStr = '$serverUrl/sync/pull?snapshot=true&limit=1000';
-    final req = await httpClient.openUrl('GET', Uri.parse(uriStr));
-    final resp = await req.close();
+    final req = http.Request('GET', Uri.parse(uriStr));
+    final streamed = await httpClient.send(req);
+    final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode != HttpStatus.ok) return false;
 
-    final respBody = await utf8.decoder.bind(resp).join();
+    final respBody = resp.body;
     final bodyJson = jsonDecode(respBody) as Map<String, dynamic>;
     final changes = (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
     final nextCursor = bodyJson['next_cursor'] as int;

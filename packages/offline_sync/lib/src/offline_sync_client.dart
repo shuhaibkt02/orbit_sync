@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
 import 'uuid_v7.dart';
 import 'sync_storage.dart';
@@ -33,6 +34,7 @@ class OfflineSyncClient {
     required String databasePath,
     String serverUrl = '',
     SyncProfile profile = SyncProfile.standard,
+    http.Client? httpClient,
     int maxReaders = 4,
     int pullPageLimit = 50,
     Map<String, dynamic>? scopeFilter,
@@ -54,6 +56,7 @@ class OfflineSyncClient {
       storage: storage,
       serverUrl: serverUrl,
       profile: profile,
+      client: httpClient,
       pullPageLimit: pullPageLimit,
       scopeFilter: scopeFilter,
       getAuthToken: getAuthToken,
@@ -214,7 +217,9 @@ class OfflineSyncClient {
     _isSyncing = true;
     try {
       // 1. Pull remote delta changes first (resolve remote changes & deletions before pushing)
-      await worker.pullAll();
+      if (worker.serverUrl.isNotEmpty) {
+        await worker.pullAll();
+      }
 
       // 2. Drain pending outbox mutations
       while (true) {
@@ -300,20 +305,21 @@ class OfflineSyncClient {
     required String url,
     Map<String, String>? headers,
   }) async {
-    final req = await worker.httpClient.openUrl('GET', Uri.parse(url));
-    req.headers.contentType = ContentType.json;
+    final req = http.Request('GET', Uri.parse(url));
+    req.headers['content-type'] = 'application/json';
     if (worker.getAuthToken != null) {
       final token = await worker.getAuthToken!();
-      if (token != null) req.headers.set('Authorization', 'Bearer $token');
+      if (token != null) req.headers['authorization'] = 'Bearer $token';
     }
     if (headers != null) {
-      headers.forEach(req.headers.set);
+      req.headers.addAll(headers);
     }
-    final resp = await req.close();
+    final streamed = await worker.httpClient.send(req);
+    final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException('Failed to hydrate $entity from $url: HTTP ${resp.statusCode}');
     }
-    final bodyStr = await utf8.decoder.bind(resp).join();
+    final bodyStr = resp.body;
     final decoded = jsonDecode(bodyStr);
     final List<dynamic> items = decoded is List ? decoded : (decoded['data'] as List? ?? []);
 
