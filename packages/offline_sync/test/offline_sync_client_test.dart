@@ -426,5 +426,23 @@ void main() {
       expect(outboxPending.first['count'], equals(0));
       await checkClient.close();
     });
+
+    test('Test Case 11: client.storage.db.execute works for _sync_metadata and phase management', () async {
+      await client.storage.db.execute(
+        "INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES ('test_key', 'test_val')",
+      );
+      final rows = await client.query(
+        "SELECT value FROM _sync_metadata WHERE key = 'test_key'",
+      );
+      expect(rows.first['value'], equals('test_val'));
+
+      await client.storage.db.execute(
+        "DELETE FROM _sync_metadata WHERE key = 'test_key'",
+      );
+      final rowsAfter = await client.query(
+        "SELECT value FROM _sync_metadata WHERE key = 'test_key'",
+      );
+      expect(rowsAfter, isEmpty);
+    });
   });
 }
