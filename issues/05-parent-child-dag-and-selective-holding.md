@@ -10,15 +10,16 @@ Implementation and test harness for hierarchical parent-child entity synchroniza
 **Blocked by:**
 - 04: Two-Client Conflict, Invariants & Convergence Test
 
-**Status:** in-progress
+**Status:** done
 
 ### Acceptance Criteria & Test Cases:
-- [ ] **Schema & Outbox Dependency Tracking:** Outbox schema includes `depends_on_mutation_id` for declaring DAG parent dependencies.
-- [ ] **Test Case 1 (Universal UUIDv7 & Local FK Integrity):** Parent `Order` and Child `OrderItem` created offline with UUIDv7 IDs. Local SQLite foreign key `order_id REFERENCES orders(id)` passes without temporary IDs or rewrites.
-- [ ] **Test Case 2 (Topological Push Ordering):** Sync worker pushes parent `Order` before child `OrderItem`. Server validates parent exists before inserting child; both mark `synced`.
-- [ ] **Test Case 3 (Selective Holding on Quarantined Parent):**
+- [x] **Schema & Outbox Dependency Tracking:** Outbox schema includes `depends_on_mutation_id` for declaring DAG parent dependencies.
+- [x] **Test Case 1 (Universal UUIDv7 & Local FK Integrity):** Parent `Order` and Child `OrderItem` created offline with UUIDv7 IDs. Local SQLite foreign key `order_id REFERENCES orders(id)` passes without temporary IDs or rewrites.
+- [x] **Test Case 2 (Topological Push Ordering):** Sync worker pushes parent `Order` before child `OrderItem`. Server validates parent exists before inserting child; both mark `synced`.
+- [x] **Test Case 3 (Selective Holding on Quarantined Parent):**
   - Parent `Order` triggers poison pill (HTTP 400) -> routes to `dlq`.
   - Dependent `OrderItem` is selectively `held` (preventing orphaned server FK rejection).
   - Unrelated `Task` pushes successfully (`status = 'synced'`).
-- [ ] **Test Case 4 (Parent Recovery Unblocks Held Children):**
+- [x] **Test Case 4 (Parent Recovery Unblocks Held Children):**
   - When quarantined parent is corrected/re-queued (`status = 'pending'`) and syncs successfully, dependent `held` children are automatically unblocked and sync.
+

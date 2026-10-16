@@ -41,6 +41,7 @@ class SyncStorage {
           base_snapshot_json TEXT,
           base_version INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'pending',
+          depends_on_mutation_id TEXT,
           error_details_json TEXT,
           retry_count INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL
@@ -61,10 +62,15 @@ class SyncStorage {
     });
   }
 
-  /// Registers an entity table with custom columns.
-  Future<void> registerEntityTable(String entityName, Map<String, String> columnTypes) async {
+  /// Registers an entity table with custom columns and optional foreign key clauses.
+  Future<void> registerEntityTable(
+    String entityName,
+    Map<String, String> columnTypes, {
+    String? foreignKeyClause,
+  }) async {
     final colDefs = columnTypes.entries.map((e) => '${e.key} ${e.value}').join(', ');
     final fullCols = colDefs.isNotEmpty ? ', $colDefs' : '';
+    final fk = foreignKeyClause != null ? ', $foreignKeyClause' : '';
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $entityName (
@@ -73,6 +79,7 @@ class SyncStorage {
         updated_at INTEGER NOT NULL,
         _base_snapshot_json TEXT
         $fullCols
+        $fk
       );
     ''');
   }
@@ -84,6 +91,7 @@ class SyncStorage {
     required String id,
     required Map<String, dynamic> data,
     int version = 1,
+    String? dependsOnMutationId,
   }) async {
     return await db.writeTransaction<String>((tx) async {
       // 1. Read existing row to capture shadow baseline for rollback
@@ -118,13 +126,13 @@ class SyncStorage {
         values,
       );
 
-      // 3. Append outbox mutation envelope
+      // 3. Append outbox mutation envelope with optional DAG dependency
       final mutationId = UuidV7.generate();
       await tx.execute('''
         INSERT INTO _sync_outbox (
           mutation_id, entity_name, entity_id, op, payload_json,
-          base_snapshot_json, base_version, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+          base_snapshot_json, base_version, status, depends_on_mutation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       ''', [
         mutationId,
         entity,
@@ -133,6 +141,7 @@ class SyncStorage {
         jsonEncode(data),
         baseSnapshotJson,
         baseVersion,
+        dependsOnMutationId,
         now,
       ]);
 

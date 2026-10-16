@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
 
@@ -82,11 +83,49 @@ class SyncWorker {
   }
 
   /// Drains up to [batchSize] pending outbox mutations to POST /sync/push.
+  /// Enforces DAG dependencies: selectively holds children if their parent is quarantined in DLQ/conflict.
   Future<SyncPushResult> pushBatch({int batchSize = 10, String? chaos}) async {
-    final pending = await storage.db.getAll(
+    // 0. Automatically unblock any held mutations whose parent has successfully synced
+    await storage.db.execute('''
+      UPDATE _sync_outbox 
+      SET status = 'pending' 
+      WHERE status = 'held' 
+        AND depends_on_mutation_id IN (SELECT mutation_id FROM _sync_outbox WHERE status = 'synced');
+    ''');
+
+    // 1. Fetch pending candidates
+    final pendingRaw = await storage.db.getAll(
       "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
-      [batchSize],
+      [batchSize * 2],
     );
+
+    if (pendingRaw.isEmpty) {
+      return const SyncPushResult(status: SyncPushStatus.success, applied: 0);
+    }
+
+    // 2. Selective holding: filter out mutations whose parent is quarantined (dlq/conflict/held)
+    final pending = <Row>[];
+    for (final r in pendingRaw) {
+      final parentId = r['depends_on_mutation_id'] as String?;
+      if (parentId != null) {
+        final parentRows = await storage.db.getAll(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+          [parentId],
+        );
+        if (parentRows.isNotEmpty) {
+          final pStatus = parentRows.first['status'] as String;
+          if (pStatus == 'dlq' || pStatus == 'conflict' || pStatus == 'held') {
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'held' WHERE mutation_id = ?",
+              [r['mutation_id']],
+            );
+            continue;
+          }
+        }
+      }
+      pending.add(r);
+      if (pending.length == batchSize) break;
+    }
 
     if (pending.isEmpty) {
       return const SyncPushResult(status: SyncPushStatus.success, applied: 0);

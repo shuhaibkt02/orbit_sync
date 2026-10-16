@@ -94,12 +94,29 @@ class FakeSyncServer {
           final List<dynamic> rawMutations = body is List ? body : (body['mutations'] as List? ?? []);
           final mutations = rawMutations.cast<Map<String, dynamic>>();
 
-          if (mutations.any((m) => m['id'] == 'poison-pill')) {
+          if (mutations.any((m) => m['id'] == 'poison-pill' || (m['payload'] is Map && m['payload']['customer'] == 'poison-pill'))) {
             _sendJson(request.response, HttpStatus.badRequest, {
               'error': 'bad_request',
               'detail': 'Poison pill rejected by schema validator'
             });
             return;
+          }
+
+          // Foreign key integrity check: parent must exist on server
+          for (final mut in mutations) {
+            final payload = (mut['payload'] as Map<String, dynamic>?) ?? {};
+            final orderId = payload['order_id'];
+            if (mut['entity'] == 'order_items' && orderId != null) {
+              final parentExists = records.containsKey('orders:$orderId') ||
+                  mutations.any((m) => m['entity'] == 'orders' && m['id'].toString() == orderId.toString());
+              if (!parentExists) {
+                _sendJson(request.response, HttpStatus.badRequest, {
+                  'error': 'foreign_key_violation',
+                  'detail': 'Parent order $orderId not found on server'
+                });
+                return;
+              }
+            }
           }
 
           final idempotencyKey = request.headers.value('Idempotency-Key');
