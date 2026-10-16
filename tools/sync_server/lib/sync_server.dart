@@ -179,6 +179,28 @@ class FakeSyncServer {
             return;
           }
 
+          final isSnapshot = request.uri.queryParameters['snapshot'] == 'true';
+          if (isSnapshot) {
+            final snapshotChanges = records.entries.map((e) {
+              final parts = e.key.split(':');
+              return {
+                'cursor': cursor,
+                'entity': parts[0],
+                'id': parts[1],
+                'op': 'upsert',
+                '_deleted': false,
+                'data': e.value,
+                'version': 1,
+              };
+            }).toList();
+            _sendJson(request.response, HttpStatus.ok, {
+              'changes': snapshotChanges,
+              'next_cursor': cursor,
+              'has_more': false,
+            });
+            return;
+          }
+
           final since = int.tryParse(request.uri.queryParameters['since'] ?? '') ?? 0;
           final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 50;
           final scopeStr = request.uri.queryParameters['scope'];

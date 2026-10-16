@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
 
 enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized }
@@ -36,7 +37,8 @@ class SyncPullResult {
   });
 }
 
-/// Bidirectional sync worker handling push queue and checkpointed pull streams.
+/// Bidirectional sync worker handling push queue, 3-way merge, invariant validation,
+/// and generation-swap resync.
 class SyncWorker {
   final SyncStorage storage;
   final String serverUrl;
@@ -46,6 +48,10 @@ class SyncWorker {
   Future<String?> Function()? getAuthToken;
   Future<void> Function()? onAuthExpired;
 
+  /// Business invariant validator across co-dependent fields.
+  /// Returns null if valid, or an RFC 9457 error message string if invalid.
+  String? Function(String entity, Map<String, dynamic> mergedRecord)? validateInvariants;
+
   SyncWorker({
     required this.storage,
     required this.serverUrl,
@@ -54,6 +60,7 @@ class SyncWorker {
     this.scopeFilter,
     this.getAuthToken,
     this.onAuthExpired,
+    this.validateInvariants,
   }) : httpClient = client ?? HttpClient();
 
   /// Gets the last checkpointed cursor from metadata.
@@ -76,7 +83,6 @@ class SyncWorker {
 
   /// Drains up to [batchSize] pending outbox mutations to POST /sync/push.
   Future<SyncPushResult> pushBatch({int batchSize = 10, String? chaos}) async {
-    // 1. Fetch pending mutations in chronological order (UUIDv7 / created_at)
     final pending = await storage.db.getAll(
       "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
       [batchSize],
@@ -95,7 +101,6 @@ class SyncWorker {
       mutationIds,
     );
 
-    // Build payload
     final mutations = pending.map((r) {
       final payloadJson = r['payload_json'] as String?;
       return {
@@ -107,7 +112,6 @@ class SyncWorker {
       };
     }).toList();
 
-    // Idempotency key: single mutation uses its mutation_id, batch uses first id or combined
     final idempotencyKey = mutationIds.length == 1 ? mutationIds.first : 'batch-${mutationIds.first}';
 
     try {
@@ -127,7 +131,6 @@ class SyncWorker {
       final bodyJson = respBody.isNotEmpty ? (jsonDecode(respBody) as Map<String, dynamic>) : <String, dynamic>{};
 
       if (resp.statusCode == HttpStatus.unauthorized) {
-        // Auth expired: pause queue and trigger refresh; do NOT burn retry budget
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
           mutationIds,
@@ -139,14 +142,12 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.badRequest) {
-        // Poison pill: route offending item to 'dlq' without blocking the entire queue
         await storage.db.execute('''
           UPDATE _sync_outbox 
           SET status = 'dlq', error_details_json = ? 
           WHERE mutation_id = ?
         ''', [respBody, mutationIds.first]);
 
-        // Revert any remaining batch items to pending
         if (mutationIds.length > 1) {
           final remaining = mutationIds.sublist(1);
           final remPlaceholders = List.filled(remaining.length, '?').join(', ');
@@ -163,11 +164,16 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.unprocessableEntity) {
+        // Rollback optimistic active row to base snapshot; preserve draft in outbox
+        await storage.rollbackOptimistic(mutationIds.first, status: 'validation_error');
+        await storage.db.execute(
+          'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
+          [respBody, mutationIds.first],
+        );
         return SyncPushResult(status: SyncPushStatus.validationError, details: bodyJson);
       }
 
       if (resp.statusCode == HttpStatus.ok) {
-        // Mark all pushed mutations as synced
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id IN ($placeholders)",
           mutationIds,
@@ -177,7 +183,6 @@ class SyncWorker {
 
       throw HttpException('HTTP ${resp.statusCode}: $respBody');
     } catch (e) {
-      // Revert in_flight to pending on network / socket drop so it will retry
       await storage.db.execute(
         "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
         mutationIds,
@@ -186,7 +191,8 @@ class SyncWorker {
     }
   }
 
-  /// Pulls a single page of changes from GET /sync/pull and commits them checkpointed.
+  /// Pulls a single page of changes from GET /sync/pull.
+  /// Handles 3-way merging, invariant validation, and tombstone/scope eviction.
   Future<SyncPullResult> pullPage({String? chaos}) async {
     final since = await getLastSyncedCursor();
     var uriStr = '$serverUrl/sync/pull?since=$since&limit=$pullPageLimit';
@@ -216,8 +222,6 @@ class SyncWorker {
       final nextCursor = bodyJson['next_cursor'] as int;
       final hasMore = bodyJson['has_more'] as bool;
 
-      // Atomically apply server changes directly into local domain tables
-      // AND checkpoint the new cursor in _sync_metadata
       await storage.db.writeTransaction((tx) async {
         for (final change in changes) {
           final entity = change['entity'] as String;
@@ -226,33 +230,73 @@ class SyncWorker {
           final isLeftScope = change['left_scope'] == true;
 
           if (isDeleted || isLeftScope) {
-            // Evict row locally without creating an outbox mutation
             await tx.execute('DELETE FROM $entity WHERE id = ?', [id]);
+            continue;
+          }
+
+          final remoteData = (change['data'] as Map<String, dynamic>?) ?? {};
+          final version = (change['version'] as int?) ?? 1;
+          final now = DateTime.now().millisecondsSinceEpoch;
+
+          // Check if there are pending local mutations for this record
+          final pendingRows = await tx.getAll(
+            "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending' ORDER BY created_at ASC",
+            [entity, id],
+          );
+
+          if (pendingRows.isEmpty) {
+            // No local conflict: directly write remote data
+            await _upsertRow(tx, entity, id, remoteData, version, now, null);
           } else {
-            final data = (change['data'] as Map<String, dynamic>?) ?? {};
-            final version = (change['version'] as int?) ?? 1;
-            final now = DateTime.now().millisecondsSinceEpoch;
+            // Pending local mutation exists: perform 3-way field merge
+            final pendingMut = pendingRows.first;
+            final mutId = pendingMut['mutation_id'] as String;
+            final baseJson = pendingMut['base_snapshot_json'] as String?;
+            final baseMap = baseJson != null ? (jsonDecode(baseJson) as Map<String, dynamic>) : <String, dynamic>{};
+            final localJson = pendingMut['payload_json'] as String?;
+            final localMap = localJson != null ? (jsonDecode(localJson) as Map<String, dynamic>) : <String, dynamic>{};
 
-            final cols = <String>['id', 'version', 'updated_at', '_base_snapshot_json'];
-            final vals = <dynamic>[id, version, now, null];
-
-            for (final entry in data.entries) {
-              if (entry.key != 'id' && entry.key != 'version' && entry.key != 'updated_at') {
-                cols.add(entry.key);
-                vals.add(entry.value);
+            // 3-way merge
+            final merged = Map<String, dynamic>.from(remoteData);
+            for (final key in localMap.keys) {
+              if (localMap[key] != baseMap[key]) {
+                // Local made a change to this key
+                merged[key] = localMap[key];
               }
             }
 
-            final colStr = cols.join(', ');
-            final phStr = cols.map((_) => '?').join(', ');
-            await tx.execute(
-              'INSERT OR REPLACE INTO $entity ($colStr) VALUES ($phStr)',
-              vals,
-            );
+            // Invariant validation
+            if (validateInvariants != null) {
+              final invariantError = validateInvariants!(entity, merged);
+              if (invariantError != null) {
+                // Co-dependent invariant violated! Reject auto-merge, record conflict
+                await tx.execute('''
+                  UPDATE _sync_outbox 
+                  SET status = 'conflict', error_details_json = ? 
+                  WHERE mutation_id = ?
+                ''', [
+                  jsonEncode({
+                    'type': 'https://offline-sync.dev/errors/invariant-conflict',
+                    'title': 'Invariant Validation Failed',
+                    'detail': invariantError,
+                  }),
+                  mutId
+                ]);
+                continue;
+              }
+            }
+
+            // Invariants passed: apply merged row and update mutation baseline
+            await _upsertRow(tx, entity, id, merged, version, now, jsonEncode(remoteData));
+            await tx.execute('''
+              UPDATE _sync_outbox 
+              SET payload_json = ?, base_snapshot_json = ?, base_version = ? 
+              WHERE mutation_id = ?
+            ''', [jsonEncode(merged), jsonEncode(remoteData), version, mutId]);
           }
         }
 
-        // Commit checkpoint cursor in the same atomic transaction
+        // Commit checkpoint cursor
         await tx.execute(
           'INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES (?, ?)',
           ['last_synced_cursor', nextCursor.toString()],
@@ -270,6 +314,30 @@ class SyncWorker {
     }
   }
 
+  static Future<void> _upsertRow(
+    SqliteWriteContext tx,
+    String entity,
+    String id,
+    Map<String, dynamic> data,
+    int version,
+    int now,
+    String? baseSnapshot,
+  ) async {
+    final cols = <String>['id', 'version', 'updated_at', '_base_snapshot_json'];
+    final vals = <dynamic>[id, version, now, baseSnapshot];
+
+    for (final entry in data.entries) {
+      if (entry.key != 'id' && entry.key != 'version' && entry.key != 'updated_at' && entry.key != '_base_snapshot_json') {
+        cols.add(entry.key);
+        vals.add(entry.value);
+      }
+    }
+
+    final colStr = cols.join(', ');
+    final phStr = cols.map((_) => '?').join(', ');
+    await tx.execute('INSERT OR REPLACE INTO $entity ($colStr) VALUES ($phStr)', vals);
+  }
+
   /// Continues pulling all available pages until has_more is false.
   Future<int> pullAll() async {
     int totalChanges = 0;
@@ -280,5 +348,71 @@ class SyncWorker {
       if (!res.hasMore) break;
     }
     return totalChanges;
+  }
+
+  /// Performs an atomic generation swap to recover from HTTP 410 Gone.
+  /// Pulls current snapshot into staging tables, swaps active tables atomically,
+  /// and reapplies pending outbox mutations.
+  Future<bool> resyncGeneration(List<String> entities) async {
+    // 1. Pull snapshot from server
+    final uriStr = '$serverUrl/sync/pull?snapshot=true&limit=1000';
+    final req = await httpClient.openUrl('GET', Uri.parse(uriStr));
+    final resp = await req.close();
+    if (resp.statusCode != HttpStatus.ok) return false;
+
+    final respBody = await utf8.decoder.bind(resp).join();
+    final bodyJson = jsonDecode(respBody) as Map<String, dynamic>;
+    final changes = (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
+    final nextCursor = bodyJson['next_cursor'] as int;
+
+    // 2. Perform atomic table swap in writeTransaction
+    await storage.db.writeTransaction((tx) async {
+      for (final entity in entities) {
+        // Create staging table with identical schema
+        await tx.execute('CREATE TABLE _staging_$entity AS SELECT * FROM $entity WHERE 0;');
+
+        // Populate staging table with latest remote changes
+        final entityChanges = changes.where((c) => c['entity'] == entity && c['_deleted'] != true);
+        for (final change in entityChanges) {
+          final id = change['id'].toString();
+          final data = (change['data'] as Map<String, dynamic>?) ?? {};
+          final version = (change['version'] as int?) ?? 1;
+          final now = DateTime.now().millisecondsSinceEpoch;
+          await _upsertRow(tx, '_staging_$entity', id, data, version, now, null);
+        }
+
+        // Atomic swap
+        await tx.execute('DROP TABLE IF EXISTS _old_$entity;');
+        await tx.execute('ALTER TABLE $entity RENAME TO _old_$entity;');
+        await tx.execute('ALTER TABLE _staging_$entity RENAME TO $entity;');
+        await tx.execute('DROP TABLE _old_$entity;');
+
+        // Reapply pending outbox mutations on top of newly swapped active table
+        final pending = await tx.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_name = ? AND status = 'pending' ORDER BY created_at ASC",
+          [entity],
+        );
+
+        for (final p in pending) {
+          final id = p['entity_id'] as String;
+          final op = p['op'] as String;
+          if (op == 'delete') {
+            await tx.execute('DELETE FROM $entity WHERE id = ?', [id]);
+          } else {
+            final payload = jsonDecode(p['payload_json'] as String) as Map<String, dynamic>;
+            final now = DateTime.now().millisecondsSinceEpoch;
+            await _upsertRow(tx, entity, id, payload, (p['base_version'] as int?) ?? 1, now, p['base_snapshot_json'] as String?);
+          }
+        }
+      }
+
+      // Update cursor to latest
+      await tx.execute(
+        'INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES (?, ?)',
+        ['last_synced_cursor', nextCursor.toString()],
+      );
+    });
+
+    return true;
   }
 }
