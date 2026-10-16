@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
+import 'uuid_v7.dart';
 import 'sync_storage.dart';
 import 'sync_worker.dart';
 
@@ -67,17 +68,19 @@ class OfflineSyncClient {
   }
 
   /// Atomically commits an optimistic entity write and appends to the outbox.
+  /// If [id] is omitted, it will use `data['id']` or generate a monotonic UUIDv7.
   Future<String> save({
     required String entity,
-    required String id,
+    String? id,
     required Map<String, dynamic> data,
     int version = 1,
     String? dependsOnMutationId,
     int schemaVersion = 1,
   }) async {
+    final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
     return await storage.save(
       entity: entity,
-      id: id,
+      id: effectiveId,
       data: data,
       version: version,
       dependsOnMutationId: dependsOnMutationId,

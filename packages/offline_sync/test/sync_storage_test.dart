@@ -105,7 +105,7 @@ void main() {
 
     test('Test Case 3: Shadow-Base Materialization & Optimistic Rollback', () async {
       // 1. Initial save of an entity
-      final mut1 = await storage.save(
+      await storage.save(
         entity: 'tasks',
         id: 'task-100',
         data: {'title': 'Original Title', 'priority': 'low'},

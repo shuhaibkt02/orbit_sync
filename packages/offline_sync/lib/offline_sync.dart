@@ -1,6 +1,6 @@
 library offline_sync;
 
-export 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
+export 'package:sqlite3/sqlite3.dart' show ResultSet;
 export 'src/uuid_v7.dart';
 export 'src/sync_storage.dart';
 export 'src/sync_worker.dart';
