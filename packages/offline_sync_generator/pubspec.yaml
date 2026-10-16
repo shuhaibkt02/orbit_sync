@@ -1,0 +1,23 @@
+name: offline_sync_generator
+description: Code generator and automated test suite builder for offline_sync (@SyncEntity).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  analyzer: ^14.5.0
+  build: ^5.0.0
+  source_gen: ^4.3.1
+  offline_sync_annotation:
+    path: ../offline_sync_annotation
+
+dev_dependencies:
+  test: ^1.24.0
+  build_test: ^3.0.0
+  build_runner: ^2.4.0
+  offline_sync:
+    path: ../offline_sync
+  sync_server:
+    path: ../../tools/sync_server

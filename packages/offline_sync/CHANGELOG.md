@@ -31,5 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `SyncProfile.basic` (LWW conflict resolution, simple retry, FIFO).
   - Added `SyncProfile.standard` (3-way column merge, exponential backoff, DLQ).
   - Added `SyncProfile.enterprise` (DAG selective holding, invariant validation, DLQ, multi-tenant).
+- **Codegen Companion Packages (Path B):**
+  - Added `offline_sync_annotation` with `@SyncEntity`, `@PrimaryKey`, and `@SyncField`.
+  - Added `offline_sync_generator` providing `build_runner` code generation for typed repositories (`$TaskRepository`) and automated test suites (`$TaskSyncTestSuite`).
 - **Acceptance Test Suite:**
-  - 29 comprehensive automated integration tests covering all distributed synchronization edge cases and profile tiers.
+  - 31 comprehensive automated integration tests covering all distributed synchronization edge cases, profile tiers, and code generation.

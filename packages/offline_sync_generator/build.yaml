@@ -1,0 +1,7 @@
+builders:
+  sync_entity:
+    import: "package:offline_sync_generator/builder.dart"
+    builder_factories: ["syncEntityBuilder"]
+    build_extensions: {".dart": [".sync.g.dart"]}
+    auto_apply: dependents
+    build_to: source
