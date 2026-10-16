@@ -56,7 +56,7 @@ void main() {
       expect(outboxDuring['status'], 'pending');
 
       // 3. Retry push normally (sends same Idempotency-Key)
-      final retryRes = await worker.pushBatch(batchSize: 1);
+      final retryRes = await worker.pushBatch(batchSize: 1, force: true);
       expect(retryRes.status, SyncPushStatus.success);
 
       // Verify outbox marks 'synced'

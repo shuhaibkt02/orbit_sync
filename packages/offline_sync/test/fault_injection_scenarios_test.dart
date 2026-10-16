@@ -169,7 +169,7 @@ void main() {
       expect(serverHits[orderId], equals(1), reason: 'Server did receive and commit first attempt');
 
       // 2. Second sync: network restored, client retries with exact same Idempotency-Key
-      await client.sync();
+      await client.sync(force: true);
 
       outboxRows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
       expect(outboxRows.first['status'], equals('synced'));
@@ -252,6 +252,90 @@ void main() {
       expect(outboxRows, isEmpty, reason: 'Zero orphaned outbox records after aborted transaction');
 
       await client.close();
+    });
+
+    test('Scenario 6: Injected DNS resolution failure (DnsFailure) pauses without crash and recovers', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((HttpRequest req) async {
+        req.response.statusCode = HttpStatus.ok;
+        req.response.headers.contentType = ContentType.json;
+        req.response.write(jsonEncode({'status': 'ok'}));
+        await req.response.close();
+      });
+
+      final targetUrl = 'http://${server.address.address}:${server.port}/api/records';
+      final faultClient = FaultInjectionHttpClient(
+        script: [const DnsFailure()],
+      );
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/dns_fault.db',
+        httpClient: faultClient,
+      );
+      await client.registerEntity('records', url: targetUrl);
+
+      final recId = await client.store('records', {'name': 'DNS Resilient Record'});
+
+      // Attempt 1: Injected DNS failure (SocketException)
+      await client.sync();
+
+      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      expect(rows.first['status'], equals('pending'), reason: 'DNS failure leaves outbox pending');
+      expect(rows.first['retry_count'], equals(1));
+      expect(rows.first['next_retry_at'], isNotNull);
+
+      // Attempt 2: DNS resolves -> sync recovers with force: true
+      await client.sync(force: true);
+
+      rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      expect(rows.first['status'], equals('synced'));
+      expect(rows.first['next_retry_at'], isNull);
+
+      await client.close();
+      faultClient.close();
+      await server.close();
+    });
+
+    test('Scenario 7: Injected TLS handshake failure (TlsFailure) pauses without corruption and recovers', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((HttpRequest req) async {
+        req.response.statusCode = HttpStatus.ok;
+        req.response.headers.contentType = ContentType.json;
+        req.response.write(jsonEncode({'status': 'ok'}));
+        await req.response.close();
+      });
+
+      final targetUrl = 'http://${server.address.address}:${server.port}/api/records';
+      final faultClient = FaultInjectionHttpClient(
+        script: [const TlsFailure()],
+      );
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/tls_fault.db',
+        httpClient: faultClient,
+      );
+      await client.registerEntity('records', url: targetUrl);
+
+      final recId = await client.store('records', {'name': 'TLS Resilient Record'});
+
+      // Attempt 1: Injected TLS handshake failure (HandshakeException)
+      await client.sync();
+
+      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      expect(rows.first['status'], equals('pending'), reason: 'TLS handshake failure leaves outbox pending');
+      expect(rows.first['retry_count'], equals(1));
+      expect(rows.first['next_retry_at'], isNotNull);
+
+      // Attempt 2: Handshake succeeds -> sync recovers
+      await client.sync(force: true);
+
+      rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      expect(rows.first['status'], equals('synced'));
+      expect(rows.first['next_retry_at'], isNull);
+
+      await client.close();
+      faultClient.close();
+      await server.close();
     });
   });
 }

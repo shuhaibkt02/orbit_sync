@@ -6,6 +6,7 @@ import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import 'sync_storage.dart';
 import 'sync_profile.dart';
+import 'backoff_policy.dart';
 
 enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized, needsUpgrade }
 enum SyncPullStatus { success, networkError, expiredCursor, unauthorized }
@@ -82,12 +83,16 @@ class SyncWorker {
   int currentSchemaVersion;
   MutationMigrator? migrator;
   final void Function(String message)? onLog;
+  final BackoffPolicy backoffPolicy;
+  int Function()? nowMsProvider;
 
   SyncWorker({
     required this.storage,
     required this.serverUrl,
     this.profile = SyncProfile.enterprise,
     http.Client? client,
+    BackoffPolicy? backoffPolicy,
+    this.nowMsProvider,
     this.pullPageLimit = 50,
     this.scopeFilter,
     this.getAuthToken,
@@ -96,7 +101,8 @@ class SyncWorker {
     this.currentSchemaVersion = 1,
     this.migrator,
     this.onLog,
-  }) : httpClient = client ?? http.Client();
+  })  : httpClient = client ?? http.Client(),
+        backoffPolicy = backoffPolicy ?? BackoffPolicy();
 
   /// Gets the last checkpointed cursor from metadata.
   Future<int> getLastSyncedCursor() async {
@@ -118,7 +124,13 @@ class SyncWorker {
 
   /// Drains up to [batchSize] pending outbox mutations to POST /sync/push.
   /// Enforces DAG dependencies: selectively holds children if their parent is quarantined in DLQ/conflict.
-  Future<SyncPushResult> pushBatch({int batchSize = 10, String? chaos}) async {
+  Future<SyncPushResult> pushBatch({
+    int batchSize = 10,
+    String? chaos,
+    bool force = false,
+  }) async {
+    final nowMs = nowMsProvider?.call() ?? DateTime.now().toUtc().millisecondsSinceEpoch;
+
     // 0. Automatically unblock any held mutations whose parent has successfully synced
     if (profile == SyncProfile.enterprise) {
       await storage.db.execute('''
@@ -129,10 +141,12 @@ class SyncWorker {
       ''');
     }
 
-    // 1. Fetch pending candidates
+    // 1. Fetch pending candidates that are eligible to run (next_retry_at is null or <= nowMs, or force=true)
     final pendingRaw = await storage.db.getAll(
-      "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
-      [batchSize * 2],
+      force
+          ? "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?"
+          : "SELECT * FROM _sync_outbox WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?) ORDER BY created_at ASC LIMIT ?",
+      force ? [batchSize * 2] : [nowMs, batchSize * 2],
     );
 
     if (pendingRaw.isEmpty) {
@@ -255,7 +269,7 @@ class SyncWorker {
 
           if (resp.statusCode >= 200 && resp.statusCode < 300) {
             await storage.db.execute(
-              "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id = ?",
+              "UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL WHERE mutation_id = ?",
               [mutationId],
             );
             onLog?.call('Orbit: Successfully synced mutation $mutationId to $targetUrl (HTTP ${resp.statusCode})');
@@ -268,22 +282,50 @@ class SyncWorker {
             await _handleAuthExpired();
             return const SyncPushResult(status: SyncPushStatus.unauthorized);
           } else if (resp.statusCode == HttpStatus.tooManyRequests) {
-            final retryAfter = resp.headers['retry-after'] ?? '30';
+            final retryAfter = resp.headers['retry-after'];
+            final retrySec = int.tryParse(retryAfter ?? '') ?? backoffPolicy.delayFor(1).inSeconds;
+            final nextRetry = nowMs + (retrySec * 1000);
             await storage.db.execute(
-              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
-              mutationIds,
+              "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id = ?",
+              [nextRetry, mutationId],
             );
-            onLog?.call('Orbit: Rate limited (HTTP 429). Pausing queue. Retry-After: $retryAfter seconds.');
+            final remIds = mutationIds.where((id) => id != mutationId).toList();
+            if (remIds.isNotEmpty) {
+              final remPlaceholders = List.filled(remIds.length, '?').join(', ');
+              await storage.db.execute(
+                "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPlaceholders) AND status = 'in_flight'",
+                remIds,
+              );
+            }
+            onLog?.call('Orbit: Rate limited (HTTP 429). Pausing queue until $nextRetry. Retry-After: $retrySec seconds.');
             return SyncPushResult(
               status: SyncPushStatus.networkError,
-              errorMessage: 'Rate limited (HTTP 429). Retry-After: $retryAfter',
+              errorMessage: 'Rate limited (HTTP 429). Retry-After: $retrySec',
             );
           } else if (resp.statusCode >= 500) {
+            final currentRetry = (r['retry_count'] as int?) ?? 0;
+            final newRetry = currentRetry + 1;
+            final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+            final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+            final structuredError = jsonEncode({
+              'statusCode': resp.statusCode,
+              'error': respBody,
+              'url': targetUrl,
+              'failedAt': DateTime.now().toUtc().toIso8601String(),
+            });
             await storage.db.execute(
-              "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
-              mutationIds,
+              "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ?, error_details_json = ? WHERE mutation_id = ?",
+              [targetStatus, newRetry, nextRetry, structuredError, mutationId],
             );
-            onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}) for $targetUrl. Remains pending.');
+            final remIds = mutationIds.where((id) => id != mutationId).toList();
+            if (remIds.isNotEmpty) {
+              final remPlaceholders = List.filled(remIds.length, '?').join(', ');
+              await storage.db.execute(
+                "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPlaceholders) AND status = 'in_flight'",
+                remIds,
+              );
+            }
+            onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}) for $targetUrl. Next retry at: $nextRetry');
             return SyncPushResult(
               status: SyncPushStatus.networkError,
               errorMessage: 'Server error (HTTP ${resp.statusCode}): $respBody',
@@ -297,7 +339,7 @@ class SyncWorker {
               'failedAt': DateTime.now().toUtc().toIso8601String(),
             });
             await storage.db.execute('''
-              UPDATE _sync_outbox SET status = ?, error_details_json = ? WHERE mutation_id = ?
+              UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?
             ''', [targetStatus, structuredError, mutationId]);
             onLog?.call('Orbit: Poison pill error (HTTP 400). Quarantined mutation to DLQ: $respBody');
           } else if (resp.statusCode == HttpStatus.unprocessableEntity) {
@@ -309,7 +351,7 @@ class SyncWorker {
             });
             await storage.rollbackOptimistic(mutationId, status: 'validation_error');
             await storage.db.execute(
-              'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
+              'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
               [structuredError, mutationId],
             );
             onLog?.call('Orbit: Validation error (HTTP 422). Rolled back active row: $respBody');
@@ -321,7 +363,7 @@ class SyncWorker {
               'failedAt': DateTime.now().toUtc().toIso8601String(),
             });
             await storage.db.execute('''
-              UPDATE _sync_outbox SET status = 'failed', error_details_json = ? WHERE mutation_id = ?
+              UPDATE _sync_outbox SET status = 'failed', next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?
             ''', [structuredError, mutationId]);
             onLog?.call('Orbit: Server error (HTTP ${resp.statusCode}) for $targetUrl: $respBody');
           } else {
@@ -331,11 +373,23 @@ class SyncWorker {
             );
           }
         } catch (e) {
+          final currentRetry = (r['retry_count'] as int?) ?? 0;
+          final newRetry = currentRetry + 1;
+          final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+          final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
           await storage.db.execute(
-            "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders) AND status = 'in_flight'",
-            mutationIds,
+            "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ? WHERE mutation_id = ?",
+            [targetStatus, newRetry, nextRetry, mutationId],
           );
-          onLog?.call('Orbit: Network or push error for $targetUrl: $e');
+          final remIds = mutationIds.where((id) => id != mutationId).toList();
+          if (remIds.isNotEmpty) {
+            final remPlaceholders = List.filled(remIds.length, '?').join(', ');
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPlaceholders) AND status = 'in_flight'",
+              remIds,
+            );
+          }
+          onLog?.call('Orbit: Network or push error for $targetUrl: $e. Next retry at: $nextRetry');
           return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
         }
       }
@@ -380,24 +434,33 @@ class SyncWorker {
       }
 
       if (resp.statusCode == HttpStatus.tooManyRequests) {
-        final retryAfter = resp.headers['retry-after'] ?? '30';
+        final retryAfterHeader = resp.headers['retry-after'];
+        final retrySec = int.tryParse(retryAfterHeader ?? '') ?? backoffPolicy.delayFor(1).inSeconds;
+        final nextRetry = nowMs + (retrySec * 1000);
         await storage.db.execute(
-          "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
-          mutationIds,
+          "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id IN ($placeholders)",
+          [nextRetry, ...mutationIds],
         );
-        onLog?.call('Orbit: Rate limited (HTTP 429). Pausing batch. Retry-After: $retryAfter seconds.');
+        onLog?.call('Orbit: Rate limited (HTTP 429). Pausing batch until $nextRetry. Retry-After: $retrySec seconds.');
         return SyncPushResult(
           status: SyncPushStatus.networkError,
-          errorMessage: 'Rate limited (HTTP 429). Retry-After: $retryAfter',
+          errorMessage: 'Rate limited (HTTP 429). Retry-After: $retrySec',
         );
       }
 
       if (resp.statusCode >= 500) {
-        await storage.db.execute(
-          "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id IN ($placeholders)",
-          mutationIds,
-        );
-        onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}). Remains pending.');
+        for (final r in pending) {
+          final mutId = r['mutation_id'] as String;
+          final currentRetry = (r['retry_count'] as int?) ?? 0;
+          final newRetry = currentRetry + 1;
+          final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+          final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+          await storage.db.execute(
+            "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ? WHERE mutation_id = ?",
+            [targetStatus, newRetry, nextRetry, mutId],
+          );
+        }
+        onLog?.call('Orbit: Transient server error (HTTP ${resp.statusCode}). Retries scheduled.');
         return SyncPushResult(
           status: SyncPushStatus.networkError,
           errorMessage: 'Server error (HTTP ${resp.statusCode}): $respBody',
@@ -408,7 +471,7 @@ class SyncWorker {
         final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
         await storage.db.execute('''
           UPDATE _sync_outbox 
-          SET status = ?, error_details_json = ? 
+          SET status = ?, next_retry_at = NULL, error_details_json = ? 
           WHERE mutation_id = ?
         ''', [targetStatus, respBody, mutationIds.first]);
 
@@ -433,7 +496,7 @@ class SyncWorker {
         // Rollback optimistic active row to base snapshot; preserve draft in outbox
         await storage.rollbackOptimistic(mutationIds.first, status: 'validation_error');
         await storage.db.execute(
-          'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
+          'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
           [respBody, mutationIds.first],
         );
         onLog?.call('Orbit: Validation error (HTTP 422). Rolled back active row: $respBody');
@@ -442,7 +505,7 @@ class SyncWorker {
 
       if (resp.statusCode == HttpStatus.ok) {
         await storage.db.execute(
-          "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id IN ($placeholders)",
+          "UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL WHERE mutation_id IN ($placeholders)",
           mutationIds,
         );
         onLog?.call('Orbit: Successfully pushed ${mutations.length} mutation(s).');
@@ -451,10 +514,17 @@ class SyncWorker {
 
       throw HttpException('HTTP ${resp.statusCode}: $respBody');
     } catch (e) {
-      await storage.db.execute(
-        "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
-        mutationIds,
-      );
+      for (final r in pending) {
+        final mutId = r['mutation_id'] as String;
+        final currentRetry = (r['retry_count'] as int?) ?? 0;
+        final newRetry = currentRetry + 1;
+        final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+        final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+        await storage.db.execute(
+          "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ? WHERE mutation_id = ?",
+          [targetStatus, newRetry, nextRetry, mutId],
+        );
+      }
       onLog?.call('Orbit: Network or push error: $e');
       return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
     }

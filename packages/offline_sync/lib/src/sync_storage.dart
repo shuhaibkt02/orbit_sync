@@ -47,6 +47,7 @@ class SyncStorage {
           schema_version INTEGER NOT NULL DEFAULT 1,
           error_details_json TEXT,
           retry_count INTEGER NOT NULL DEFAULT 0,
+          next_retry_at INTEGER,
           created_at INTEGER NOT NULL
         );
       ''');
@@ -58,10 +59,13 @@ class SyncStorage {
       try {
         await tx.execute('ALTER TABLE _sync_outbox ADD COLUMN http_method TEXT');
       } catch (_) {}
+      try {
+        await tx.execute('ALTER TABLE _sync_outbox ADD COLUMN next_retry_at INTEGER');
+      } catch (_) {}
 
       await tx.execute('''
         CREATE INDEX IF NOT EXISTS idx_sync_outbox_queue 
-        ON _sync_outbox(status, created_at);
+        ON _sync_outbox(status, next_retry_at, created_at);
       ''');
 
       await tx.execute('''

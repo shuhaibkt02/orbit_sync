@@ -97,7 +97,7 @@ void main() {
 
       // 3. Rate limit window passes on server
       isRateLimited = false;
-      await client.sync();
+      await client.sync(force: true);
 
       // Check status: Now successfully 'synced'
       rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
@@ -150,7 +150,7 @@ void main() {
 
       // Server recovers
       serverDown = false;
-      await client.sync();
+      await client.sync(force: true);
 
       rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [invId]);
       expect(rows.first['status'], equals('synced'));

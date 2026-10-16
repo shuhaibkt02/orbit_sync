@@ -131,7 +131,7 @@ void main() {
       expect(outboxAfterDrop['schema_version'], 2);
 
       // Retry push: sends exact same upgraded payload without re-running migration
-      final retryRes = await worker.pushBatch(batchSize: 1);
+      final retryRes = await worker.pushBatch(batchSize: 1, force: true);
       expect(retryRes.status, SyncPushStatus.success);
 
       final outboxSynced = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [mutId]);

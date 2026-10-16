@@ -9,6 +9,7 @@ import 'sync_worker.dart';
 import 'sync_profile.dart';
 import 'connectivity_monitor.dart';
 import 'sync_failure.dart';
+import 'backoff_policy.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient {
@@ -35,6 +36,8 @@ class OfflineSyncClient {
     String serverUrl = '',
     SyncProfile profile = SyncProfile.standard,
     http.Client? httpClient,
+    BackoffPolicy? backoffPolicy,
+    int Function()? nowMsProvider,
     int maxReaders = 4,
     int pullPageLimit = 50,
     Map<String, dynamic>? scopeFilter,
@@ -57,6 +60,8 @@ class OfflineSyncClient {
       serverUrl: serverUrl,
       profile: profile,
       client: httpClient,
+      backoffPolicy: backoffPolicy,
+      nowMsProvider: nowMsProvider,
       pullPageLimit: pullPageLimit,
       scopeFilter: scopeFilter,
       getAuthToken: getAuthToken,
@@ -212,7 +217,8 @@ class OfflineSyncClient {
   }
 
   /// Performs a full bidirectional sync: pulls incoming changes, then drains pending outbox push.
-  Future<void> sync() async {
+  /// If [force] is true, pending mutations are pushed immediately bypassing any active backoff window.
+  Future<void> sync({bool force = false}) async {
     if (_isSyncing || _isPaused) return;
     _isSyncing = true;
     try {
@@ -223,7 +229,7 @@ class OfflineSyncClient {
 
       // 2. Drain pending outbox mutations
       while (true) {
-        final pushRes = await worker.pushBatch(batchSize: 20);
+        final pushRes = await worker.pushBatch(batchSize: 20, force: force);
         if (pushRes.status != SyncPushStatus.success || pushRes.applied == 0) {
           break;
         }
