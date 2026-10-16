@@ -19,6 +19,11 @@ build/
 *.db-wal
 *.db-shm
 
+# Internal Specs, Research & Skills
+docs/
+issues/
+.agents/
+
 # IDEs
 .idea/
 .vscode/

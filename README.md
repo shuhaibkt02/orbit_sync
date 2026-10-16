@@ -105,10 +105,8 @@ offline_plugin/
 │   ├── offline_sync_annotation/  # (Optional) Type-safe annotations for build_runner
 │   └── offline_sync_generator/   # (Optional) Code generator for strict typed repos
 │
-├── tools/
-│   └── sync_server/              # Local mock server for testing & chaos simulation
-│
-└── docs/                         # In-depth architectural & distributed systems specs
+└── tools/
+    └── sync_server/              # Local mock server for testing & chaos simulation
 ```
 
 ---
