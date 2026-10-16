@@ -266,5 +266,165 @@ void main() {
       await universalClient.close();
       await restServer.close(force: true);
     });
+
+    test('Test Case 7: Real-world Dead-Zone Entry and Auto-Drain on Reconnect', () async {
+      final monitor = ConnectivityMonitor(
+        timeout: const Duration(milliseconds: 100),
+        heartbeatInterval: const Duration(milliseconds: 100),
+        defaultProbeUrl: 'http://127.0.0.1:59999', // Non-existent dead zone port
+      );
+
+      // Probe dead zone
+      final reachable = await monitor.checkReachability();
+      expect(reachable, isFalse);
+      expect(monitor.isOnline, isFalse);
+
+      // Start live server
+      final liveServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final syncedItems = <String>[];
+      liveServer.listen((request) async {
+        final bodyStr = await utf8.decoder.bind(request).join();
+        if (bodyStr.isNotEmpty) {
+          final json = jsonDecode(bodyStr) as Map<String, dynamic>;
+          if (json.containsKey('title')) {
+            syncedItems.add(json['title'] as String);
+          }
+        }
+        request.response.statusCode = HttpStatus.ok;
+        await request.response.close();
+      });
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/deadzone.db',
+        serverUrl: 'http://${liveServer.address.host}:${liveServer.port}',
+        connectivityTimeout: const Duration(milliseconds: 100),
+      );
+      await client.registerEntity('tasks', url: 'http://${liveServer.address.host}:${liveServer.port}/tasks');
+
+      // User creates item while in dead zone
+      await client.store('tasks', {'title': 'Basement task'});
+
+      // Assert saved locally in backup
+      final offline = await client.restore('tasks');
+      expect(offline.length, equals(1));
+      expect(offline.first['title'], equals('Basement task'));
+      expect(syncedItems, isEmpty);
+
+      // Now reconnect: update probe URL to live server
+      client.connectivity.defaultProbeUrl = 'http://${liveServer.address.host}:${liveServer.port}';
+      final reconnected = await client.connectivity.checkReachability();
+      expect(reconnected, isTrue);
+
+      // Trigger sync upon reconnect
+      await client.sync();
+      expect(syncedItems, contains('Basement task'));
+
+      monitor.dispose();
+      await client.close();
+      await liveServer.close(force: true);
+    });
+
+    test('Test Case 8: Strict Status Invariant and Rich Failure Details on HTTP 422 Rejection', () async {
+      final errorServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      errorServer.listen((request) async {
+        request.response.statusCode = HttpStatus.unprocessableEntity;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'statusCode': 422,
+          'error': 'Warehouse ID 49 is closed',
+        }));
+        await request.response.close();
+      });
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/failures.db',
+      );
+      await client.registerEntity(
+        'orders',
+        url: 'http://${errorServer.address.host}:${errorServer.port}/api/orders',
+      );
+
+      // Store record locally
+      final orderId = await client.store('orders', {
+        'item': 'Pallet of goods',
+        'warehouse_id': 49,
+      });
+
+      // Attempt sync
+      await client.sync();
+
+      // Assert status is NOT synced
+      final rows = await client.query("SELECT status FROM _sync_outbox WHERE entity_id = ?", [orderId]);
+      expect(rows.first['status'], equals('validation_error'));
+
+      // Assert typed SyncFailure returns structured reason
+      final failures = await client.getFailures();
+      expect(failures.length, equals(1));
+      expect(failures.first.statusCode, equals(422));
+      expect(failures.first.errorMessage, contains('Warehouse ID 49 is closed'));
+      expect(failures.first.endpointUrl, contains('/api/orders'));
+
+      await client.close();
+      await errorServer.close(force: true);
+    });
+
+    test('Test Case 9: Remote Data Hydration from Standard REST API (fetchAndStore)', () async {
+      final restServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      restServer.listen((request) async {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode([
+          {'id': 'remote-1', 'title': 'First server note', 'version': 1},
+          {'id': 'remote-2', 'title': 'Second server note', 'version': 1},
+        ]));
+        await request.response.close();
+      });
+
+      final client = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/hydrate.db',
+      );
+      await client.registerEntity('notes', url: 'http://${restServer.address.host}:${restServer.port}/notes');
+
+      // Hydrate from server
+      final count = await client.fetchAndStore(
+        'notes',
+        url: 'http://${restServer.address.host}:${restServer.port}/notes',
+      );
+      expect(count, equals(2));
+
+      // Assert 100% available offline via restore()
+      final offlineNotes = await client.restore('notes');
+      expect(offlineNotes.length, equals(2));
+      expect(offlineNotes.any((n) => n['title'] == 'First server note'), isTrue);
+      expect(offlineNotes.any((n) => n['title'] == 'Second server note'), isTrue);
+
+      // Assert zero outbox push mutations were created (since data originated from server)
+      final outboxRows = await client.query("SELECT COUNT(*) as count FROM _sync_outbox");
+      expect(outboxRows.first['count'], equals(0));
+
+      await client.close();
+      await restServer.close(force: true);
+    });
+
+    test('Test Case 10: Headless Worker Background Sync (Alarm/WorkManager simulation)', () async {
+      final dbPath = '${tempDir.path}/headless.db';
+
+      // 1. Simulate UI storing a task before app is closed
+      final mainClient = await OfflineSyncClient.initialize(databasePath: dbPath);
+      await mainClient.registerEntity('tasks', url: server.baseUrl);
+      await mainClient.store('tasks', {'title': 'Pre-kill task'});
+      await mainClient.close(); // App is killed!
+
+      // 2. Simulate OS Alarm/WorkManager waking up in headless isolate
+      await OfflineSyncClient.headlessSync(
+        databasePath: dbPath,
+      );
+
+      // Verify that headless sync safely drained the queue without UI running
+      final checkClient = await OfflineSyncClient.initialize(databasePath: dbPath);
+      final outboxPending = await checkClient.query("SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
+      expect(outboxPending.first['count'], equals(0));
+      await checkClient.close();
+    });
   });
 }

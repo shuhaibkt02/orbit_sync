@@ -1,15 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
 import 'uuid_v7.dart';
 import 'sync_storage.dart';
 import 'sync_worker.dart';
 import 'sync_profile.dart';
+import 'connectivity_monitor.dart';
+import 'sync_failure.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient {
   final SyncStorage storage;
   final SyncWorker worker;
   final SyncProfile profile;
+  final ConnectivityMonitor connectivity;
   final Map<String, String> _entityUrls = {};
   Timer? _periodicTimer;
   Duration _periodicInterval = const Duration(seconds: 30);
@@ -20,6 +25,7 @@ class OfflineSyncClient {
     required this.storage,
     required this.worker,
     required this.profile,
+    required this.connectivity,
   });
 
   /// Initializes storage, outbox schema, connection pools, and sync worker.
@@ -36,6 +42,8 @@ class OfflineSyncClient {
     int currentSchemaVersion = 1,
     MutationMigrator? migrator,
     void Function(String message)? onLog,
+    String? healthCheckUrl,
+    Duration connectivityTimeout = const Duration(seconds: 3),
   }) async {
     final storage = await SyncStorage.open(
       path: databasePath,
@@ -56,11 +64,26 @@ class OfflineSyncClient {
       onLog: onLog,
     );
 
-    return OfflineSyncClient._(
+    final connectivity = ConnectivityMonitor(
+      timeout: connectivityTimeout,
+      defaultProbeUrl: healthCheckUrl ?? (serverUrl.isNotEmpty ? serverUrl : null),
+    );
+
+    final client = OfflineSyncClient._(
       storage: storage,
       worker: worker,
       profile: profile,
+      connectivity: connectivity,
     );
+
+    // Auto-sync the exact moment signal is restored
+    connectivity.onConnectivityChanged.listen((isOnline) {
+      if (isOnline && !client.isPaused) {
+        client.sync();
+      }
+    });
+
+    return client;
   }
 
   /// Registers an entity with its exact remote destination URL.
@@ -259,10 +282,95 @@ class OfflineSyncClient {
     );
   }
 
-  /// Closes database connections and stops periodic timers.
+  /// Returns typed [SyncFailure] objects with status code, message, and URL for all failed mutations.
+  Future<List<SyncFailure>> getFailures() async {
+    final rows = await getFailedMutations();
+    return rows.map(SyncFailure.fromRow).toList();
+  }
+
+  /// Live reactive stream of typed [SyncFailure] objects for Flutter UI warning banners.
+  Stream<List<SyncFailure>> watchFailures() {
+    return watchFailedMutations().map((rs) => rs.map(SyncFailure.fromRow).toList());
+  }
+
+  /// Hydrates local offline storage from a standard remote REST API endpoint.
+  /// Does NOT enqueue outbox sync mutations, as this data originates from the remote server.
+  Future<int> fetchAndStore(
+    String entity, {
+    required String url,
+    Map<String, String>? headers,
+  }) async {
+    final req = await worker.httpClient.openUrl('GET', Uri.parse(url));
+    req.headers.contentType = ContentType.json;
+    if (worker.getAuthToken != null) {
+      final token = await worker.getAuthToken!();
+      if (token != null) req.headers.set('Authorization', 'Bearer $token');
+    }
+    if (headers != null) {
+      headers.forEach(req.headers.set);
+    }
+    final resp = await req.close();
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw HttpException('Failed to hydrate $entity from $url: HTTP ${resp.statusCode}');
+    }
+    final bodyStr = await utf8.decoder.bind(resp).join();
+    final decoded = jsonDecode(bodyStr);
+    final List<dynamic> items = decoded is List ? decoded : (decoded['data'] as List? ?? []);
+
+    int count = 0;
+    for (final item in items) {
+      if (item is Map<String, dynamic>) {
+        final id = (item['id'] as String?) ?? UuidV7.generate();
+        await storage.db.writeTransaction((tx) async {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          for (final key in item.keys) {
+            if (key != 'id' && key != 'version' && key != 'updated_at' && key != '_base_snapshot_json') {
+              try {
+                await tx.execute('ALTER TABLE $entity ADD COLUMN $key TEXT');
+              } catch (_) {}
+            }
+          }
+          final cols = <String>['id', 'version', 'updated_at'];
+          final vals = <dynamic>[id, (item['version'] as int?) ?? 1, now];
+          for (final entry in item.entries) {
+            if (entry.key != 'id' && entry.key != 'version' && entry.key != 'updated_at') {
+              cols.add(entry.key);
+              vals.add(entry.value);
+            }
+          }
+          final colStr = cols.join(', ');
+          final placeholders = cols.map((_) => '?').join(', ');
+          await tx.execute('INSERT OR REPLACE INTO $entity ($colStr) VALUES ($placeholders)', vals);
+        });
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// Headless sync runner for OS background schedulers (WorkManager, AlarmManager, BGAppRefreshTask).
+  static Future<void> headlessSync({
+    required String databasePath,
+    Future<String?> Function()? getAuthToken,
+    void Function(String message)? onLog,
+  }) async {
+    final client = await OfflineSyncClient.initialize(
+      databasePath: databasePath,
+      getAuthToken: getAuthToken,
+      onLog: onLog,
+    );
+    try {
+      await client.sync();
+    } finally {
+      await client.close();
+    }
+  }
+
+  /// Closes database connections, connectivity monitors, and stops periodic timers.
   Future<void> close() async {
     _periodicTimer?.cancel();
     _periodicTimer = null;
+    connectivity.dispose();
     await storage.close();
   }
 }

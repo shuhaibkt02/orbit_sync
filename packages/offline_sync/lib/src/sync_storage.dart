@@ -120,7 +120,15 @@ class SyncStorage {
         baseVersion = (row['version'] as int?) ?? 1;
       }
 
-      // 2. Materialize optimistic write to table columns for direct SQL queryability
+      // 2. Ensure missing columns exist dynamically in the SQLite table
+      for (final key in data.keys) {
+        if (key != 'id' && key != 'version' && key != 'updated_at' && key != '_base_snapshot_json') {
+          try {
+            await tx.execute('ALTER TABLE $entity ADD COLUMN $key TEXT');
+          } catch (_) {}
+        }
+      }
+
       final now = DateTime.now().millisecondsSinceEpoch;
       final columns = <String>['id', 'version', 'updated_at', '_base_snapshot_json'];
       final values = <dynamic>[id, version, now, baseSnapshotJson];

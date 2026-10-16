@@ -251,17 +251,40 @@ class SyncWorker {
             return const SyncPushResult(status: SyncPushStatus.unauthorized);
           } else if (resp.statusCode == HttpStatus.badRequest) {
             final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
+            final structuredError = jsonEncode({
+              'statusCode': resp.statusCode,
+              'error': respBody,
+              'url': targetUrl,
+              'failedAt': DateTime.now().toUtc().toIso8601String(),
+            });
             await storage.db.execute('''
               UPDATE _sync_outbox SET status = ?, error_details_json = ? WHERE mutation_id = ?
-            ''', [targetStatus, respBody, mutationId]);
+            ''', [targetStatus, structuredError, mutationId]);
             onLog?.call('Orbit: Poison pill error (HTTP 400). Quarantined mutation to DLQ: $respBody');
           } else if (resp.statusCode == HttpStatus.unprocessableEntity) {
+            final structuredError = jsonEncode({
+              'statusCode': resp.statusCode,
+              'error': respBody,
+              'url': targetUrl,
+              'failedAt': DateTime.now().toUtc().toIso8601String(),
+            });
             await storage.rollbackOptimistic(mutationId, status: 'validation_error');
             await storage.db.execute(
               'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
-              [respBody, mutationId],
+              [structuredError, mutationId],
             );
             onLog?.call('Orbit: Validation error (HTTP 422). Rolled back active row: $respBody');
+          } else if (resp.statusCode >= 400) {
+            final structuredError = jsonEncode({
+              'statusCode': resp.statusCode,
+              'error': respBody,
+              'url': targetUrl,
+              'failedAt': DateTime.now().toUtc().toIso8601String(),
+            });
+            await storage.db.execute('''
+              UPDATE _sync_outbox SET status = 'failed', error_details_json = ? WHERE mutation_id = ?
+            ''', [structuredError, mutationId]);
+            onLog?.call('Orbit: Server error (HTTP ${resp.statusCode}) for $targetUrl: $respBody');
           } else {
             await storage.db.execute(
               "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
@@ -270,7 +293,7 @@ class SyncWorker {
           }
         } catch (e) {
           await storage.db.execute(
-            "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
+            "UPDATE _sync_outbox SET status = 'pending', retry_count = retry_count + 1 WHERE mutation_id = ?",
             [mutationId],
           );
           onLog?.call('Orbit: Network or push error for $targetUrl: $e');
