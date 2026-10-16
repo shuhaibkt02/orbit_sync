@@ -131,66 +131,72 @@ class SyncWorker {
   }) async {
     final nowMs = nowMsProvider?.call() ?? DateTime.now().toUtc().millisecondsSinceEpoch;
 
-    // 0. Automatically unblock any held mutations whose parent has successfully synced
-    if (profile == SyncProfile.enterprise) {
-      await storage.db.execute('''
-        UPDATE _sync_outbox 
-        SET status = 'pending' 
-        WHERE status = 'held' 
-          AND depends_on_mutation_id IN (SELECT mutation_id FROM _sync_outbox WHERE status = 'synced');
-      ''');
-    }
-
-    // 1. Fetch pending candidates that are eligible to run (next_retry_at is null or <= nowMs, or force=true)
-    final pendingRaw = await storage.db.getAll(
-      force
-          ? "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?"
-          : "SELECT * FROM _sync_outbox WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?) ORDER BY created_at ASC LIMIT ?",
-      force ? [batchSize * 2] : [nowMs, batchSize * 2],
-    );
-
-    if (pendingRaw.isEmpty) {
-      return const SyncPushResult(status: SyncPushStatus.success, applied: 0);
-    }
-
-    // 2. Selective holding (Enterprise only): filter out mutations whose parent is quarantined (dlq/conflict/held)
-    final pending = <Row>[];
-    for (final r in pendingRaw) {
+    // Atomically select eligible candidates and claim them into 'in_flight' status
+    final pending = await storage.db.writeTransaction<List<Row>>((tx) async {
+      // 0. Automatically unblock any held mutations whose parent has successfully synced
       if (profile == SyncProfile.enterprise) {
-        final parentId = r['depends_on_mutation_id'] as String?;
-        if (parentId != null) {
-          final parentRows = await storage.db.getAll(
-            'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
-            [parentId],
-          );
-          if (parentRows.isNotEmpty) {
-            final pStatus = parentRows.first['status'] as String;
-            if (pStatus == 'dlq' || pStatus == 'conflict' || pStatus == 'held') {
-              await storage.db.execute(
-                "UPDATE _sync_outbox SET status = 'held' WHERE mutation_id = ?",
-                [r['mutation_id']],
-              );
-              continue;
+        await tx.execute('''
+          UPDATE _sync_outbox 
+          SET status = 'pending' 
+          WHERE status = 'held' 
+            AND depends_on_mutation_id IN (SELECT mutation_id FROM _sync_outbox WHERE status = 'synced');
+        ''');
+      }
+
+      // 1. Fetch pending candidates that are eligible to run (next_retry_at is null or <= nowMs, or force=true)
+      final pendingRaw = await tx.getAll(
+        force
+            ? "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?"
+            : "SELECT * FROM _sync_outbox WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?) ORDER BY created_at ASC LIMIT ?",
+        force ? [batchSize * 2] : [nowMs, batchSize * 2],
+      );
+
+      if (pendingRaw.isEmpty) return const [];
+
+      // 2. Selective holding (Enterprise only): filter out mutations whose parent is quarantined (dlq/conflict/held)
+      final eligible = <Row>[];
+      for (final r in pendingRaw) {
+        if (profile == SyncProfile.enterprise) {
+          final parentId = r['depends_on_mutation_id'] as String?;
+          if (parentId != null) {
+            final parentRows = await tx.getAll(
+              'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+              [parentId],
+            );
+            if (parentRows.isNotEmpty) {
+              final pStatus = parentRows.first['status'] as String;
+              if (pStatus == 'dlq' || pStatus == 'conflict' || pStatus == 'held') {
+                await tx.execute(
+                  "UPDATE _sync_outbox SET status = 'held' WHERE mutation_id = ?",
+                  [r['mutation_id']],
+                );
+                continue;
+              }
             }
           }
         }
+        eligible.add(r);
+        if (eligible.length == batchSize) break;
       }
-      pending.add(r);
-      if (pending.length == batchSize) break;
-    }
+
+      if (eligible.isEmpty) return const [];
+
+      final mutationIds = eligible.map((r) => r['mutation_id'] as String).toList();
+      final placeholders = List.filled(mutationIds.length, '?').join(', ');
+      await tx.execute(
+        "UPDATE _sync_outbox SET status = 'in_flight' WHERE mutation_id IN ($placeholders) AND status = 'pending'",
+        mutationIds,
+      );
+
+      return eligible;
+    });
 
     if (pending.isEmpty) {
       return const SyncPushResult(status: SyncPushStatus.success, applied: 0);
     }
 
     final mutationIds = pending.map((r) => r['mutation_id'] as String).toList();
-
-    // Mark as in_flight
     final placeholders = List.filled(mutationIds.length, '?').join(', ');
-    await storage.db.execute(
-      "UPDATE _sync_outbox SET status = 'in_flight' WHERE mutation_id IN ($placeholders)",
-      mutationIds,
-    );
 
     final mutations = <Map<String, dynamic>>[];
     for (final r in pending) {
