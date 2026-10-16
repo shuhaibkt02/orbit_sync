@@ -1,0 +1,25 @@
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dart & Flutter
+.dart_tool/
+.packages
+pubspec.lock
+build/
+
+# Scratch & Spikes
+.scratch/
+*.db
+*.db-wal
+*.db-shm
+
+# IDEs
+.idea/
+.vscode/
+*.iml
