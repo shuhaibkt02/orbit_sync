@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:offline_sync/offline_sync.dart';
@@ -196,6 +197,74 @@ void main() {
       await sub.cancel();
       await connectivityController.close();
       await loggedClient.close();
+    });
+
+    test('Test Case 6: Developer provides exact full URL, store and restore work offline, sync sends offline headers', () async {
+      // 1. Spin up a standard REST endpoint simulator
+      late String receivedMethod;
+      late String receivedPath;
+      final receivedHeaders = <String, String>{};
+      late Map<String, dynamic> receivedBody;
+
+      final restServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      restServer.listen((request) async {
+        receivedMethod = request.method;
+        receivedPath = request.uri.path;
+        request.headers.forEach((name, values) {
+          receivedHeaders[name] = values.join(',');
+        });
+        final bodyStr = await utf8.decoder.bind(request).join();
+        receivedBody = jsonDecode(bodyStr) as Map<String, dynamic>;
+        request.response.statusCode = HttpStatus.created;
+        request.response.write(jsonEncode({'status': 'created'}));
+        await request.response.close();
+      });
+
+      final fullEndpointUrl = 'http://${restServer.address.host}:${restServer.port}/api/v1/custom-tasks';
+
+      // 2. Initialize client as an outsider: developer supplies exact full URL
+      final universalClient = await OfflineSyncClient.initialize(
+        databasePath: '${tempDir.path}/universal.db',
+      );
+      await universalClient.registerEntity(
+        'tasks',
+        url: fullEndpointUrl,
+        columnTypes: {'title': 'TEXT'},
+      );
+
+      // 3. STORE (Local backup: works 100% offline)
+      final recordId = await universalClient.store('tasks', {
+        'title': 'Universal offline task',
+      });
+
+      // 4. RESTORE (Read from local backup while offline)
+      final offlineRecords = await universalClient.restore('tasks');
+      expect(offlineRecords.length, equals(1));
+      expect(offlineRecords.first['title'], equals('Universal offline task'));
+
+      final singleRecord = await universalClient.restoreById('tasks', recordId);
+      expect(singleRecord, isNotNull);
+      expect(singleRecord!['title'], equals('Universal offline task'));
+
+      // 5. SYNC: Drains queue directly to the developer's exact URL
+      await universalClient.sync();
+
+      // 6. Assert standard REST dispatch and offline headers
+      expect(receivedMethod, equals('POST'));
+      expect(receivedPath, equals('/api/v1/custom-tasks'));
+      expect(receivedHeaders['x-offline-sync'], equals('true'));
+      expect(receivedHeaders['x-offline-created-at'], isNotNull);
+      expect(receivedHeaders['idempotency-key'], isNotNull);
+      expect(receivedBody['title'], equals('Universal offline task'));
+      expect(receivedBody['_offline_meta'], isNotNull);
+      expect(receivedBody['_offline_meta']['is_offline'], equals(true));
+
+      // Assert outbox marked synced
+      final failedMutations = await universalClient.getFailedMutations();
+      expect(failedMutations, isEmpty);
+
+      await universalClient.close();
+      await restServer.close(force: true);
     });
   });
 }

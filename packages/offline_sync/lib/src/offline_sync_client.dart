@@ -10,6 +10,7 @@ class OfflineSyncClient {
   final SyncStorage storage;
   final SyncWorker worker;
   final SyncProfile profile;
+  final Map<String, String> _entityUrls = {};
   Timer? _periodicTimer;
   Duration _periodicInterval = const Duration(seconds: 30);
   bool _isPaused = false;
@@ -24,7 +25,7 @@ class OfflineSyncClient {
   /// Initializes storage, outbox schema, connection pools, and sync worker.
   static Future<OfflineSyncClient> initialize({
     required String databasePath,
-    required String serverUrl,
+    String serverUrl = '',
     SyncProfile profile = SyncProfile.standard,
     int maxReaders = 4,
     int pullPageLimit = 50,
@@ -62,12 +63,29 @@ class OfflineSyncClient {
     );
   }
 
-  /// Registers an entity table with custom columns and optional foreign keys.
+  /// Registers an entity with its exact remote destination URL.
+  Future<void> registerEntity(
+    String entityName, {
+    required String url,
+    Map<String, String> columnTypes = const {},
+    String? foreignKeyClause,
+  }) async {
+    _entityUrls[entityName] = url;
+    await storage.registerEntityTable(
+      entityName,
+      columnTypes,
+      foreignKeyClause: foreignKeyClause,
+    );
+  }
+
+  /// Registers an entity table with custom columns, optional foreign keys, and optional full destination URL.
   Future<void> registerTable(
     String entityName,
     Map<String, String> columnTypes, {
     String? foreignKeyClause,
+    String? url,
   }) async {
+    if (url != null) _entityUrls[entityName] = url;
     await storage.registerEntityTable(
       entityName,
       columnTypes,
@@ -77,6 +95,7 @@ class OfflineSyncClient {
 
   /// Atomically commits an optimistic entity write and appends to the outbox.
   /// If [id] is omitted, it will use `data['id']` or generate a monotonic UUIDv7.
+  /// If [url] is provided, it overrides any registered entity destination URL.
   Future<String> save({
     required String entity,
     String? id,
@@ -84,8 +103,11 @@ class OfflineSyncClient {
     int version = 1,
     String? dependsOnMutationId,
     int schemaVersion = 1,
+    String? url,
+    String? httpMethod,
   }) async {
     final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
+    final effectiveUrl = url ?? _entityUrls[entity];
     return await storage.save(
       entity: entity,
       id: effectiveId,
@@ -93,18 +115,64 @@ class OfflineSyncClient {
       version: version,
       dependsOnMutationId: dependsOnMutationId,
       schemaVersion: schemaVersion,
+      endpointUrl: effectiveUrl,
+      httpMethod: httpMethod,
     );
+  }
+
+  /// Friendly alias for [save]. Stores a record locally in backup storage,
+  /// queues it for remote sync, and returns the record's primary key [id].
+  Future<String> store(
+    String entity,
+    Map<String, dynamic> data, {
+    String? id,
+    String? url,
+    String? httpMethod,
+  }) async {
+    final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
+    await save(
+      entity: entity,
+      id: effectiveId,
+      data: data,
+      url: url,
+      httpMethod: httpMethod,
+    );
+    return effectiveId;
   }
 
   /// Atomically deletes an entity and appends a delete envelope to the outbox.
   Future<String> delete({
     required String entity,
     required String id,
+    String? url,
+    String? httpMethod,
   }) async {
+    final effectiveUrl = url ?? _entityUrls[entity];
     return await storage.delete(
       entity: entity,
       id: id,
+      endpointUrl: effectiveUrl,
+      httpMethod: httpMethod,
     );
+  }
+
+  /// Restores records from local offline storage. Works 100% offline.
+  Future<List<Row>> restore(
+    String entity, {
+    String? where,
+    List<dynamic> whereArgs = const [],
+    String? orderBy,
+  }) async {
+    var sql = 'SELECT * FROM $entity';
+    if (where != null) sql += ' WHERE $where';
+    if (orderBy != null) sql += ' ORDER BY $orderBy';
+    return await query(sql, whereArgs);
+  }
+
+  /// Restores a single record by ID from local offline storage. Works 100% offline.
+  Future<Row?> restoreById(String entity, String id) async {
+    final rows = await query('SELECT * FROM $entity WHERE id = ? LIMIT 1', [id]);
+    return rows.isEmpty ? null : rows.first;
   }
 
   /// Queries records from the local SQLite database via pooled readers.

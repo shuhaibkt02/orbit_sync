@@ -37,6 +37,8 @@ class SyncStorage {
           entity_name TEXT NOT NULL,
           entity_id TEXT NOT NULL,
           op TEXT NOT NULL,
+          endpoint_url TEXT,
+          http_method TEXT,
           payload_json TEXT,
           base_snapshot_json TEXT,
           base_version INTEGER NOT NULL DEFAULT 1,
@@ -48,6 +50,14 @@ class SyncStorage {
           created_at INTEGER NOT NULL
         );
       ''');
+
+      // Ensure backward-compatible column upgrades if table existed
+      try {
+        await tx.execute('ALTER TABLE _sync_outbox ADD COLUMN endpoint_url TEXT');
+      } catch (_) {}
+      try {
+        await tx.execute('ALTER TABLE _sync_outbox ADD COLUMN http_method TEXT');
+      } catch (_) {}
 
       await tx.execute('''
         CREATE INDEX IF NOT EXISTS idx_sync_outbox_queue 
@@ -94,6 +104,8 @@ class SyncStorage {
     int version = 1,
     String? dependsOnMutationId,
     int schemaVersion = 1,
+    String? endpointUrl,
+    String? httpMethod,
   }) async {
     return await db.writeTransaction<String>((tx) async {
       // 1. Read existing row to capture shadow baseline for rollback
@@ -132,14 +144,16 @@ class SyncStorage {
       final mutationId = UuidV7.generate();
       await tx.execute('''
         INSERT INTO _sync_outbox (
-          mutation_id, entity_name, entity_id, op, payload_json,
+          mutation_id, entity_name, entity_id, op, endpoint_url, http_method, payload_json,
           base_snapshot_json, base_version, status, depends_on_mutation_id, schema_version, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
       ''', [
         mutationId,
         entity,
         id,
         'upsert',
+        endpointUrl,
+        httpMethod,
         jsonEncode(data),
         baseSnapshotJson,
         baseVersion,
@@ -156,6 +170,8 @@ class SyncStorage {
   Future<String> delete({
     required String entity,
     required String id,
+    String? endpointUrl,
+    String? httpMethod,
   }) async {
     return await db.writeTransaction<String>((tx) async {
       final existingRows = await tx.getAll('SELECT * FROM $entity WHERE id = ?', [id]);
@@ -176,13 +192,15 @@ class SyncStorage {
 
       await tx.execute('''
         INSERT INTO _sync_outbox (
-          mutation_id, entity_name, entity_id, op, payload_json,
+          mutation_id, entity_name, entity_id, op, endpoint_url, http_method, payload_json,
           base_snapshot_json, base_version, status, created_at
-        ) VALUES (?, ?, ?, 'delete', NULL, ?, ?, 'pending', ?)
+        ) VALUES (?, ?, ?, 'delete', ?, ?, NULL, ?, ?, 'pending', ?)
       ''', [
         mutationId,
         entity,
         id,
+        endpointUrl,
+        httpMethod ?? 'DELETE',
         baseSnapshotJson,
         baseVersion,
         now,

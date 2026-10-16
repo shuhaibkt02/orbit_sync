@@ -190,6 +190,96 @@ class SyncWorker {
       });
     }
 
+    final hasCustomEndpoints = pending.any((r) => r['endpoint_url'] != null);
+    if (hasCustomEndpoints) {
+      int appliedCount = 0;
+      for (final r in pending) {
+        final mutationId = r['mutation_id'] as String;
+        final rawUrl = r['endpoint_url'] as String?;
+        if (rawUrl == null) continue;
+
+        final entityId = r['entity_id'] as String;
+        final op = r['op'] as String;
+        final method = (r['http_method'] as String?) ?? (op == 'delete' ? 'DELETE' : 'POST');
+        var targetUrl = rawUrl;
+        if ((method == 'PUT' || method == 'PATCH' || method == 'DELETE') && !targetUrl.endsWith('/$entityId')) {
+          targetUrl = '$targetUrl/$entityId';
+        }
+
+        try {
+          final req = await httpClient.openUrl(method, Uri.parse(targetUrl));
+          req.headers.contentType = ContentType.json;
+          req.headers.set('Idempotency-Key', mutationId);
+          req.headers.set('X-Client-Mutation-Id', mutationId);
+          req.headers.set('X-Offline-Sync', 'true');
+          final createdAtIso = DateTime.fromMillisecondsSinceEpoch(r['created_at'] as int).toUtc().toIso8601String();
+          req.headers.set('X-Offline-Created-At', createdAtIso);
+
+          if (getAuthToken != null) {
+            final token = await getAuthToken!();
+            if (token != null) req.headers.set('Authorization', 'Bearer $token');
+          }
+
+          if (method != 'DELETE') {
+            final payloadJson = r['payload_json'] as String?;
+            var payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : <String, dynamic>{};
+            final bodyMap = Map<String, dynamic>.from(payload);
+            bodyMap['_offline_meta'] = {
+              'is_offline': true,
+              'offline_created_at': createdAtIso,
+              'mutation_id': mutationId,
+            };
+            req.add(utf8.encode(jsonEncode(bodyMap)));
+          }
+
+          final resp = await req.close();
+          final respBody = await utf8.decoder.bind(resp).join();
+
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id = ?",
+              [mutationId],
+            );
+            onLog?.call('Orbit: Successfully synced mutation $mutationId to $targetUrl (HTTP ${resp.statusCode})');
+            appliedCount++;
+          } else if (resp.statusCode == HttpStatus.unauthorized) {
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
+              [mutationId],
+            );
+            if (onAuthExpired != null) await onAuthExpired!();
+            return const SyncPushResult(status: SyncPushStatus.unauthorized);
+          } else if (resp.statusCode == HttpStatus.badRequest) {
+            final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
+            await storage.db.execute('''
+              UPDATE _sync_outbox SET status = ?, error_details_json = ? WHERE mutation_id = ?
+            ''', [targetStatus, respBody, mutationId]);
+            onLog?.call('Orbit: Poison pill error (HTTP 400). Quarantined mutation to DLQ: $respBody');
+          } else if (resp.statusCode == HttpStatus.unprocessableEntity) {
+            await storage.rollbackOptimistic(mutationId, status: 'validation_error');
+            await storage.db.execute(
+              'UPDATE _sync_outbox SET error_details_json = ? WHERE mutation_id = ?',
+              [respBody, mutationId],
+            );
+            onLog?.call('Orbit: Validation error (HTTP 422). Rolled back active row: $respBody');
+          } else {
+            await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
+              [mutationId],
+            );
+          }
+        } catch (e) {
+          await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
+            [mutationId],
+          );
+          onLog?.call('Orbit: Network or push error for $targetUrl: $e');
+          return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
+        }
+      }
+      return SyncPushResult(status: SyncPushStatus.success, applied: appliedCount);
+    }
+
     final idempotencyKey = mutationIds.length == 1 ? mutationIds.first : 'batch-${mutationIds.first}';
 
     try {
