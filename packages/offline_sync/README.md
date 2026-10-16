@@ -250,6 +250,97 @@ Fetches incremental delta changes from the server monotonic change feed.
 
 ---
 
+## Production Recipes
+
+### 1. OS Background Sync (Android WorkManager & iOS BGTaskScheduler)
+
+To sync data even when the app is completely closed or killed by the user, pair `offline_sync` with [`workmanager`](https://pub.dev/packages/workmanager). Because `offline_sync` operates on `sqlite_async` in WAL mode with connection pooling, headless background tasks and foreground UI share the SQLite database safely without file locking collisions:
+
+```dart
+import 'package:workmanager/workmanager.dart';
+import 'package:offline_sync/offline_sync.dart';
+
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    final client = await OfflineSyncClient.initialize(
+      databasePath: '/path/to/app_sync.db',
+      serverUrl: 'https://api.example.com',
+    );
+    await client.sync();
+    await client.close();
+    return true;
+  });
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher);
+  Workmanager().registerPeriodicTask(
+    'offline_sync_periodic',
+    'syncTask',
+    frequency: const Duration(minutes: 15),
+  );
+  runApp(const MyApp());
+}
+```
+
+### 2. Encrypted Auth Tokens (Keychain & Keystore)
+
+To store and inject JWT bearer tokens securely without dependency bloat, pass [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) directly into the client callback:
+
+```dart
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:offline_sync/offline_sync.dart';
+
+const secureStorage = FlutterSecureStorage();
+
+final client = await OfflineSyncClient.initialize(
+  databasePath: dbPath,
+  serverUrl: 'https://api.example.com',
+  getAuthToken: () => secureStorage.read(key: 'auth_jwt'),
+  onAuthExpired: () async {
+    final newJwt = await refreshAuthToken();
+    await secureStorage.write(key: 'auth_jwt', value: newJwt);
+  },
+);
+```
+
+### 3. Type-Safe Domain Models (Zero Build Latency)
+
+For compile-time type safety without running `build_runner`, map query rows directly using standard Dart constructors:
+
+```dart
+class Task {
+  final String id;
+  final String title;
+  final bool isCompleted;
+
+  Task({required this.id, required this.title, required this.isCompleted});
+
+  factory Task.fromRow(Map<String, dynamic> row) => Task(
+    id: row['id'] as String,
+    title: row['title'] as String,
+    isCompleted: (row['is_completed'] as int) == 1,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'is_completed': isCompleted ? 1 : 0,
+  };
+}
+
+// Reactively watch type-safe streams in UI:
+Stream<List<Task>> watchTasks(OfflineSyncClient client) {
+  return client.watch('SELECT * FROM tasks ORDER BY created_at DESC').map(
+    (rs) => rs.map(Task.fromRow).toList(),
+  );
+}
+```
+
+---
+
 ## Testing & Chaos Verification
 
 This engine includes a complete standalone acceptance suite in `test/` running against an embedded pure-Dart `FakeSyncServer`. Run the suite anytime with:
