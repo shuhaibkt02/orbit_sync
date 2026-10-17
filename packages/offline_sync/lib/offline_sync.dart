@@ -9,4 +9,5 @@ export 'src/sync_profile.dart';
 export 'src/connectivity_monitor.dart';
 export 'src/sync_failure.dart';
 export 'src/backoff_policy.dart';
+export 'src/sync_status_summary.dart';
 

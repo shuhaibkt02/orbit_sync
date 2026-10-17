@@ -10,6 +10,7 @@ import 'sync_profile.dart';
 import 'connectivity_monitor.dart';
 import 'sync_failure.dart';
 import 'backoff_policy.dart';
+import 'sync_status_summary.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient {
@@ -302,6 +303,148 @@ class OfflineSyncClient {
   /// Live reactive stream of typed [SyncFailure] objects for Flutter UI warning banners.
   Stream<List<SyncFailure>> watchFailures() {
     return watchFailedMutations().map((rs) => rs.map(SyncFailure.fromRow).toList());
+  }
+
+  /// Returns high-level outbox sync metrics (pending, in-flight, synced, failed) without writing SQL.
+  Future<SyncStatusSummary> getSummary() async {
+    final rows = await query(
+      "SELECT status, COUNT(*) as cnt, MIN(created_at) as oldest FROM _sync_outbox GROUP BY status",
+    );
+    return _buildSummaryFromRows(rows);
+  }
+
+  /// Live reactive stream of outbox sync metrics for dashboards and status widgets with zero SQL.
+  Stream<SyncStatusSummary> watchSummary() {
+    return watch(
+      "SELECT status, COUNT(*) as cnt, MIN(created_at) as oldest FROM _sync_outbox GROUP BY status",
+    ).map(_buildSummaryFromRows);
+  }
+
+  static SyncStatusSummary _buildSummaryFromRows(Iterable<Row> rows) {
+    int pending = 0;
+    int inFlight = 0;
+    int synced = 0;
+    int failed = 0;
+    int total = 0;
+    int? oldestPendingEpoch;
+
+    for (final r in rows) {
+      final status = r['status'] as String?;
+      final count = (r['cnt'] as int?) ?? 0;
+      final oldest = r['oldest'] as int?;
+      total += count;
+
+      if (status == 'pending') {
+        pending += count;
+        if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
+          oldestPendingEpoch = oldest;
+        }
+      } else if (status == 'in_flight') {
+        inFlight += count;
+        if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
+          oldestPendingEpoch = oldest;
+        }
+      } else if (status == 'synced') {
+        synced += count;
+      } else if (status == 'failed' || status == 'dlq' || status == 'validation_error') {
+        failed += count;
+        if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
+          oldestPendingEpoch = oldest;
+        }
+      }
+    }
+
+    return SyncStatusSummary(
+      pending: pending,
+      inFlight: inFlight,
+      synced: synced,
+      failed: failed,
+      total: total,
+      oldestPendingAt: oldestPendingEpoch != null
+          ? DateTime.fromMillisecondsSinceEpoch(oldestPendingEpoch)
+          : null,
+    );
+  }
+
+  /// Returns typed [OutboxRecord] objects optionally filtered by [status] with zero SQL.
+  Future<List<OutboxRecord>> getRecords({String? status, int limit = 100}) async {
+    String sql = 'SELECT * FROM _sync_outbox';
+    final params = <dynamic>[];
+    if (status != null) {
+      sql += ' WHERE status = ?';
+      params.add(status);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ?';
+    params.add(limit);
+    final rows = await query(sql, params);
+    return rows.map(OutboxRecord.fromRow).toList();
+  }
+
+  /// Live reactive stream of typed [OutboxRecord] objects optionally filtered by [status].
+  Stream<List<OutboxRecord>> watchRecords({String? status, int limit = 100}) {
+    String sql = 'SELECT * FROM _sync_outbox';
+    final params = <dynamic>[];
+    if (status != null) {
+      sql += ' WHERE status = ?';
+      params.add(status);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ?';
+    params.add(limit);
+    return watch(sql, parameters: params).map((rs) => rs.map(OutboxRecord.fromRow).toList());
+  }
+
+  /// Returns unsynced mutations that have exceeded [maxAge] (e.g. 60 minutes) without writing SQL.
+  Future<List<OutboxRecord>> getStaleRecords({required Duration maxAge}) async {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - maxAge.inMilliseconds;
+    final rows = await query(
+      "SELECT * FROM _sync_outbox WHERE status NOT IN ('synced') AND created_at <= ? ORDER BY created_at ASC",
+      [cutoff],
+    );
+    return rows.map(OutboxRecord.fromRow).toList();
+  }
+
+  /// Live reactive stream of unsynced mutations exceeding [maxAge] for business SLA escalation alerts.
+  Stream<List<OutboxRecord>> watchStaleRecords({required Duration maxAge}) {
+    return watch(
+      "SELECT * FROM _sync_outbox WHERE status NOT IN ('synced') ORDER BY created_at ASC",
+    ).map((rs) => rs.map(OutboxRecord.fromRow).where((r) => r.isStale(maxAge)).toList());
+  }
+
+  /// Manually resets a failed or quarantined mutation to 'pending' for immediate re-sync.
+  Future<void> retryMutation(String mutationId, {bool syncNow = false}) async {
+    await storage.db.execute(
+      "UPDATE _sync_outbox SET status = 'pending', retry_count = 0, next_retry_at = NULL WHERE mutation_id = ?",
+      [mutationId],
+    );
+    if (syncNow) {
+      await sync(force: true);
+    }
+  }
+
+  /// Manually resets all failed, quarantined (DLQ), and validation-error mutations to 'pending'.
+  Future<void> retryAllFailed({bool syncNow = false}) async {
+    await storage.db.execute(
+      "UPDATE _sync_outbox SET status = 'pending', retry_count = 0, next_retry_at = NULL WHERE status IN ('failed', 'dlq', 'validation_error')",
+    );
+    if (syncNow) {
+      await sync(force: true);
+    }
+  }
+
+  /// Cancels and deletes an unsynced mutation from the outbox so it is never pushed.
+  Future<void> cancelMutation(String mutationId) async {
+    await storage.db.execute(
+      "DELETE FROM _sync_outbox WHERE mutation_id = ?",
+      [mutationId],
+    );
+  }
+
+  /// Manually marks a mutation as synced when the developer handles delivery via a custom endpoint.
+  Future<void> markSynced(String mutationId) async {
+    await storage.db.execute(
+      "UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL WHERE mutation_id = ?",
+      [mutationId],
+    );
   }
 
   /// Hydrates local offline storage from a standard remote REST API endpoint.

@@ -25,8 +25,15 @@ void main() {
       await initialStorage.close();
 
       // 2. Spawn child subprocess that begins writeTransaction and hangs
+      String dartBinary = Platform.resolvedExecutable;
+      if (dartBinary.contains('flutter_tester')) {
+        final flutterDir = File(dartBinary).parent.parent.parent.parent.parent;
+        final candidate = '${flutterDir.path}/bin/dart';
+        dartBinary = File(candidate).existsSync() ? candidate : 'dart';
+      }
+
       final process = await Process.start(
-        Platform.resolvedExecutable,
+        dartBinary,
         ['run', 'test/helpers/uncommitted_writer.dart', dbPath],
         mode: ProcessStartMode.normal,
       );
