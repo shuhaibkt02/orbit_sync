@@ -10,11 +10,15 @@ class UuidV7 {
   static String generate() {
     int now = DateTime.now().millisecondsSinceEpoch;
     if (now <= _lastMillis) {
+      _seq++;
+      if (_seq > 0x0FFF) {
+        _lastMillis++;
+        _seq = 0;
+      }
       now = _lastMillis;
-      _seq = (_seq + 1) & 0x0FFF;
     } else {
       _lastMillis = now;
-      _seq = _rng.nextInt(0x1000);
+      _seq = 0;
     }
 
     final randA = _seq; // 12 bits
