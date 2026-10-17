@@ -118,6 +118,10 @@ done
 
 # Re-establish reverse proxy after airplane mode disable
 $ADB reverse tcp:8080 tcp:8080 2>/dev/null || true
+if [[ ! "$DEVICE_SERIAL" =~ "emulator" ]] && ! $ADB reverse --list 2>/dev/null | grep -q "8080"; then
+  echo "ERROR: 'adb reverse' rule for port 8080 failed to re-establish in Phase 2."
+  exit 1
+fi
 sleep 3
 
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
