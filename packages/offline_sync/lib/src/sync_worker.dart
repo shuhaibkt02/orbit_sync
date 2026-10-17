@@ -399,6 +399,7 @@ class SyncWorker {
           final currentRetry = (r['retry_count'] as int?) ?? 0;
           final newRetry = currentRetry + 1;
           final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+          final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
           final structuredError = jsonEncode({
             'error': e.toString(),
             'url': targetUrl,
