@@ -18,7 +18,7 @@ class FakeSyncServer {
   String get baseUrl => 'http://127.0.0.1:$port';
 
   static Future<FakeSyncServer> start({int port = 0, int retentionCursor = 0}) async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+    final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
     final instance = FakeSyncServer._(server);
     instance.retentionCursor = retentionCursor;
     instance._listen();

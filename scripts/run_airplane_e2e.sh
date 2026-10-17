@@ -80,13 +80,16 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Re-establish reverse proxy after airplane mode disable
+$ADB reverse tcp:8080 tcp:8080 2>/dev/null || true
+
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
 (cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"})
 
 echo "==> Verifying backend server-side receipt"
 if command -v curl >/dev/null 2>&1; then
   orders_json=$(curl -fsS "$SERVER/orders" 2>/dev/null || echo '{"orders":[]}')
-  server_count=$(echo "$orders_json" | grep -o '"id"' | wc -l | tr -d ' ' || echo "0")
+  server_count=$(echo "$orders_json" | { grep -o '"id"' || true; } | wc -l | tr -d '[:space:]')
   echo "==> Backend received $server_count records"
   if [ "$server_count" -ge "$MUTATIONS" ]; then
     echo "==> Server-side persistence verified!"
