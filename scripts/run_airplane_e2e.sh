@@ -8,6 +8,7 @@ MUTATIONS="${MUTATIONS:-50}"
 
 ADB_BIN="${ADB_BIN:-$(which adb 2>/dev/null || echo "$HOME/Library/Android/sdk/platform-tools/adb")}"
 FLUTTER_BIN="${FLUTTER_BIN:-$(which flutter 2>/dev/null || echo "$HOME/development/flutter/bin/flutter")}"
+DART_BIN="${DART_BIN:-$(which dart 2>/dev/null || echo "$HOME/development/flutter/bin/dart")}"
 ADB="$ADB_BIN ${DEVICE:+-s $DEVICE}"
 APP_DIR="packages/offline_sync/example"
 TARGET="integration_test/airplane_mode_test.dart"
@@ -35,9 +36,20 @@ fi
 # Ensure local test server is available
 if ! curl -fsS "$SERVER/health" >/dev/null 2>&1; then
   echo "==> Starting local FakeSyncServer on port 8080"
-  $FLUTTER_BIN pub run tools/sync_server/bin/server.dart 8080 >/dev/null 2>&1 &
+  $DART_BIN run tools/sync_server/bin/server.dart 8080 >/tmp/fake_sync_server.log 2>&1 &
   SERVER_PID=$!
-  sleep 2
+  for attempt in $(seq 1 10); do
+    if curl -fsS "$SERVER/health" >/dev/null 2>&1; then
+      echo "==> FakeSyncServer is healthy and listening on $SERVER"
+      break
+    fi
+    sleep 0.5
+  done
+  if ! curl -fsS "$SERVER/health" >/dev/null 2>&1; then
+    echo "ERROR: FakeSyncServer failed to start on $SERVER. Logs:"
+    cat /tmp/fake_sync_server.log
+    exit 1
+  fi
 fi
 
 # Forward host 8080 to device loopback
