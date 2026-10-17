@@ -26,6 +26,7 @@ void main() {
     final client = await OfflineSyncClient.initialize(
       databasePath: dbPath,
       serverUrl: serverUrl,
+      onLog: (msg) => debugPrint('[SDK LOG] $msg'),
     );
 
     await client.registerEntity(
@@ -88,9 +89,14 @@ void main() {
       await client.sync(force: true);
 
       final remainingRows = await client.query(
-        "SELECT COUNT(*) AS cnt FROM _sync_outbox WHERE status != 'synced'",
+        "SELECT * FROM _sync_outbox WHERE status != 'synced'",
       );
-      final remainingCount = (remainingRows.first['cnt'] as num?)?.toInt() ?? -1;
+      final remainingCount = remainingRows.length;
+      if (remainingCount > 0) {
+        for (final row in remainingRows.take(3)) {
+          debugPrint('==> [E2E Test] Failed row: id=${row['mutation_id']}, status=${row['status']}, retry=${row['retry_count']}, err=${row['error_details_json']}');
+        }
+      }
       expect(
         remainingCount,
         equals(0),

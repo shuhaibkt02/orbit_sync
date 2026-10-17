@@ -399,10 +399,14 @@ class SyncWorker {
           final currentRetry = (r['retry_count'] as int?) ?? 0;
           final newRetry = currentRetry + 1;
           final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
-          final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+          final structuredError = jsonEncode({
+            'error': e.toString(),
+            'url': targetUrl,
+            'failedAt': DateTime.now().toUtc().toIso8601String(),
+          });
           await storage.db.execute(
-            "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ? WHERE mutation_id = ?",
-            [targetStatus, newRetry, nextRetry, mutationId],
+            "UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ?, error_details_json = ? WHERE mutation_id = ?",
+            [targetStatus, newRetry, nextRetry, structuredError, mutationId],
           );
           final remIds = mutationIds.where((id) => id != mutationId).toList();
           if (remIds.isNotEmpty) {
