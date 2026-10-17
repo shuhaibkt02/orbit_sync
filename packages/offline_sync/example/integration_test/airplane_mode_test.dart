@@ -42,8 +42,10 @@ void main() {
       "SELECT value FROM _sync_metadata WHERE key = 'e2e_phase'",
     );
     final phase = phaseRows.isEmpty ? null : phaseRows.first['value'] as String?;
+    debugPrint('==> [E2E Test] Current database phase: $phase');
 
     if (phase == null) {
+      debugPrint('==> [E2E Test] Entering Phase 1: Queuing $mutationCount offline mutations');
       // ---- PHASE 1: Queue mutations offline ----
       // DO NOT call client.close()! We intentionally leave the SQLite connection open
       // so 'adb shell am force-stop' kills a live, uncheckpointed DB process.
@@ -59,11 +61,13 @@ void main() {
         "INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES ('e2e_phase', 'ready_for_kill')",
       );
 
+      debugPrint('==> [E2E Test] Phase 1 complete. Outbox ready. Process awaiting kill.');
       // Return immediately without closing client or DB
       return;
     }
 
     if (phase == 'ready_for_kill') {
+      debugPrint('==> [E2E Test] Entering Phase 2: Verifying uncheckpointed outbox durability & syncing');
       // ---- PHASE 2: Verify outbox durability, sync, verify drained ----
       final pendingRows = await client.query(
         "SELECT COUNT(*) AS cnt FROM _sync_outbox WHERE status = 'pending'",

@@ -61,7 +61,7 @@ $ADB shell svc data disable 2>/dev/null || true
 sleep 2
 
 echo "==> Phase 1: Queuing $MUTATIONS mutations offline"
-(cd "$APP_DIR" && $FLUTTER_BIN test "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"}) || true
+(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"}) || true
 
 echo "==> Hard-killing app process via OS"
 $ADB shell am force-stop "$PKG"
@@ -81,16 +81,18 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
-(cd "$APP_DIR" && $FLUTTER_BIN test "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"})
+(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"})
 
 echo "==> Verifying backend server-side receipt"
 if command -v curl >/dev/null 2>&1; then
-  server_count=$(curl -fsS "$SERVER/orders" 2>/dev/null | grep -o '"id"' | wc -l || echo "0")
+  orders_json=$(curl -fsS "$SERVER/orders" 2>/dev/null || echo '{"orders":[]}')
+  server_count=$(echo "$orders_json" | grep -o '"id"' | wc -l | tr -d ' ' || echo "0")
   echo "==> Backend received $server_count records"
   if [ "$server_count" -ge "$MUTATIONS" ]; then
     echo "==> Server-side persistence verified!"
   else
-    echo "WARNING: Server reports $server_count records, expected at least $MUTATIONS."
+    echo "ERROR: Server reports $server_count records, expected at least $MUTATIONS."
+    exit 1
   fi
 fi
 
