@@ -82,6 +82,7 @@ done
 
 # Re-establish reverse proxy after airplane mode disable
 $ADB reverse tcp:8080 tcp:8080 2>/dev/null || true
+sleep 3
 
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
 (cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"})

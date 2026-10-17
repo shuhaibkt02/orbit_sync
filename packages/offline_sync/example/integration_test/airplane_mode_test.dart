@@ -86,17 +86,30 @@ void main() {
       );
       expect(backoffRows, isNotEmpty);
 
-      await client.sync(force: true);
+      // Poll sync with retry to absorb asynchronous OS radio power-up latency
+      int remainingCount = mutationCount;
+      for (var attempt = 1; attempt <= 10; attempt++) {
+        await client.sync(force: true);
+        final remainingRows = await client.query(
+          "SELECT * FROM _sync_outbox WHERE status != 'synced'",
+        );
+        remainingCount = remainingRows.length;
+        if (remainingCount == 0) {
+          debugPrint('==> [E2E Test] Outbox completely drained in attempt $attempt');
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
 
-      final remainingRows = await client.query(
-        "SELECT * FROM _sync_outbox WHERE status != 'synced'",
-      );
-      final remainingCount = remainingRows.length;
       if (remainingCount > 0) {
-        for (final row in remainingRows.take(3)) {
+        final failedRows = await client.query(
+          "SELECT * FROM _sync_outbox WHERE status != 'synced'",
+        );
+        for (final row in failedRows.take(3)) {
           debugPrint('==> [E2E Test] Failed row: id=${row['mutation_id']}, status=${row['status']}, retry=${row['retry_count']}, err=${row['error_details_json']}');
         }
       }
+
       expect(
         remainingCount,
         equals(0),
