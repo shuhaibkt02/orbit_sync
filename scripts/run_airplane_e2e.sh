@@ -9,6 +9,16 @@ MUTATIONS="${MUTATIONS:-50}"
 ADB_BIN="${ADB_BIN:-$(which adb 2>/dev/null || echo "$HOME/Library/Android/sdk/platform-tools/adb")}"
 FLUTTER_BIN="${FLUTTER_BIN:-$(which flutter 2>/dev/null || echo "$HOME/development/flutter/bin/flutter")}"
 DART_BIN="${DART_BIN:-$(which dart 2>/dev/null || echo "$HOME/development/flutter/bin/dart")}"
+
+if [ -z "${DEVICE:-}" ]; then
+  # Auto-select physical Android device if connected via USB
+  PHYSICAL_DEVICE=$($ADB_BIN devices -l 2>/dev/null | grep -v "emulator" | grep "device " | head -n 1 | awk '{print $1}')
+  if [ -n "$PHYSICAL_DEVICE" ]; then
+    DEVICE="$PHYSICAL_DEVICE"
+    echo "==> Auto-selected physical Android device: $DEVICE"
+  fi
+fi
+
 ADB="$ADB_BIN ${DEVICE:+-s $DEVICE}"
 APP_DIR="packages/offline_sync/example"
 TARGET="integration_test/airplane_mode_test.dart"
@@ -72,8 +82,11 @@ $ADB shell svc wifi disable 2>/dev/null || true
 $ADB shell svc data disable 2>/dev/null || true
 sleep 2
 
+LOG_DIR="${LOG_DIR:-$HOME/.offline_sync_logs}"
+mkdir -p "$LOG_DIR"
+
 echo "==> Phase 1: Queuing $MUTATIONS mutations offline"
-(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"}) || true
+(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"}) 2>&1 | tee "$LOG_DIR/e2e_phase1.log" || true
 
 echo "==> Hard-killing app process via OS"
 $ADB shell am force-stop "$PKG"
@@ -97,7 +110,9 @@ $ADB reverse tcp:8080 tcp:8080 2>/dev/null || true
 sleep 3
 
 echo "==> Phase 2: Verifying durability & syncing upon reconnection"
-(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"})
+(cd "$APP_DIR" && $FLUTTER_BIN test --no-uninstall "$TARGET" --dart-define=SYNC_TEST_SERVER="$DEVICE_SERVER" ${DEVICE:+-d "$DEVICE"}) 2>&1 | tee "$LOG_DIR/e2e_phase2.log"
+
+echo "==> Archived Phase 1 & Phase 2 logs to $LOG_DIR"
 
 echo "==> Verifying backend server-side receipt"
 if command -v curl >/dev/null 2>&1; then

@@ -62,6 +62,13 @@ void main() {
         "INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES ('e2e_phase', 'ready_for_kill')",
       );
 
+      final initialPending = await client.query(
+        "SELECT COUNT(*) AS cnt FROM _sync_outbox WHERE status = 'pending'",
+      );
+      final initialCount = (initialPending.first['cnt'] as num?)?.toInt() ?? 0;
+      debugPrint('==> [E2E Test] Phase 1 verified on-disk: $initialCount mutations queued in outbox');
+      expect(initialCount, equals(mutationCount), reason: 'Phase 1 must queue all mutations in pending state');
+
       debugPrint('==> [E2E Test] Phase 1 complete. Outbox ready. Process awaiting kill.');
       // Return immediately without closing client or DB
       return;
