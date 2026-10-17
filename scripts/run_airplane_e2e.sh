@@ -10,6 +10,14 @@ ADB_BIN="${ADB_BIN:-$(which adb 2>/dev/null || echo "$HOME/Library/Android/sdk/p
 FLUTTER_BIN="${FLUTTER_BIN:-$(which flutter 2>/dev/null || echo "$HOME/development/flutter/bin/flutter")}"
 DART_BIN="${DART_BIN:-$(which dart 2>/dev/null || echo "$HOME/development/flutter/bin/dart")}"
 
+# Check for attached but unauthorized devices
+UNAUTH_DEVICE=$($ADB_BIN devices 2>/dev/null | grep -i "unauthorized" | head -n 1 | awk '{print $1}')
+if [ -n "$UNAUTH_DEVICE" ]; then
+  echo "ERROR: Device '$UNAUTH_DEVICE' is attached but unauthorized."
+  echo "Please unlock your phone and tap 'Allow USB debugging' on the prompt."
+  exit 1
+fi
+
 if [ -z "${DEVICE:-}" ]; then
   # Auto-select physical Android device if connected via USB
   PHYSICAL_DEVICE=$($ADB_BIN devices -l 2>/dev/null | grep -v "emulator" | grep "device " | head -n 1 | awk '{print $1}')
@@ -71,6 +79,9 @@ if [[ "$DEVICE_SERIAL" =~ "emulator" ]]; then
   DEVICE_SERVER="http://10.0.2.2:8080"
 else
   DEVICE_SERVER="http://127.0.0.1:8080"
+  if ! $ADB reverse --list 2>/dev/null | grep -q "8080"; then
+    echo "WARNING: 'adb reverse' rule for port 8080 not active. USB connection may need reset."
+  fi
 fi
 
 echo "==> Resetting app state"
