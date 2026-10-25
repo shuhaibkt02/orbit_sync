@@ -65,13 +65,10 @@ class ConnectivityMonitor implements IConnectivityMonitor {
 
   @override
   ConnectivityState get state => _currentState;
-
   @override
   bool get isOnline => _stateMachine.isOnline;
-
   @override
   bool get isMetered => _typeProvider.isMetered;
-
   @override
   bool get simulateOffline => _stateMachine.simulateOffline;
 
@@ -80,21 +77,17 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     if (_stateMachine.simulateOffline == value) return;
     _stateMachine.simulateOffline = value;
     _publishState();
-    if (!value && !_isDisposed) {
-      checkReachability(bypassDebounce: true);
-    }
+    if (!value && !_isDisposed) checkReachability(bypassDebounce: true);
   }
 
   @override
   Stream<ConnectivityState> get onStateChanged => _stateController.stream;
-
   @override
   Stream<bool> get onConnectivityChanged => _boolController.stream;
 
   @override
   Future<bool> checkReachability({String? targetUrl, bool bypassDebounce = false}) async {
-    if (_isDisposed) return false;
-    if (simulateOffline) return false;
+    if (_isDisposed || simulateOffline) return false;
 
     if (reachabilityChecker != null) {
       try {
@@ -113,19 +106,11 @@ class ConnectivityMonitor implements IConnectivityMonitor {
         : Uri.parse('http://connectivitycheck.gstatic.com/generate_204');
 
     final result = await _probe.probe(targetUri, timeout: timeout);
-    _updatePhysicalState(
-      isPhysicallyOnline: result.isOnline,
-      isCaptivePortal: result.isCaptivePortal,
-      bypassDebounce: bypassDebounce,
-    );
+    _updatePhysicalState(isPhysicallyOnline: result.isOnline, isCaptivePortal: result.isCaptivePortal, bypassDebounce: bypassDebounce);
     return isOnline;
   }
 
-  void _updatePhysicalState({
-    required bool isPhysicallyOnline,
-    required bool isCaptivePortal,
-    required bool bypassDebounce,
-  }) {
+  void _updatePhysicalState({required bool isPhysicallyOnline, required bool isCaptivePortal, required bool bypassDebounce}) {
     if (_isDisposed) return;
     _stateMachine.handleReachabilityUpdate(
       isPhysicallyOnline: isPhysicallyOnline,
@@ -147,12 +132,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
 
     if (!_stateController.isClosed) _stateController.add(_currentState);
     if (!_boolController.isClosed) _boolController.add(effectiveOnline);
-
-    if (!effectiveOnline) {
-      _startHeartbeat();
-    } else {
-      _stopHeartbeat();
-    }
+    effectiveOnline ? _stopHeartbeat() : _startHeartbeat();
   }
 
   void _startHeartbeat() {
@@ -176,9 +156,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   }
 
   @override
-  Future<void> notifyAppResumed() async {
-    await checkReachability(bypassDebounce: true);
-  }
+  Future<void> notifyAppResumed() => checkReachability(bypassDebounce: true);
 
   @override
   void dispose() {
