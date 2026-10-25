@@ -36,8 +36,9 @@ class UuidV7 {
     // 2-bit var (10) + 14 bits from randB
     final varRandB = ((0x8000 | (randB >> 16 & 0x3FFF))).toRadixString(16).padLeft(4, '0');
 
-    // Remaining random bits
-    final randLow = (((randB & 0xFFFF) << 16) | (randC & 0xFFFF)).toRadixString(16).padLeft(8, '0') +
+    // Remaining random bits (12 hex chars = 48 bits)
+    final randLow = (randB & 0xFFFF).toRadixString(16).padLeft(4, '0') +
+        (randC & 0xFFFF).toRadixString(16).padLeft(4, '0') +
         ((randC >> 16) & 0xFFFF).toRadixString(16).padLeft(4, '0');
 
     return '$timeHigh-$timeMid-$verRandA-$varRandB-$randLow';
