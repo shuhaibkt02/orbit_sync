@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart' show Row;
 import '../../storage/sync_storage.dart';
-import '../../sync_transport.dart';
+import '../../transport/sync_transport.dart';
 import '../../sync_profile.dart';
 import '../domain/models/sync_result.dart';
 import '../domain/policies/backoff_policy.dart';

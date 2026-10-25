@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../storage/sync_storage.dart';
 import '../sync_profile.dart';
-import '../sync_transport.dart';
+import '../transport/sync_transport.dart';
 import 'domain/models/sync_result.dart';
 import 'domain/policies/backoff_policy.dart';
 import 'domain/interfaces/i_sync_worker.dart';

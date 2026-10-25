@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
 import '../../storage/sync_storage.dart';
-import '../../sync_transport.dart';
+import '../../transport/sync_transport.dart';
 
 /// Manages atomic SQLite table generation swaps for HTTP 410 Gone recovery
 /// without losing unpushed local dirty mutations.

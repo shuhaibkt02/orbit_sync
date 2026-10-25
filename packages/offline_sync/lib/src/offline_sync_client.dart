@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
 import 'storage/sync_storage.dart';
-import 'sync_worker.dart';
+import 'consensus/sync_worker.dart';
 import 'sync_profile.dart';
-import 'sync_transport.dart';
-import 'connectivity_monitor.dart';
-import 'sync_failure.dart';
-import 'sync_status_summary.dart';
+import 'transport/sync_transport.dart';
+import 'connectivity/connectivity_monitor.dart';
+import 'consensus/domain/models/sync_failure.dart';
+import 'consensus/domain/models/sync_status_summary.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient {

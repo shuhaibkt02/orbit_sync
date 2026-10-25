@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import '../../storage/sync_storage.dart';
-import '../../sync_transport.dart';
+import '../../transport/sync_transport.dart';
 import '../../sync_profile.dart';
 import '../domain/models/sync_result.dart';
 import 'conflict_reconciler.dart';
