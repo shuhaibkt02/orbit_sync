@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../storage/sync_storage.dart';
-import '../domain/interfaces/i_orbit_table.dart';
 import '../domain/models/orbit_record.dart';
 import '../domain/models/orbit_sync_status.dart';
 import '../domain/models/rest_endpoints.dart';
@@ -10,11 +9,10 @@ import '../domain/policies/debounce_stream_transformer.dart';
 import '../domain/policies/sqlite_type_sanitizer.dart';
 import 'entity_hydrator.dart';
 
-/// Implementation of strongly-typed entity table handle (Challenge 4).
-class OrbitTableImpl<T> implements IOrbitTable<T> {
-  @override
+/// Strongly-typed entity table handle providing compile-time safe CRUD,
+/// automated SQLite sanitization, and reactive stream subscriptions (Challenge 4).
+class OrbitTable<T> {
   final String name;
-  @override
   final String primaryKey;
 
   final T Function(Map<String, dynamic> json) fromJson;
@@ -25,7 +23,7 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
   final SqliteTypeSanitizer sanitizer;
   final EntityHydrator hydrator;
 
-  OrbitTableImpl({
+  OrbitTable({
     required this.name,
     required this.fromJson,
     required this.toJson,
@@ -36,7 +34,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
     this.sanitizer = const SqliteTypeSanitizer(),
   }) : hydrator = EntityHydrator(storage: storage, sanitizer: sanitizer);
 
-  @override
   Future<String> save(
     T item, {
     Duration? sla,
@@ -62,24 +59,20 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
     return id;
   }
 
-  @override
   Future<String?> delete(String id, {Duration? undoWindow}) async {
     return await storage.delete(entity: name, id: id, undoWindow: undoWindow);
   }
 
-  @override
   Future<bool> undoDelete(String id) async {
     return await storage.undoDelete(entity: name, id: id);
   }
 
-  @override
   Future<T?> get(String id) async {
     final rows = await storage.db.getAll('SELECT * FROM $name WHERE $primaryKey = ? LIMIT 1', [id]);
     if (rows.isEmpty) return null;
     return fromJson(Map<String, dynamic>.from(rows.first));
   }
 
-  @override
   Future<List<T>> query({String? where, List<dynamic> whereArgs = const [], String? orderBy, int? limit}) async {
     var sql = 'SELECT * FROM $name';
     if (where != null) sql += ' WHERE $where';
@@ -89,7 +82,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
     return rows.map((r) => fromJson(Map<String, dynamic>.from(r))).toList();
   }
 
-  @override
   Stream<List<T>> watch({String? where, List<dynamic> whereArgs = const [], String? orderBy, int? limit}) {
     var sql = 'SELECT * FROM $name';
     if (where != null) sql += ' WHERE $where';
@@ -98,7 +90,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
     return watchRaw(sql, whereArgs);
   }
 
-  @override
   Stream<List<T>> watchRaw(String query, [List<dynamic> parameters = const []]) {
     return storage
         .watch(query, parameters: parameters)
@@ -106,7 +97,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
         .map((rs) => rs.map((r) => fromJson(Map<String, dynamic>.from(r))).toList());
   }
 
-  @override
   Stream<List<OrbitRecord<T>>> watchRecords() {
     final sql = '''
       SELECT t.*, o.status as _outbox_status, o.error_details_json as _outbox_err, o.mutation_id as _outbox_mut_id
@@ -137,7 +127,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
             }).toList());
   }
 
-  @override
   Future<int> refresh({Map<String, dynamic>? params}) async {
     if (endpoints?.list == null) return 0;
     final req = endpoints!.list!(params ?? const {});
@@ -165,3 +154,6 @@ class OrbitTableImpl<T> implements IOrbitTable<T> {
     }
   }
 }
+
+/// Backward-compatible alias for [OrbitTable].
+typedef OrbitTableImpl<T> = OrbitTable<T>;

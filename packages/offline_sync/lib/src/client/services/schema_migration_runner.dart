@@ -1,7 +1,6 @@
 import 'dart:convert';
 import '../../storage/sync_storage.dart';
 import '../../consensus/domain/models/sync_result.dart';
-import '../domain/models/mutation_envelope.dart';
 
 /// Runs isolated plugin schema migrations and upgrades outbox envelopes eagerly on startup (Challenge 7).
 class SchemaMigrationRunner {
@@ -57,23 +56,17 @@ class SchemaMigrationRunner {
 
         if (payloadJson == null) continue;
 
-        final envelope = MutationEnvelope(
-          mutationId: mutId,
-          entity: entity,
-          schemaVersion: rowVersion,
-          payload: jsonDecode(payloadJson) as Map<String, dynamic>,
-          baseSnapshot: baseSnapshotJson != null ? jsonDecode(baseSnapshotJson) as Map<String, dynamic> : null,
-          endpointUrl: r['endpoint_url'] as String?,
-          httpMethod: r['http_method'] as String?,
-        );
+        var payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+        final baseSnapshot = baseSnapshotJson != null
+            ? jsonDecode(baseSnapshotJson) as Map<String, dynamic>
+            : null;
 
         // Run step-ladder migration
         var v = rowVersion;
         while (v < targetSchemaVersion) {
-          envelope.payload = migrator!(v, v + 1, entity, envelope.payload);
+          payload = migrator!(v, v + 1, entity, payload);
           v++;
         }
-        envelope.schemaVersion = targetSchemaVersion;
 
         await tx.execute('''
           UPDATE _sync_outbox SET 
@@ -82,8 +75,8 @@ class SchemaMigrationRunner {
             schema_version = ?
           WHERE mutation_id = ?
         ''', [
-          jsonEncode(envelope.payload),
-          envelope.baseSnapshot != null ? jsonEncode(envelope.baseSnapshot) : null,
+          jsonEncode(payload),
+          baseSnapshot != null ? jsonEncode(baseSnapshot) : null,
           targetSchemaVersion,
           mutId,
         ]);

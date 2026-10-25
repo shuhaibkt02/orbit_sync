@@ -4,12 +4,12 @@ import '../storage/sync_storage.dart';
 import '../consensus/sync_worker.dart';
 import '../sync_profile.dart';
 import '../connectivity/connectivity_monitor.dart';
-import 'domain/interfaces/i_orbit_client.dart';
-import 'domain/interfaces/i_orbit_table.dart';
+import 'orbit_client.dart';
 import 'domain/models/orbit_sync_event.dart';
 import 'domain/models/sync_job.dart';
 import 'domain/models/rest_endpoints.dart';
 import 'domain/models/client_exceptions.dart';
+import 'domain/policies/causal_horizon_guard.dart';
 import 'services/sync_event_bus.dart';
 import 'services/sync_coordinator.dart';
 import 'services/entity_hydrator.dart';
@@ -19,7 +19,7 @@ import 'services/orbit_table_impl.dart';
 import 'services/dashboard_query_helper.dart';
 
 /// Concrete implementation of the unified application facade (Layer 5).
-class OrbitClientImpl implements IOrbitClient {
+class OrbitClientImpl implements OrbitClient {
   final SyncStorage storage;
   final SyncWorker worker;
   final SyncProfile profile;
@@ -28,12 +28,13 @@ class OrbitClientImpl implements IOrbitClient {
 
   final SyncEventBus eventBus = SyncEventBus();
   final SessionManager sessionManager = const SessionManager();
+  late final CausalHorizonGuard horizonGuard;
   late final EntityHydrator hydrator;
   late final SyncCoordinator coordinator;
   late final DrainOrchestrator drainOrchestrator;
   late final DashboardQueryHelper queryHelper;
 
-  final Map<String, IOrbitTable> _tables = {};
+  final Map<String, OrbitTable> _tables = {};
   final Map<String, String> _entityUrls = {};
   final List<StreamController<dynamic>> _activeWatchControllers = [];
 
@@ -48,6 +49,7 @@ class OrbitClientImpl implements IOrbitClient {
     required this.connectivity,
     this.getAuthToken,
   }) {
+    horizonGuard = CausalHorizonGuard(storage);
     hydrator = EntityHydrator(storage: storage);
     coordinator = SyncCoordinator(worker: worker, eventBus: eventBus);
     drainOrchestrator = DrainOrchestrator(
@@ -66,7 +68,7 @@ class OrbitClientImpl implements IOrbitClient {
   bool get isClosed => drainOrchestrator.isClosed;
 
   @override
-  IOrbitTable<T> registerModel<T>({
+  OrbitTable<T> registerModel<T>({
     required String name,
     required T Function(Map<String, dynamic> json) fromJson,
     required Map<String, dynamic> Function(T item) toJson,
@@ -75,7 +77,7 @@ class OrbitClientImpl implements IOrbitClient {
     List<String> foreignKeys = const [],
     RestEndpoints<T>? endpoints,
   }) {
-    final table = OrbitTableImpl<T>(
+    final table = OrbitTable<T>(
       name: name,
       primaryKey: primaryKey,
       fromJson: fromJson,
@@ -89,7 +91,7 @@ class OrbitClientImpl implements IOrbitClient {
     return table;
   }
 
-  IOrbitTable<T> registerTypedTable<T>({
+  OrbitTable<T> registerTypedTable<T>({
     required String name,
     required T Function(Map<String, dynamic> json) fromJson,
     required Map<String, dynamic> Function(T item) toJson,
@@ -150,6 +152,8 @@ class OrbitClientImpl implements IOrbitClient {
   @override
   SyncJob sync({String? entity, bool force = false}) => coordinator.triggerSync(force: force, isPaused: _isPaused, isClosed: isClosed);
   Future<int> fetchAndStore(String entity, {required String url, Map<String, String>? headers}) => hydrator.fetchAndStore(entity, url: url, headers: headers, getAuthToken: getAuthToken);
+  Future<void> softRejectRecord(String entity, String id, {String? reason}) => horizonGuard.softRejectRecord(entity: entity, id: id, errorMessage: reason);
+  Future<int> holdDescendants(String parentMutationId) => horizonGuard.holdDescendantMutations(parentMutationId);
 
   void startPeriodicSync({Duration? interval}) {
     _periodicInterval = interval ?? (profile == SyncProfile.basic ? const Duration(seconds: 60) : profile == SyncProfile.standard ? const Duration(seconds: 30) : const Duration(seconds: 15));

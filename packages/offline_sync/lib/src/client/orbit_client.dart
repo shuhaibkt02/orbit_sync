@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:sqlite3/sqlite3.dart' show Row, ResultSet;
 import '../storage/sync_storage.dart';
 import '../consensus/sync_worker.dart';
 import '../sync_profile.dart';
 import '../transport/sync_transport.dart';
 import '../connectivity/connectivity_monitor.dart';
-import 'domain/interfaces/i_orbit_client.dart';
+import 'domain/models/orbit_sync_event.dart';
+import 'domain/models/sync_job.dart';
+import 'domain/models/rest_endpoints.dart';
 import 'services/session_manager.dart';
 import 'services/schema_migration_runner.dart';
+import 'services/orbit_table_impl.dart';
 import 'orbit_client_impl.dart';
 
-/// Top-level factory for initializing and sandboxing the Orbit offline sync engine.
-abstract class OrbitClient implements IOrbitClient {
+/// Top-level developer facade and factory for initializing and sandboxing the Orbit offline sync engine.
+abstract class OrbitClient {
   /// Deterministic 16-character SHA-256 session path hash (Challenge 5).
   static String hashUserId(String userId) =>
       const SessionManager().computeSessionPath('', userId).split('/')[2];
@@ -123,4 +127,41 @@ abstract class OrbitClient implements IOrbitClient {
       await client.close();
     }
   }
+
+  /// Registers a strongly-typed entity table handle (Challenge 4).
+  OrbitTable<T> registerModel<T>({
+    required String name,
+    required T Function(Map<String, dynamic> json) fromJson,
+    required Map<String, dynamic> Function(T item) toJson,
+    String primaryKey = 'id',
+    List<String> indexes = const [],
+    List<String> foreignKeys = const [],
+    RestEndpoints<T>? endpoints,
+  });
+
+  /// Registers an untyped table schema with custom columns, foreign keys, and endpoint URL.
+  Future<void> registerTable(
+    String entityName,
+    Map<String, String> columnTypes, {
+    String? foreignKeyClause,
+    String? url,
+  });
+
+  /// Executes bidirectional sync returning an operation-scoped [SyncJob].
+  SyncJob sync({String? entity, bool force = false});
+
+  /// Telemetry stream of sync events with correlation IDs.
+  Stream<OrbitSyncEvent> get syncEvents;
+
+  /// Restores records from local storage with optional SQL where clause.
+  Future<List<Row>> query(String sql, [List<dynamic> parameters = const []]);
+
+  /// Watches query updates reactively with leading-immediate debounce.
+  Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []});
+
+  /// Closes database connections and stops timers with a graceful drain budget.
+  Future<void> close({Duration drainTimeout = const Duration(seconds: 3)});
 }
+
+/// Backward-compatible alias for [OrbitClient].
+typedef IOrbitClient = OrbitClient;

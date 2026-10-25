@@ -1,21 +1,18 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../../storage/sync_storage.dart';
-import '../domain/interfaces/i_session_manager.dart';
 import '../domain/models/client_exceptions.dart';
 
 /// Manages multi-user session filesystem sandboxing, JWT claim assertion,
 /// and guest-to-user draft migration (Challenge 5).
-class SessionManager implements ISessionManager {
+class SessionManager {
   const SessionManager();
 
-  @override
   String computeSessionPath(String appDir, String userId) {
     final hash = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
     return '$appDir/orbit_sessions/$hash/orbit.db';
   }
 
-  @override
   Future<void> assertTokenSubject({
     required String? token,
     required String expectedUserId,
@@ -46,7 +43,6 @@ class SessionManager implements ISessionManager {
     }
   }
 
-  @override
   Future<int> mergeGuestSession({
     required String guestDatabasePath,
     required String targetDatabasePath,
