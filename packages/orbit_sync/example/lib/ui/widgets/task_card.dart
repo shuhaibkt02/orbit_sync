@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import '../../main.dart';
+import '../../models/task.dart';
 import '../apple_theme.dart';
 import 'apple_checkbox.dart';
 import 'apple_pressable.dart';
