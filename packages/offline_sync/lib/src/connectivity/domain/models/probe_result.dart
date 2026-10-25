@@ -40,6 +40,7 @@ class ProbeResult {
 
   /// Traffic intercepted by a Wi-Fi captive portal / login splash screen.
   factory ProbeResult.captivePortal({
+    int? statusCode,
     Uri? redirectUrl,
     int latencyMs = 0,
     String? errorMessage,
@@ -47,6 +48,7 @@ class ProbeResult {
       ProbeResult(
         isOnline: false,
         isCaptivePortal: true,
+        statusCode: statusCode,
         redirectUrl: redirectUrl,
         latencyMs: latencyMs,
         errorMessage: errorMessage,

@@ -36,6 +36,7 @@ class HttpNetworkProbe implements INetworkProbe {
 
         if (isExternalHost) {
           return ProbeResult.captivePortal(
+            statusCode: statusCode,
             redirectUrl: redirectUri,
             latencyMs: stopwatch.elapsedMilliseconds,
           );
