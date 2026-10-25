@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:offline_sync/offline_sync.dart';
-import '../harness/transport/fault.dart';
-import '../harness/transport/fault_injection_http_client.dart';
-import '../harness/server/scripted_batch.dart';
+import '../shared/harness/transport/fault.dart';
+import '../shared/harness/transport/fault_injection_http_client.dart';
+import '../shared/harness/server/scripted_batch.dart';
 
 void main() {
   group('Fault Injection Test Harness & Deterministic Scenarios', () {

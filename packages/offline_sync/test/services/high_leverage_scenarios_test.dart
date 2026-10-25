@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:offline_sync/offline_sync.dart';
 import 'package:sync_server/sync_server.dart';
-import '../harness/transport/fault.dart';
-import '../harness/transport/fault_injection_http_client.dart';
+import '../shared/harness/transport/fault.dart';
+import '../shared/harness/transport/fault_injection_http_client.dart';
 
 void main() {
   group('Tier 1 High-Leverage Scenarios', () {

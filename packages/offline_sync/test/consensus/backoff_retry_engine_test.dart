@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:offline_sync/offline_sync.dart';
-import '../harness/clock/controllable_clock.dart';
-import '../harness/transport/fault.dart';
-import '../harness/transport/fault_injection_http_client.dart';
+import '../shared/harness/clock/controllable_clock.dart';
+import '../shared/harness/transport/fault.dart';
+import '../shared/harness/transport/fault_injection_http_client.dart';
 
 void main() {
   group('Layer 2 Consensus: Backoff Retry Engine Integration', () {

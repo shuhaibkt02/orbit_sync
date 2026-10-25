@@ -34,7 +34,7 @@ void main() {
 
       final process = await Process.start(
         dartBinary,
-        ['run', 'test/helpers/uncommitted_writer.dart', dbPath],
+        ['run', 'test/shared/helpers/uncommitted_writer.dart', dbPath],
         mode: ProcessStartMode.normal,
       );
 
