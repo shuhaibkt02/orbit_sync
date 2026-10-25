@@ -13,11 +13,15 @@ class BatchPushOrchestrator {
   final SyncTransport transport;
   final SyncProfile profile;
   final BackoffPolicy backoffPolicy;
-  final int currentSchemaVersion;
-  final MutationMigrator? migrator;
   final void Function(String message)? onLog;
   final Future<void> Function()? onAuthExpired;
   final int Function()? nowMsProvider;
+
+  int get currentSchemaVersion => _batchPusher.currentSchemaVersion;
+  set currentSchemaVersion(int v) => _batchPusher.currentSchemaVersion = v;
+
+  MutationMigrator? get migrator => _batchPusher.migrator;
+  set migrator(MutationMigrator? m) => _batchPusher.migrator = m;
 
   late final CustomRestPusher _customPusher;
   late final BatchEnvelopePusher _batchPusher;
@@ -27,8 +31,8 @@ class BatchPushOrchestrator {
     required this.transport,
     required this.profile,
     required this.backoffPolicy,
-    this.currentSchemaVersion = 1,
-    this.migrator,
+    int currentSchemaVersion = 1,
+    MutationMigrator? migrator,
     this.onLog,
     this.onAuthExpired,
     this.nowMsProvider,

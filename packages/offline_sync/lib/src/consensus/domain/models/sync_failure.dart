@@ -38,9 +38,9 @@ class SyncFailure {
         final decoded = jsonDecode(detailsStr);
         if (decoded is Map<String, dynamic>) {
           code = decoded['statusCode'] as int?;
-          message = (decoded['error'] as String?) ??
+          message = (decoded['detail'] as String?) ??
               (decoded['message'] as String?) ??
-              (decoded['detail'] as String?) ??
+              (decoded['error'] as String?) ??
               detailsStr;
         } else {
           message = detailsStr;
@@ -58,6 +58,8 @@ class SyncFailure {
       } catch (_) {}
     }
 
+    final status = (row['status'] as String?) ?? 'pending';
+    if (code == null && status == 'validation_error') code = 422;
     return SyncFailure(
       mutationId: row['mutation_id'] as String,
       entity: row['entity_name'] as String,

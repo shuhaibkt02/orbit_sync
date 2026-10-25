@@ -4,6 +4,9 @@ import '../storage/sync_storage.dart';
 import '../consensus/sync_worker.dart';
 import '../sync_profile.dart';
 import '../connectivity/connectivity_monitor.dart';
+import '../observability/sync_observer.dart';
+import '../observability/domain/models/sync_event.dart';
+import '../observability/services/sla_monitor.dart';
 import 'orbit_client.dart';
 import 'domain/models/orbit_sync_event.dart';
 import 'domain/models/sync_job.dart';
@@ -33,6 +36,8 @@ class OrbitClientImpl implements OrbitClient {
   late final SyncCoordinator coordinator;
   late final DrainOrchestrator drainOrchestrator;
   late final DashboardQueryHelper queryHelper;
+  @override
+  late final SyncObserver observer;
 
   final Map<String, OrbitTable> _tables = {};
   final Map<String, String> _entityUrls = {};
@@ -52,14 +57,15 @@ class OrbitClientImpl implements OrbitClient {
     horizonGuard = CausalHorizonGuard(storage);
     hydrator = EntityHydrator(storage: storage);
     coordinator = SyncCoordinator(worker: worker, eventBus: eventBus);
-    drainOrchestrator = DrainOrchestrator(
-      storage: storage,
-      worker: worker,
-      connectivity: connectivity,
-      activeWatchControllers: _activeWatchControllers,
-      awaitInFlightSync: () async => coordinator.currentInFlightSync,
-    );
+    drainOrchestrator = DrainOrchestrator(storage: storage, worker: worker, connectivity: connectivity, activeWatchControllers: _activeWatchControllers, awaitInFlightSync: () async => coordinator.currentInFlightSync);
     queryHelper = DashboardQueryHelper(storage: storage, watchFn: watch);
+    final slaMon = SlaMonitor(storage: storage)..start();
+    observer = SyncObserver(
+      slaMonitor: slaMon,
+      onRetryMutation: (id, {syncNow = false}) async { await queryHelper.retryMutation(id); if (syncNow) await sync(force: true); },
+      onRetryAllFailed: ({syncNow = false}) async { await queryHelper.retryAllFailed(); if (syncNow) await sync(force: true); },
+    );
+    connectivity.onConnectivityChanged.listen((on) => observer.publish(on ? OnlineEvent(timestamp: DateTime.now().toUtc()) : OfflineEvent(timestamp: DateTime.now().toUtc())));
   }
 
   @override
@@ -68,39 +74,16 @@ class OrbitClientImpl implements OrbitClient {
   bool get isClosed => drainOrchestrator.isClosed;
 
   @override
-  OrbitTable<T> registerModel<T>({
-    required String name,
-    required T Function(Map<String, dynamic> json) fromJson,
-    required Map<String, dynamic> Function(T item) toJson,
-    String primaryKey = 'id',
-    List<String> indexes = const [],
-    List<String> foreignKeys = const [],
-    RestEndpoints<T>? endpoints,
-  }) {
-    final table = OrbitTable<T>(
-      name: name,
-      primaryKey: primaryKey,
-      fromJson: fromJson,
-      toJson: toJson,
-      storage: storage,
-      endpoints: endpoints,
-      getAuthToken: getAuthToken,
-    );
+  OrbitTable<T> registerModel<T>({required String name, required T Function(Map<String, dynamic> json) fromJson, required Map<String, dynamic> Function(T item) toJson, String primaryKey = 'id', List<String> indexes = const [], List<String> foreignKeys = const [], RestEndpoints<T>? endpoints}) {
+    final table = OrbitTable<T>(name: name, primaryKey: primaryKey, fromJson: fromJson, toJson: toJson, storage: storage, endpoints: endpoints, getAuthToken: getAuthToken);
     _tables[name] = table;
     storage.registerEntityTable(name, const {}, foreignKeyClause: foreignKeys.isNotEmpty ? foreignKeys.first : null);
     return table;
   }
 
   @override
-  OrbitTable<T> registerTypedTable<T>({
-    required String name,
-    required T Function(Map<String, dynamic> json) fromJson,
-    required Map<String, dynamic> Function(T item) toJson,
-    String primaryKey = 'id',
-    List<String> indexes = const [],
-    List<String> foreignKeys = const [],
-    RestEndpoints<T>? endpoints,
-  }) => registerModel<T>(name: name, fromJson: fromJson, toJson: toJson, primaryKey: primaryKey, indexes: indexes, foreignKeys: foreignKeys, endpoints: endpoints);
+  OrbitTable<T> registerTypedTable<T>({required String name, required T Function(Map<String, dynamic> json) fromJson, required Map<String, dynamic> Function(T item) toJson, String primaryKey = 'id', List<String> indexes = const [], List<String> foreignKeys = const [], RestEndpoints<T>? endpoints}) =>
+      registerModel<T>(name: name, fromJson: fromJson, toJson: toJson, primaryKey: primaryKey, indexes: indexes, foreignKeys: foreignKeys, endpoints: endpoints);
 
   @override
   Future<void> registerTable(String entityName, Map<String, String> columnTypes, {String? foreignKeyClause, String? url}) async {
@@ -116,7 +99,9 @@ class OrbitClientImpl implements OrbitClient {
   Future<String> save({required String entity, String? id, required Map<String, dynamic> data, int version = 1, String? dependsOnMutationId, int schemaVersion = 1, String? url, String? httpMethod, Duration? holdFor, Duration? sla, Duration? ttl, int priority = 0, String? correlationTag}) async {
     if (isClosed) throw const ClientClosedException('save');
     final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
-    return await storage.save(entity: entity, id: effectiveId, data: data, version: version, dependsOnMutationId: dependsOnMutationId, schemaVersion: schemaVersion, endpointUrl: url ?? _entityUrls[entity], httpMethod: httpMethod, holdFor: holdFor, sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag);
+    final mutId = await storage.save(entity: entity, id: effectiveId, data: data, version: version, dependsOnMutationId: dependsOnMutationId, schemaVersion: schemaVersion, endpointUrl: url ?? _entityUrls[entity], httpMethod: httpMethod, holdFor: holdFor, sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag);
+    observer.publish(MutationQueuedEvent(timestamp: DateTime.now().toUtc(), mutationId: mutId, entity: entity, entityId: effectiveId));
+    return mutId;
   }
 
   Future<String> store(String entity, Map<String, dynamic> data, {String? id, String? url, String? httpMethod, Duration? holdFor, Duration? sla, Duration? ttl, int priority = 0, String? correlationTag}) async {
@@ -153,7 +138,10 @@ class OrbitClientImpl implements OrbitClient {
   @override
   SyncJob sync({String? entity, bool force = false}) => coordinator.triggerSync(force: force, isPaused: _isPaused, isClosed: isClosed);
   Future<int> fetchAndStore(String entity, {required String url, Map<String, String>? headers}) => hydrator.fetchAndStore(entity, url: url, headers: headers, getAuthToken: getAuthToken);
-  Future<void> softRejectRecord(String entity, String id, {String? reason}) => horizonGuard.softRejectRecord(entity: entity, id: id, errorMessage: reason);
+  Future<void> softRejectRecord(String entity, String id, {String? reason}) async {
+    await horizonGuard.softRejectRecord(entity: entity, id: id, errorMessage: reason);
+    observer.publish(SyncRejectedEvent(timestamp: DateTime.now().toUtc(), entity: entity, entityId: id, errorMessage: reason ?? 'Business rejected'));
+  }
   Future<int> holdDescendants(String parentMutationId) => horizonGuard.holdDescendantMutations(parentMutationId);
 
   void startPeriodicSync({Duration? interval}) {
@@ -174,6 +162,7 @@ class OrbitClientImpl implements OrbitClient {
   Future<void> close({Duration drainTimeout = const Duration(seconds: 3)}) async {
     await drainOrchestrator.executeClose(drainTimeout: drainTimeout, periodicTimer: _periodicTimer);
     _periodicTimer = null;
+    await observer.dispose();
     await eventBus.dispose();
   }
 }

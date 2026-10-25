@@ -9,6 +9,7 @@ import '../connectivity/connectivity_monitor.dart';
 import 'domain/models/orbit_sync_event.dart';
 import 'domain/models/sync_job.dart';
 import 'domain/models/rest_endpoints.dart';
+import '../observability/sync_observer.dart';
 import 'services/session_manager.dart';
 import 'services/schema_migration_runner.dart';
 import 'services/orbit_table_impl.dart';
@@ -163,6 +164,9 @@ abstract class OrbitClient {
 
   /// Telemetry stream of sync events with correlation IDs.
   Stream<OrbitSyncEvent> get syncEvents;
+
+  /// Central observability hub emitting typed telemetry streams and managing in-memory logs (Layer 6).
+  SyncObserver get observer;
 
   /// Restores records from local storage with optional SQL where clause.
   Future<List<Row>> query(String sql, [List<dynamic> parameters = const []]);

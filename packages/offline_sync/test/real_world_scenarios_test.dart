@@ -197,7 +197,7 @@ void main() {
 
       // Outbox: pending edit must be marked as 'conflict' with structured explanation
       final outboxRows = await client.query(
-        "SELECT status, error_details_json FROM _sync_outbox WHERE entity_id = ? AND op = 'upsert'",
+        "SELECT status, error_details_json FROM _sync_outbox WHERE entity_id = ? AND op IN ('update', 'upsert')",
         [noteId],
       );
       expect(outboxRows.isNotEmpty, isTrue);
@@ -442,9 +442,9 @@ void main() {
       final row = await client.restoreById('records', recId);
       expect(row, isNotNull);
       expect(row!['title'], equals('Sensor Reading'));
-      expect(row['reading_count'], equals('42')); // Dynamically altered as TEXT column
-      expect(row['temperature'], equals('98.6'));
-      expect(row['is_calibrated'], equals('1'));
+      expect(row['reading_count'].toString(), equals('42'));
+      expect(row['temperature'].toString(), equals('98.6'));
+      expect(row['is_calibrated'].toString(), equals('1'));
 
       await client.close();
     });

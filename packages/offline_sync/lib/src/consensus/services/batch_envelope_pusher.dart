@@ -14,8 +14,8 @@ class BatchEnvelopePusher {
   final SyncTransport transport;
   final SyncProfile profile;
   final BackoffPolicy backoffPolicy;
-  final int currentSchemaVersion;
-  final MutationMigrator? migrator;
+  int currentSchemaVersion;
+  MutationMigrator? migrator;
   final Future<void> Function()? onAuthExpired;
 
   BatchEnvelopePusher({

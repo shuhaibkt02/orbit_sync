@@ -42,8 +42,10 @@ class SyncWorker implements ISyncWorker {
   Future<void>? _refreshFuture;
 
   String? Function(String entity, Map<String, dynamic> mergedRecord)? validateInvariants;
-  int currentSchemaVersion;
-  MutationMigrator? migrator;
+  int get currentSchemaVersion => _pushOrchestrator.currentSchemaVersion;
+  set currentSchemaVersion(int v) => _pushOrchestrator.currentSchemaVersion = v;
+  MutationMigrator? get migrator => _pushOrchestrator.migrator;
+  set migrator(MutationMigrator? m) => _pushOrchestrator.migrator = m;
 
   late final ConflictReconciler _reconciler;
   late final PagePullOrchestrator _pullOrchestrator;
@@ -67,8 +69,8 @@ class SyncWorker implements ISyncWorker {
     Future<String?> Function()? getAuthToken,
     this.onAuthExpired,
     this.validateInvariants,
-    this.currentSchemaVersion = 1,
-    this.migrator,
+    int currentSchemaVersion = 1,
+    MutationMigrator? migrator,
     this.onLog,
   })  : _getAuthToken = getAuthToken,
         backoffPolicy = backoffPolicy ?? BackoffPolicy(),
@@ -78,14 +80,14 @@ class SyncWorker implements ISyncWorker {
               client: client,
               getAuthToken: getAuthToken,
             ) {
-    _initServices();
+    _initServices(currentSchemaVersion, migrator);
     _remoteChangeSub = this.transport.onRemoteChange?.listen((_) {
       onLog?.call('Orbit: Real-time remote change detected. Triggering sync.');
       sync();
     });
   }
 
-  void _initServices() {
+  void _initServices(int initialSchemaVersion, MutationMigrator? initialMigrator) {
     _reconciler = ConflictReconciler(
       validateInvariants: (entity, merged) => validateInvariants?.call(entity, merged),
     );
@@ -102,8 +104,8 @@ class SyncWorker implements ISyncWorker {
       transport: transport,
       profile: profile,
       backoffPolicy: backoffPolicy,
-      currentSchemaVersion: currentSchemaVersion,
-      migrator: migrator,
+      currentSchemaVersion: initialSchemaVersion,
+      migrator: initialMigrator,
       onLog: onLog,
       onAuthExpired: _handleAuthExpired,
       nowMsProvider: nowMsProvider,
