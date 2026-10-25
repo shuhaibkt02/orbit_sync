@@ -119,5 +119,43 @@ void main() {
       );
       expect(syncedRow['status'], 'synced');
     });
+
+    test('Test Case 4: Grace Window (holdFor / dispatch_after) suppresses push until window elapses', () async {
+      final baseNow = DateTime.now().millisecondsSinceEpoch;
+      int simulatedNow = baseNow;
+      final timeGatedWorker = SyncWorker(
+        storage: env.storage,
+        serverUrl: env.server.baseUrl,
+        nowMsProvider: () => simulatedNow,
+      );
+
+      // Save record with 5-minute hold window
+      final mutId = await env.storage.save(
+        entity: 'tasks',
+        id: 'hold-task-1',
+        data: {'title': 'Held Task'},
+        holdFor: const Duration(minutes: 5),
+      );
+
+      // Push while within hold window (simulatedNow < dispatch_after)
+      final pushEarly = await timeGatedWorker.pushBatch();
+      expect(pushEarly.status, SyncPushStatus.success);
+      expect(pushEarly.applied, 0, reason: 'Must skip mutations whose dispatch_after is in future');
+
+      final rowEarly = await env.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      expect(rowEarly['status'], 'pending');
+
+      // Advance simulated clock past 5 minutes
+      simulatedNow += const Duration(minutes: 6).inMilliseconds;
+
+      final pushDue = await timeGatedWorker.pushBatch();
+      expect(pushDue.status, SyncPushStatus.success);
+      expect(pushDue.applied, 1);
+
+      final rowSynced = await env.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      expect(rowSynced['status'], 'synced');
+
+      timeGatedWorker.dispose();
+    });
   });
 }

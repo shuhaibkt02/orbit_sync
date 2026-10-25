@@ -38,7 +38,7 @@ class SqliteOutboxWriter {
 
     return await db.writeTransaction<String>((tx) async {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final dispatchAfter = holdFor != null ? now + holdFor.inMilliseconds : now;
+      final dispatchAfter = holdFor != null ? now + holdFor.inMilliseconds : null;
       final slaSeconds = sla?.inSeconds ?? 86400;
       final expiresAt = ttl != null ? now + ttl.inMilliseconds : null;
 

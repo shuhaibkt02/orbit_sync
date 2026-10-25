@@ -72,9 +72,9 @@ class BatchPushOrchestrator {
 
       final pendingRaw = await tx.getAll(
         force
-            ? "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?"
-            : "SELECT * FROM _sync_outbox WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?) ORDER BY created_at ASC LIMIT ?",
-        force ? [batchSize * 2] : [nowMs, batchSize * 2],
+            ? "SELECT * FROM _sync_outbox WHERE status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT ?"
+            : "SELECT * FROM _sync_outbox WHERE status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= ?) AND (dispatch_after IS NULL OR dispatch_after <= ?) ORDER BY priority DESC, created_at ASC LIMIT ?",
+        force ? [batchSize * 2] : [nowMs, nowMs, batchSize * 2],
       );
 
       if (pendingRaw.isEmpty) return const [];

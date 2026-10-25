@@ -20,6 +20,7 @@ void main() {
       'priority': 'TEXT',
       'start_time': 'TEXT',
       'end_time': 'TEXT',
+      'stock': 'INTEGER',
     };
 
     storageA = await SyncStorage.open(path: '${tempDir.path}/client_a.db', maxReaders: 2);
@@ -128,6 +129,53 @@ void main() {
       final localRow = await storageB.db.get("SELECT start_time, end_time FROM tasks WHERE id = 'event-1';");
       expect(localRow['start_time'], '09:00');
       expect(localRow['end_time'], '12:00');
+    });
+
+    test('Test Case 3: Pluggable EntityConflictResolver converges non-scalar counters', () async {
+      // Register semilattice counter resolver for tasks stock: base + deltaA + deltaB
+      workerB.registerConflictResolver('tasks', ({required baseSnapshot, required localRecord, required remoteRecord}) {
+        final baseStock = (baseSnapshot?['stock'] as int?) ?? 10;
+        final localStock = (localRecord['stock'] as int?) ?? baseStock;
+        final remoteStock = (remoteRecord['stock'] as int?) ?? baseStock;
+
+        final deltaLocal = localStock - baseStock;
+        final deltaRemote = remoteStock - baseStock;
+        final resolvedStock = baseStock + deltaLocal + deltaRemote;
+
+        final merged = Map<String, dynamic>.from(remoteRecord);
+        merged['stock'] = resolvedStock;
+        return merged;
+      });
+
+      // 1. Initial shared record on server: Task(id: 'inv-1', title: 'Widget', stock: 10)
+      server.records['tasks:inv-1'] = {'title': 'Widget', 'stock': 10};
+      server.cursor++;
+      server.changelog.add({
+        'cursor': server.cursor,
+        'entity': 'tasks',
+        'id': 'inv-1',
+        'op': 'upsert',
+        '_deleted': false,
+        'data': {'title': 'Widget', 'stock': 10},
+        'version': 1,
+      });
+
+      await workerA.pullAll();
+      await workerB.pullAll();
+
+      // Device A sells 2 units (stock: 8)
+      await storageA.save(entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 8});
+      // Device B sells 3 units (stock: 7)
+      await storageB.save(entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 7});
+
+      // Device A pushes stock 8 to server
+      await workerA.pushBatch();
+
+      // Device B pulls: resolver merges deltaLocal (-3) + deltaRemote (-2) = final stock 5!
+      await workerB.pullAll();
+
+      final bResolved = await storageB.db.get("SELECT stock FROM tasks WHERE id = 'inv-1';");
+      expect(bResolved['stock'], 5);
     });
   });
 }

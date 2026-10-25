@@ -7,6 +7,7 @@ import '../http_sync_transport.dart';
 import 'domain/models/sync_result.dart';
 import 'domain/policies/backoff_policy.dart';
 import 'domain/interfaces/i_sync_worker.dart';
+import 'domain/interfaces/i_conflict_resolver.dart';
 import 'services/conflict_reconciler.dart';
 import 'services/page_pull_orchestrator.dart';
 import 'services/batch_push_orchestrator.dart';
@@ -129,6 +130,11 @@ class SyncWorker implements ISyncWorker {
 
   @override
   Future<void> setLastSyncedCursor(int cursor) => _pullOrchestrator.setLastSyncedCursor(cursor);
+
+  @override
+  void registerConflictResolver(String entity, EntityConflictResolver resolver) {
+    _reconciler.registerResolver(entity, resolver);
+  }
 
   @override
   Future<SyncPushResult> pushBatch({

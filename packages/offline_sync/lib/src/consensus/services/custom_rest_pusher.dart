@@ -85,6 +85,12 @@ class CustomRestPusher {
             'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
             [targetStatus, resp.body, mutationId],
           );
+        } else if (resp.statusCode == HttpStatus.conflict) {
+          await storage.db.execute(
+            'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
+            ['conflict', resp.body, mutationId],
+          );
+          return SyncPushResult(status: SyncPushStatus.conflict, errorMessage: resp.body);
         } else if (resp.statusCode == HttpStatus.unprocessableEntity) {
           await storage.rollbackOptimistic(mutationId, status: 'validation_error');
           await storage.db.execute(

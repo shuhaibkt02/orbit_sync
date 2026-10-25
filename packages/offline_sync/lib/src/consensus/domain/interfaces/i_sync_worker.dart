@@ -1,4 +1,5 @@
 import '../models/sync_result.dart';
+import 'i_conflict_resolver.dart';
 
 /// Abstract contract for Layer 2 synchronization and consensus engine.
 abstract class ISyncWorker {
@@ -7,6 +8,9 @@ abstract class ISyncWorker {
 
   /// Updates checkpointed sync cursor.
   Future<void> setLastSyncedCursor(int cursor);
+
+  /// Registers a custom entity-specific CRDT or join-semilattice conflict resolver.
+  void registerConflictResolver(String entity, EntityConflictResolver resolver);
 
   /// Pushes up to [batchSize] pending mutations to the remote transport.
   Future<SyncPushResult> pushBatch({
