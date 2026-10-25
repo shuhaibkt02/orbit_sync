@@ -256,8 +256,8 @@ void main() {
       expect(receivedHeaders['x-offline-created-at'], isNotNull);
       expect(receivedHeaders['idempotency-key'], isNotNull);
       expect(receivedBody['title'], equals('Universal offline task'));
-      expect(receivedBody['_offline_meta'], isNotNull);
-      expect(receivedBody['_offline_meta']['is_offline'], equals(true));
+      // Zero Metadata Pollution: headers carry metadata, body remains 100% clean domain data
+      expect(receivedBody.containsKey('_offline_meta'), isFalse);
 
       // Assert outbox marked synced
       final failedMutations = await universalClient.getFailedMutations();

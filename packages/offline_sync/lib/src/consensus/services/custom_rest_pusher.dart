@@ -119,17 +119,19 @@ class CustomRestPusher {
     );
   }
 
-  static int parseNextRetryAfter(String? header, int nowMs, BackoffPolicy policy) {
-    if (header == null || header.trim().isEmpty) return nowMs + policy.delayFor(1).inMilliseconds;
-    final clean = header.trim();
-    final seconds = int.tryParse(clean);
-    if (seconds != null) return nowMs + (seconds * 1000);
-    try {
-      final date = HttpDate.parse(clean);
-      final epochMs = date.millisecondsSinceEpoch;
-      return epochMs > nowMs ? epochMs : nowMs + policy.delayFor(1).inMilliseconds;
-    } catch (_) {
-      return nowMs + policy.delayFor(1).inMilliseconds;
-    }
+  static int parseNextRetryAfter(
+    String? header,
+    int nowMs,
+    BackoffPolicy policy, {
+    RetryAfterParser? parser,
+    bool withJitter = false,
+  }) {
+    final retryParser = parser ?? RetryAfterParser();
+    return retryParser.parseNextRetryAt(
+      header,
+      nowMs,
+      fallbackDelay: policy.delayFor(1),
+      withJitter: withJitter,
+    );
   }
 }
