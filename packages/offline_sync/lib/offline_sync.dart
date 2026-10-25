@@ -5,6 +5,7 @@ export 'src/storage/sync_storage.dart';
 export 'src/consensus/sync_worker.dart';
 export 'src/offline_sync_client.dart';
 export 'src/client/orbit_client.dart';
+export 'src/client/orbit_client_observability.dart';
 export 'src/client/services/orbit_table_impl.dart' show OrbitTable;
 export 'src/client/domain/models/orbit_sync_event.dart';
 export 'src/client/domain/models/sync_job.dart';

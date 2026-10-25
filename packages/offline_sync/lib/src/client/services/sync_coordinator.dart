@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../storage/sync_storage.dart';
 import '../../consensus/sync_worker.dart';
 import '../../transport/infrastructure/http_sync_transport.dart';
+import '../../observability/domain/models/sync_event.dart';
 import '../domain/models/sync_job.dart';
 import '../domain/models/sync_summary.dart';
 import 'sync_event_bus.dart';
@@ -11,6 +12,7 @@ import 'sync_event_bus.dart';
 class SyncCoordinator {
   final SyncWorker worker;
   final SyncEventBus eventBus;
+  final void Function(SyncEvent event)? onEvent;
 
   bool _isSyncing = false;
   Completer<void>? _syncCompleter;
@@ -18,6 +20,7 @@ class SyncCoordinator {
   SyncCoordinator({
     required this.worker,
     required this.eventBus,
+    this.onEvent,
   });
 
   bool get isSyncing => _isSyncing;
@@ -54,7 +57,16 @@ class SyncCoordinator {
           final res = await worker.pushBatch(batchSize: 20, force: force);
           totalApplied += res.applied;
           if (res.status != SyncPushStatus.success || res.applied == 0) {
-            if (res.status != SyncPushStatus.success) totalFailed++;
+            if (res.status != SyncPushStatus.success) {
+              totalFailed++;
+              if (res.status == SyncPushStatus.conflict) {
+                onEvent?.call(ConflictDetectedEvent(timestamp: DateTime.now().toUtc(), entity: '', entityId: ''));
+              } else if (res.errorMessage?.contains('Rate limited') == true) {
+                onEvent?.call(RateLimitedEvent(timestamp: DateTime.now().toUtc()));
+              } else if (res.status == SyncPushStatus.unauthorized) {
+                onEvent?.call(AuthExpiredEvent(timestamp: DateTime.now().toUtc()));
+              }
+            }
             break;
           }
           eventBus.emitProgress(syncId: syncId, percentage: 0.5, applied: totalApplied, total: totalApplied);

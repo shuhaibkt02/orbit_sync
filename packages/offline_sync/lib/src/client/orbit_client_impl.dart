@@ -56,16 +56,22 @@ class OrbitClientImpl implements OrbitClient {
   }) {
     horizonGuard = CausalHorizonGuard(storage);
     hydrator = EntityHydrator(storage: storage);
-    coordinator = SyncCoordinator(worker: worker, eventBus: eventBus);
-    drainOrchestrator = DrainOrchestrator(storage: storage, worker: worker, connectivity: connectivity, activeWatchControllers: _activeWatchControllers, awaitInFlightSync: () async => coordinator.currentInFlightSync);
-    queryHelper = DashboardQueryHelper(storage: storage, watchFn: watch);
     final slaMon = SlaMonitor(storage: storage)..start();
+    queryHelper = DashboardQueryHelper(storage: storage, watchFn: watch);
     observer = SyncObserver(
       slaMonitor: slaMon,
       onRetryMutation: (id, {syncNow = false}) async { await queryHelper.retryMutation(id); if (syncNow) await sync(force: true); },
       onRetryAllFailed: ({syncNow = false}) async { await queryHelper.retryAllFailed(); if (syncNow) await sync(force: true); },
     );
+    coordinator = SyncCoordinator(worker: worker, eventBus: eventBus, onEvent: observer.publish);
+    drainOrchestrator = DrainOrchestrator(storage: storage, worker: worker, connectivity: connectivity, activeWatchControllers: _activeWatchControllers, awaitInFlightSync: () async => coordinator.currentInFlightSync);
     connectivity.onConnectivityChanged.listen((on) => observer.publish(on ? OnlineEvent(timestamp: DateTime.now().toUtc()) : OfflineEvent(timestamp: DateTime.now().toUtc())));
+    connectivity.onProbeTimeout = (t, ep) => observer.publish(ProbeTimeoutEvent(timestamp: DateTime.now().toUtc(), targetUrl: ep, latencyMs: t.inMilliseconds));
+    final origAuth = worker.onAuthExpired;
+    worker.onAuthExpired = () async {
+      observer.publish(AuthExpiredEvent(timestamp: DateTime.now().toUtc()));
+      await origAuth?.call();
+    };
   }
 
   @override
@@ -99,8 +105,13 @@ class OrbitClientImpl implements OrbitClient {
   Future<String> save({required String entity, String? id, required Map<String, dynamic> data, int version = 1, String? dependsOnMutationId, int schemaVersion = 1, String? url, String? httpMethod, Duration? holdFor, Duration? sla, Duration? ttl, int priority = 0, String? correlationTag}) async {
     if (isClosed) throw const ClientClosedException('save');
     final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
+    final existing = await storage.db.getAll("SELECT mutation_id FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending' LIMIT 1", [entity, effectiveId]);
     final mutId = await storage.save(entity: entity, id: effectiveId, data: data, version: version, dependsOnMutationId: dependsOnMutationId, schemaVersion: schemaVersion, endpointUrl: url ?? _entityUrls[entity], httpMethod: httpMethod, holdFor: holdFor, sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag);
-    observer.publish(MutationQueuedEvent(timestamp: DateTime.now().toUtc(), mutationId: mutId, entity: entity, entityId: effectiveId));
+    if (existing.isNotEmpty) {
+      observer.publish(MutationCoalescedEvent(timestamp: DateTime.now().toUtc(), mutationId: mutId, entity: entity, entityId: effectiveId));
+    } else {
+      observer.publish(MutationQueuedEvent(timestamp: DateTime.now().toUtc(), mutationId: mutId, entity: entity, entityId: effectiveId));
+    }
     return mutId;
   }
 
@@ -142,7 +153,11 @@ class OrbitClientImpl implements OrbitClient {
     await horizonGuard.softRejectRecord(entity: entity, id: id, errorMessage: reason);
     observer.publish(SyncRejectedEvent(timestamp: DateTime.now().toUtc(), entity: entity, entityId: id, errorMessage: reason ?? 'Business rejected'));
   }
-  Future<int> holdDescendants(String parentMutationId) => horizonGuard.holdDescendantMutations(parentMutationId);
+  Future<int> holdDescendants(String parentMutationId) async {
+    final held = await horizonGuard.holdDescendantMutations(parentMutationId);
+    if (held > 0) observer.publish(CascadeFailureEvent(timestamp: DateTime.now().toUtc(), parentMutationId: parentMutationId, childMutationId: 'held-$held'));
+    return held;
+  }
 
   void startPeriodicSync({Duration? interval}) {
     _periodicInterval = interval ?? (profile == SyncProfile.basic ? const Duration(seconds: 60) : profile == SyncProfile.standard ? const Duration(seconds: 30) : const Duration(seconds: 15));

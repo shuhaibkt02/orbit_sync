@@ -26,6 +26,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   String? defaultProbeUrl;
   final Future<bool> Function()? reachabilityChecker;
   final Future<void> Function()? onScheduleNativeAlarm;
+  void Function(Duration timeout, String endpoint)? onProbeTimeout;
 
   final INetworkProbe _probe;
   final INetworkTypeProvider _typeProvider;
@@ -48,6 +49,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     this.defaultProbeUrl,
     this.reachabilityChecker,
     this.onScheduleNativeAlarm,
+    this.onProbeTimeout,
     INetworkProbe? probe,
     INetworkTypeProvider? typeProvider,
     DebouncePolicy debouncePolicy = DebouncePolicy.standard,
@@ -108,6 +110,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
         : Uri.parse('http://connectivitycheck.gstatic.com/generate_204');
 
     final result = await _probe.probe(targetUri, timeout: timeout);
+    if (!result.isOnline) onProbeTimeout?.call(timeout, targetUri.toString());
     _updatePhysicalState(isPhysicallyOnline: result.isOnline, isCaptivePortal: result.isCaptivePortal, bypassDebounce: bypassDebounce);
     return isOnline;
   }

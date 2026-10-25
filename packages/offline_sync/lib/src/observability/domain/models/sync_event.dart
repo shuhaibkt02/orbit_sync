@@ -42,7 +42,7 @@ class MutationCoalescedEvent extends SyncEvent {
 class DatabasePrunedEvent extends SyncEvent {
   final int prunedCount;
   final String pruneType;
-  const DatabasePrunedEvent({required super.timestamp, required this.prunedCount, required this.pruneType});
+  const DatabasePrunedEvent({required super.timestamp, required this.prunedCount, this.pruneType = 'expired'});
 }
 
 class StorageWarningEvent extends SyncEvent {
@@ -77,7 +77,7 @@ class ConflictDetectedEvent extends SyncEvent {
   final Map<String, dynamic> localRecord;
   final Map<String, dynamic> remoteRecord;
   final Map<String, dynamic>? mergedRecord;
-  const ConflictDetectedEvent({required super.timestamp, required this.entity, required this.entityId, required this.localRecord, required this.remoteRecord, this.mergedRecord});
+  const ConflictDetectedEvent({required super.timestamp, required this.entity, required this.entityId, this.localRecord = const {}, this.remoteRecord = const {}, this.mergedRecord});
 }
 
 class PoisonPillQuarantinedEvent extends SyncEvent {
@@ -106,7 +106,7 @@ class SyncRejectedEvent extends SyncEvent {
 class RateLimitedEvent extends SyncEvent {
   final int retryAfterSeconds;
   final String? endpoint;
-  const RateLimitedEvent({required super.timestamp, required this.retryAfterSeconds, this.endpoint});
+  const RateLimitedEvent({required super.timestamp, this.retryAfterSeconds = 1, this.endpoint});
 }
 
 class AuthExpiredEvent extends SyncEvent {

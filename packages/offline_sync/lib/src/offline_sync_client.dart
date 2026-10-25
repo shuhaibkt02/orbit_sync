@@ -8,6 +8,7 @@ import 'consensus/domain/models/sync_failure.dart';
 import 'consensus/domain/models/sync_status_summary.dart';
 import 'client/orbit_client.dart';
 import 'client/orbit_client_impl.dart';
+import 'observability/domain/models/sync_event.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.
 class OfflineSyncClient extends OrbitClientImpl {
@@ -90,7 +91,11 @@ class OfflineSyncClient extends OrbitClientImpl {
     );
   }
 
-  Future<int> pruneExpiredCache(String entity) => storage.pruneExpiredCache(entity);
+  Future<int> pruneExpiredCache(String entity) async {
+    final count = await storage.pruneExpiredCache(entity);
+    if (count > 0) observer.publish(DatabasePrunedEvent(timestamp: DateTime.now().toUtc(), prunedCount: count));
+    return count;
+  }
   Future<SyncStatusSummary> getSummary() => queryHelper.getSummary();
   Stream<SyncStatusSummary> watchSummary() => queryHelper.watchSummary();
   Future<List<SyncFailure>> getFailures() => queryHelper.getFailures();

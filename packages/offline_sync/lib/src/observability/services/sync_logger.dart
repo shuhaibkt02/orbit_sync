@@ -13,9 +13,10 @@ class SyncLogger {
   final ListQueue<SyncLogEntry> _buffer;
 
   SyncLogger({
-    this.capacity = 100,
+    int capacity = 100,
     this.minLevel = LogLevel.warn,
-  }) : _buffer = ListQueue<SyncLogEntry>(capacity);
+  })  : capacity = capacity < 1 ? 1 : capacity,
+        _buffer = ListQueue<SyncLogEntry>(capacity < 1 ? 1 : capacity);
 
   int get length => _buffer.length;
   bool get isEmpty => _buffer.isEmpty;

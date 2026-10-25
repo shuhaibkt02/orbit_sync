@@ -47,7 +47,8 @@ class SlaMonitor {
         WHERE status IN ('pending', 'in_flight', 'failed', 'held')
           AND sla_seconds IS NOT NULL
           AND sla_seconds > 0
-      ''');
+          AND (created_at + sla_seconds * 800) <= ?
+      ''', [now]);
 
       final activeIds = <String>{};
       final emitted = <SyncEvent>[];
