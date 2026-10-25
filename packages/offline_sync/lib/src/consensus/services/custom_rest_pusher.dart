@@ -124,7 +124,7 @@ class CustomRestPusher {
     int nowMs,
     BackoffPolicy policy, {
     RetryAfterParser? parser,
-    bool withJitter = false,
+    bool withJitter = true,
   }) {
     final retryParser = parser ?? RetryAfterParser();
     return retryParser.parseNextRetryAt(

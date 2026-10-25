@@ -49,6 +49,7 @@ class SyncWorker implements ISyncWorker {
   late final PagePullOrchestrator _pullOrchestrator;
   late final BatchPushOrchestrator _pushOrchestrator;
   late final GenerationSwapManager _swapManager;
+  StreamSubscription<void>? _remoteChangeSub;
 
   String get serverUrl => transport is HttpSyncTransport ? (transport as HttpSyncTransport).serverUrl : '';
   http.Client? get httpClient => transport is HttpSyncTransport ? (transport as HttpSyncTransport).httpClient : null;
@@ -78,7 +79,7 @@ class SyncWorker implements ISyncWorker {
               getAuthToken: getAuthToken,
             ) {
     _initServices();
-    this.transport.onRemoteChange?.listen((_) {
+    _remoteChangeSub = this.transport.onRemoteChange?.listen((_) {
       onLog?.call('Orbit: Real-time remote change detected. Triggering sync.');
       sync();
     });
@@ -161,6 +162,7 @@ class SyncWorker implements ISyncWorker {
 
   @override
   void dispose() {
+    _remoteChangeSub?.cancel();
     transport.dispose();
   }
 }

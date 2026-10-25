@@ -33,7 +33,11 @@ class HttpSyncTransport implements SyncTransport {
   @override
   Stream<void> get onRemoteChange => _remoteChangeController.stream;
 
-  void notifyRemoteChange() => _remoteChangeController.add(null);
+  void notifyRemoteChange() {
+    if (!_remoteChangeController.isClosed) {
+      _remoteChangeController.add(null);
+    }
+  }
 
   Future<Map<String, String>> _authHeaders() async {
     final h = <String, String>{'content-type': 'application/json'};
@@ -44,13 +48,20 @@ class HttpSyncTransport implements SyncTransport {
     return h;
   }
 
+  String _joinUrl(String base, String path) {
+    final cleanBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    return '$cleanBase$cleanPath';
+  }
+
   @override
   Future<TransportResponse> pushBatch({
     required List<Map<String, dynamic>> mutations,
     required String idempotencyKey,
     String? chaos,
   }) async {
-    final uriStr = '$serverUrl/sync/push${chaos != null ? '?chaos=$chaos' : ''}';
+    final base = _joinUrl(serverUrl, 'sync/push');
+    final uriStr = '$base${chaos != null ? '?chaos=$chaos' : ''}';
     final headers = await _authHeaders();
     headers['idempotency-key'] = idempotencyKey;
 
@@ -76,9 +87,8 @@ class HttpSyncTransport implements SyncTransport {
   }) async {
     var targetUrl = url;
     if (entityId != null &&
-        (method == 'PUT' || method == 'PATCH' || method == 'DELETE') &&
-        !targetUrl.endsWith('/$entityId')) {
-      targetUrl = '$targetUrl/$entityId';
+        (method == 'PUT' || method == 'PATCH' || method == 'DELETE')) {
+      targetUrl = _joinUrl(targetUrl, entityId);
     }
 
     final headers = await _authHeaders();
@@ -95,6 +105,8 @@ class HttpSyncTransport implements SyncTransport {
     String? bodyStr;
     if (method != 'DELETE' && payload != null) {
       final bodyMap = Map<String, dynamic>.from(payload);
+      bodyMap.remove('_offline_meta');
+      bodyMap.removeWhere((k, _) => k.startsWith('_sync_') || k.startsWith('_offline_'));
       if (entityId != null) bodyMap['id'] ??= entityId;
       bodyStr = jsonEncode(bodyMap);
     }
@@ -118,7 +130,8 @@ class HttpSyncTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    var uriStr = '$serverUrl/sync/pull?limit=$limit';
+    final base = _joinUrl(serverUrl, 'sync/pull');
+    var uriStr = '$base?limit=$limit';
     if (snapshot) {
       uriStr += '&snapshot=true';
     } else {

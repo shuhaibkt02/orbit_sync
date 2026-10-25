@@ -32,7 +32,11 @@ class InMemorySyncTransport implements SyncTransport {
   @override
   Stream<void> get onRemoteChange => _remoteChangeController.stream;
 
-  void notifyRemoteChange() => _remoteChangeController.add(null);
+  void notifyRemoteChange() {
+    if (!_remoteChangeController.isClosed) {
+      _remoteChangeController.add(null);
+    }
+  }
 
   @override
   Future<TransportResponse> pushBatch({

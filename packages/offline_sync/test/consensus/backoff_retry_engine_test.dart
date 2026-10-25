@@ -165,8 +165,11 @@ void main() {
 
       final rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
       expect(rows.first['status'], equals('pending'));
-      final expectedTargetMs = DateTime.utc(2026, 10, 17, 12, 1, 0).millisecondsSinceEpoch;
-      expect(rows.first['next_retry_at'], equals(expectedTargetMs));
+      final baseTargetMs = clock.millisecondsSinceEpoch;
+      final retryAt = rows.first['next_retry_at'] as int;
+      // Validates RFC 7231 parsing + full randomized jitter (±20% of 60s)
+      expect(retryAt, greaterThanOrEqualTo(baseTargetMs + 48000));
+      expect(retryAt, lessThanOrEqualTo(baseTargetMs + 72000));
 
       await client.close();
       faultClient.close();
