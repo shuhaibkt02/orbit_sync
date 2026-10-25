@@ -1,3 +1,12 @@
+/// Common HTTP methods for declarative endpoint definitions.
+abstract class HttpMethod {
+  static const get = 'GET';
+  static const post = 'POST';
+  static const put = 'PUT';
+  static const patch = 'PATCH';
+  static const delete = 'DELETE';
+}
+
 /// HTTP request description for entity REST integration.
 class RestRequest {
   final String path;

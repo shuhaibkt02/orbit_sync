@@ -105,5 +105,18 @@ void main() {
       final undoSuccess = await products.undoDelete('prod-1');
       expect(undoSuccess, isTrue);
     });
+
+    test('RestEndpoints declarative mappings support HttpMethod constants', () {
+      final endpoints = RestEndpoints<TestProduct>(
+        list: (params) => const RestRequest(path: '/api/v1/products'),
+        create: (item) => const RestRequest(path: '/api/v1/products', method: HttpMethod.post),
+        update: (item) => RestRequest(path: '/api/v1/products/${item.id}', method: HttpMethod.put),
+        delete: (id) => RestRequest(path: '/api/v1/products/$id', method: HttpMethod.delete),
+      );
+
+      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals('POST'));
+      expect(endpoints.update!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals('PUT'));
+      expect(endpoints.delete!('1').method, equals('DELETE'));
+    });
   });
 }
