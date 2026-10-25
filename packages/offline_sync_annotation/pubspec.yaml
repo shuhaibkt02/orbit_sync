@@ -1,7 +1,0 @@
-name: offline_sync_annotation
-description: Lightweight annotations for offline_sync models (@SyncEntity, @PrimaryKey).
-version: 0.1.0
-publish_to: none
-
-environment:
-  sdk: '>=3.0.0 <4.0.0'
