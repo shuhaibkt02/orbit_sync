@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'ui/apple_theme.dart';
+import 'mock_backend.dart';
 import 'ui/widgets/apple_pressable.dart';
 import 'ui/widgets/apple_segmented_control.dart';
 import 'ui/widgets/quick_add_bar.dart';
@@ -102,6 +103,7 @@ class TaskScreen extends StatefulWidget {
 class _TaskScreenState extends State<TaskScreen> {
   OfflineSyncClient? _orbit;
   OrbitTable<Task>? _tasks;
+  MockBackend? _mockBackend;
 
   TaskFilter _selectedFilter = TaskFilter.all;
   String _searchQuery = '';
@@ -118,9 +120,12 @@ class _TaskScreenState extends State<TaskScreen> {
 
   Future<void> _initOrbit() async {
     final dir = await getApplicationDocumentsDirectory();
+    final mockBackend = await MockBackend.start();
+    _mockBackend = mockBackend;
+
     final client = await OfflineSyncClient.initialize(
       databasePath: p.join(dir.path, 'orbit_tasks.db'),
-      serverUrl: 'https://api.example.com',
+      serverUrl: mockBackend.url,
     );
 
     await client.registerTable('tasks', {
@@ -148,6 +153,7 @@ class _TaskScreenState extends State<TaskScreen> {
     _searchController.dispose();
     _undoDismissTimer?.cancel();
     _orbit?.close();
+    _mockBackend?.stop();
     super.dispose();
   }
 

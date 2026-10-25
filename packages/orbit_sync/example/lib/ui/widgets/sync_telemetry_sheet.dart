@@ -62,8 +62,8 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
 
     try {
       await widget.client.sync(force: true);
-    } catch (_) {
-      // Ignored for demo server URL
+    } catch (e) {
+      debugPrint('[Orbit Sync Demo] Sync error: $e');
     } finally {
       if (mounted) {
         _syncSpinController.stop();

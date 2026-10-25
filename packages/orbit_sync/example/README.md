@@ -1,17 +1,41 @@
-# example
+# 🛰️ Orbit Sync Example App
 
-A new Flutter project.
+A production-grade, Apple-inspired Flutter task manager demonstrating offline-first synchronization with **Orbit Sync**.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## ⚡ Quickstart (Runs 100% Out-of-the-Box)
 
-A few resources to get you started if this is your first Flutter project:
+No external backend, Docker container, or terminal server required! 
+The app spins up a lightweight in-process mock server (`MockBackend`) on app launch so you can test synchronization immediately.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+# Run on macOS, iOS, Android, or desktop
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 📱 Features Demonstrated
+
+1. **Instant Saves (0ms UI latency):**
+   - Tasks are committed immediately to local SQLite WAL.
+   - Zero loading spinners; optimistic UI updates.
+
+2. **Invisible Background Synchronization:**
+   - Queues outbox mutations atomically with domain records.
+   - Automatically pushes mutations sequentially to the backend upon network connectivity.
+
+3. **Real-time Sync Status & Telemetry:**
+   - Tap the status pill in the top-right header to open the **Sync Telemetry Sheet**.
+   - Monitor live metrics: Pending Outbox, Synced Records, and Dead-Letter Queue (DLQ).
+   - Trigger manual force-sync or test data seeding.
+
+4. **Connecting to Your Real Backend:**
+   - Open `lib/main.dart` and point `serverUrl` to your company's REST API:
+   ```dart
+   final client = await OfflineSyncClient.initialize(
+     databasePath: p.join(dir.path, 'orbit_tasks.db'),
+     serverUrl: 'https://api.yourcompany.com',
+   );
+   ```
