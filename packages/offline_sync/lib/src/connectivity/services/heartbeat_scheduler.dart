@@ -24,6 +24,8 @@ class HeartbeatScheduler {
         if (online) {
           stop();
         }
+      } catch (_) {
+        // Guard against uncaught timer exceptions crashing the isolate
       } finally {
         _isChecking = false;
       }

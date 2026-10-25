@@ -22,9 +22,13 @@ class HttpNetworkProbe implements INetworkProbe {
 
     try {
       final request = http.Request('GET', targetUri)..followRedirects = false;
-      final streamedResponse = await _client.send(request).timeout(effectiveTimeout);
+      final streamedResponse =
+          await _client.send(request).timeout(effectiveTimeout);
       final statusCode = streamedResponse.statusCode;
       stopwatch.stop();
+
+      // Drain response stream to release underlying HTTP socket / file descriptor
+      unawaited(streamedResponse.stream.drain<void>().catchError((_) {}));
 
       // 1. Captive Portal 3xx Redirect Interception
       if (statusCode >= 300 && statusCode < 400) {
@@ -33,8 +37,9 @@ class HttpNetworkProbe implements INetworkProbe {
         final isExternalHost = redirectUri != null &&
             redirectUri.host.isNotEmpty &&
             redirectUri.host != targetUri.host;
+        final isCanaryRedirect = targetUri.path.contains('generate_204');
 
-        if (isExternalHost) {
+        if (isExternalHost || isCanaryRedirect) {
           return ProbeResult.captivePortal(
             statusCode: statusCode,
             redirectUrl: redirectUri,

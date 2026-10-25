@@ -50,14 +50,18 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(events, contains(false));
 
-      // Turn off simulation
+      // Turn off simulation automatically initiates reachability check
       monitor.simulateOffline = false;
       expect(monitor.simulateOffline, isFalse);
+      expect(monitor.isOnline, isTrue);
 
-      // Now checkReachability makes actual network probe
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(spyProbe.probeCallCount, equals(1));
+
+      // Subsequent reachability check probes again
       final onlineCheck = await monitor.checkReachability(bypassDebounce: true);
       expect(onlineCheck, isTrue);
-      expect(spyProbe.probeCallCount, equals(1));
+      expect(spyProbe.probeCallCount, equals(2));
 
       await sub.cancel();
       monitor.dispose();

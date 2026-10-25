@@ -281,6 +281,15 @@ class OfflineSyncClient {
     }
   }
 
+  /// Notifies the sync engine that the host application was resumed from the background.
+  /// Bypasses the 3-second flap guard, immediately checks reachability, and triggers sync.
+  Future<void> notifyAppResumed() async {
+    await connectivity.notifyAppResumed();
+    if (connectivity.isOnline && !_isPaused) {
+      await sync();
+    }
+  }
+
   /// Starts automatic periodic background syncing with profile-aware defaults.
   void startPeriodicSync({Duration? interval}) {
     final defaultInterval = profile == SyncProfile.basic

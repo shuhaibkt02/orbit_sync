@@ -26,6 +26,27 @@ void main() {
       expect(result.redirectUrl, equals(Uri.parse('https://wifi-portal.hotel.com/login')));
     });
 
+    test('Relative 302 redirect on generate_204 flags captive portal', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          '',
+          302,
+          headers: {'location': '/guest/s/default/'},
+          request: request,
+        );
+      });
+
+      final probe = HttpNetworkProbe(client: mockClient);
+      final result = await probe.probe(
+        Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
+      );
+
+      expect(result.isOnline, isFalse);
+      expect(result.isCaptivePortal, isTrue);
+      expect(result.statusCode, equals(302));
+      expect(result.redirectUrl, equals(Uri.parse('/guest/s/default/')));
+    });
+
     test('HTTP 204 No Content confirms true reachability without captive portal', () async {
       final mockClient = MockClient((request) async {
         return http.Response('', 204, request: request);
