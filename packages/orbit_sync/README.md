@@ -94,6 +94,52 @@ void main() async {
 
 ---
 
+## 🏗️ How Orbit Works: The 6 Clean Layers
+
+Orbit does not use complex proprietary cloud databases or mandatory code generators. It is designed as a transparent 6-layer pipeline where each layer has a single responsibility:
+
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │  LAYER 5: Application Facade                                                │
+ │  `OrbitClient` & `OrbitTable<T>` • Reactive streams • Type sanitization      │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │  LAYER 6: Observability & Telemetry                                         │
+ │  `orbit.observer` • Live SLA warnings • Circular log buffer • KPI counters  │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │  LAYER 1: Local Storage Engine                                              │
+ │  SQLite WAL • Transactional Outbox • 0ms instant local writes • UUIDv7      │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │  LAYER 3: Connectivity & Flap Guard                                         │
+ │  3s flap debounce • Captive portal canary probes • Instant app resume wakeup│
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │  LAYER 2: Consensus & Outbox Replayer                                       │
+ │  FIFO queue • Exponential backoff with jitter • Poison pill (DLQ) isolation │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │  LAYER 4: Transport & REST Gateway                                          │
+ │  Host Dio/Http adapter • Pure domain JSON (no metadata leaks) • Rate limits │
+ └─────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+                       YOUR EXISTING REST BACKEND
+                       (Node.js, Django, Go, Rails, Spring Boot)
+```
+
+| Layer | Responsibility | Developer Touchpoint |
+| :--- | :--- | :--- |
+| **Layer 5: Application Facade** | High-level Flutter API. Provides typed tables (`OrbitTable<T>`), automated SQLite type sanitization, and debounced reactive streams (`watch()`). | `orbit.registerTypedTable<Task>(...)` |
+| **Layer 6: Observability** | System telemetry radar. Broadcasts 14 typed events (`onOnline`, `onSlaBreached`), circular log buffer, and dashboard summary streams. | `orbit.observer.events` & `orbit.watchSummary()` |
+| **Layer 1: Local Storage** | Fast local persistence. Writes data to SQLite WAL in 0ms with monotonic UUIDv7 keys and atomic outbox envelopes (`_sync_outbox`). | `table.save(item)` |
+| **Layer 3: Connectivity** | Smart network monitor. 3s flap guard prevents radio thrashing; canary HTTP probes detect captive portals (airport/hotel logins). | `orbit.simulateOffline` (for testing) |
+| **Layer 2: Consensus** | Ordered outbox dispatcher. Replays mutations sequentially (FIFO) with exponential backoff; quarantines poison pills (HTTP 422) to DLQ without blocking other queues. | `orbit.sync()` & `orbit.retryAllFailed()` |
+| **Layer 4: Transport** | REST HTTP pipe. Uses your existing `Dio` or `http.Client`. Keeps outbox metadata strictly in HTTP headers so server request bodies stay 100% pure JSON. | `httpClient: myDio` |
+
+### How Data Moves in 3 Steps:
+1. **User saves offline:** `Layer 5` sanitizes the data $\to$ `Layer 1` commits to local SQLite table and outbox in **1 millisecond**. Zero spinners.
+2. **Signal returns:** `Layer 3` verifies genuine internet reachability $\to$ wakes up `Layer 2`.
+3. **Seamless sync:** `Layer 2` reads pending mutations in FIFO order $\to$ `Layer 4` sends standard HTTP requests (`POST /tasks`) via your app's Dio $\to$ `Layer 6` updates the live UI counters.
+
+---
+
 ## 🎛️ Zero-SQL Sync Dashboard & Telemetry
 
 You never have to write SQL queries, inspect internal tables, or parse JSON strings. Orbit provides high-level, strongly-typed Dart APIs:
