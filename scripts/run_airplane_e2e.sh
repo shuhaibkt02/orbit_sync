@@ -28,7 +28,7 @@ if [ -z "${DEVICE:-}" ]; then
 fi
 
 ADB="$ADB_BIN ${DEVICE:+-s $DEVICE}"
-APP_DIR="packages/offline_sync/example"
+APP_DIR="packages/orbit_sync/example"
 TARGET="integration_test/airplane_mode_test.dart"
 
 SERVER_PID=""

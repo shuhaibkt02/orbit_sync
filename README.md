@@ -47,7 +47,7 @@ In your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  offline_sync: ^0.1.0 # (or path: packages/offline_sync)
+  orbit_sync: ^1.0.0 # (or path: packages/orbit_sync)
   sqlite3_flutter_libs: ^0.5.24 # Native SQLite binaries
   path_provider: ^2.1.2
 ```
@@ -55,7 +55,7 @@ dependencies:
 ### 2. Save & Sync Data in 4 Lines of Dart
 
 ```dart
-import 'package:offline_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -186,15 +186,12 @@ await orbit.markSynced(item.mutationId);
 This repository is organized as a standard Flutter/Dart monorepo:
 
 ```text
-offline_plugin/
+orbit_sync/
 ├── packages/
-│   ├── offline_sync/             👈 THE MAIN FLUTTER PACKAGE (Start here!)
-│   │   ├── lib/                  # OfflineSyncClient & local sync engine
-│   │   ├── example/              # Complete runnable Flutter demo app
-│   │   └── test/                 # 73 automated unit, durability & chaos tests
-│   │
-│   ├── offline_sync_annotation/  # (Optional) Annotations for build_runner
-│   └── offline_sync_generator/   # (Optional) Code generator for strict typed models
+│   └── orbit_sync/               👈 THE MAIN FLUTTER PACKAGE (Start here!)
+│       ├── lib/                  # OrbitClient & local sync engine
+│       ├── example/              # Complete runnable Flutter demo app
+│       └── test/                 # 152 automated unit, durability & chaos tests
 │
 ├── scripts/
 │   └── run_airplane_e2e.sh       # Hardware & Emulator Airplane Mode E2E Test Runner
@@ -209,7 +206,7 @@ offline_plugin/
 Try the full Flutter task manager app with live outbox counters, offline toggle, and manual sync controls:
 
 ```bash
-cd packages/offline_sync/example
+cd packages/orbit_sync/example
 flutter run
 ```
 
@@ -218,11 +215,11 @@ flutter run
 ## 🧪 Running Tests
 
 ```bash
-# Test the core sync engine (73 tests)
-cd packages/offline_sync && flutter test
+# Test the core sync engine (152 tests)
+cd packages/orbit_sync && flutter test
 
 # Run analyzer
-cd packages/offline_sync && flutter analyze
+cd packages/orbit_sync && flutter analyze
 ```
 
 ---

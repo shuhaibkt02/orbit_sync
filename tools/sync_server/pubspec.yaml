@@ -1,5 +1,5 @@
 name: sync_server
-description: Minimal standalone sync test server for offline_sync
+description: Minimal standalone sync test server for orbit_sync
 publish_to: none
 
 environment:
