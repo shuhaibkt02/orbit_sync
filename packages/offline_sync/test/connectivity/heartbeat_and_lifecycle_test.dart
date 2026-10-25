@@ -49,6 +49,25 @@ void main() {
       monitor.dispose();
     });
 
+    test('Entering dead zone triggers onScheduleNativeAlarm callback for OS alarm integration', () async {
+      final probe = _FakeProbe()..nextOnline = false;
+      var alarmScheduled = false;
+
+      final monitor = ConnectivityMonitor(
+        probe: probe,
+        onScheduleNativeAlarm: () async {
+          alarmScheduled = true;
+        },
+      );
+
+      expect(alarmScheduled, isFalse);
+      await monitor.checkReachability();
+      expect(monitor.isOnline, isFalse);
+      expect(alarmScheduled, isTrue);
+
+      monitor.dispose();
+    });
+
     test('notifyAppResumed triggers immediate reachability check bypassing debounce', () async {
       final probe = _FakeProbe()..nextOnline = true;
       final monitor = ConnectivityMonitor(

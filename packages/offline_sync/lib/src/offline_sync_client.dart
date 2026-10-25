@@ -51,6 +51,7 @@ class OfflineSyncClient {
     String? healthCheckUrl,
     Duration connectivityTimeout = const Duration(seconds: 3),
     Future<bool> Function()? reachabilityChecker,
+    Future<void> Function()? onScheduleNativeAlarm,
   }) async {
     final storage = await SyncStorage.open(
       path: databasePath,
@@ -79,6 +80,7 @@ class OfflineSyncClient {
       timeout: connectivityTimeout,
       defaultProbeUrl: healthCheckUrl ?? (serverUrl.isNotEmpty ? serverUrl : null),
       reachabilityChecker: reachabilityChecker,
+      onScheduleNativeAlarm: onScheduleNativeAlarm,
     );
 
     final client = OfflineSyncClient._(

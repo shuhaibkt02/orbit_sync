@@ -25,6 +25,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   final Duration heartbeatInterval;
   String? defaultProbeUrl;
   final Future<bool> Function()? reachabilityChecker;
+  final Future<void> Function()? onScheduleNativeAlarm;
 
   final INetworkProbe _probe;
   final INetworkTypeProvider _typeProvider;
@@ -46,6 +47,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     this.heartbeatInterval = const Duration(seconds: 30),
     this.defaultProbeUrl,
     this.reachabilityChecker,
+    this.onScheduleNativeAlarm,
     INetworkProbe? probe,
     INetworkTypeProvider? typeProvider,
     DebouncePolicy debouncePolicy = DebouncePolicy.standard,
@@ -132,7 +134,12 @@ class ConnectivityMonitor implements IConnectivityMonitor {
 
     if (!_stateController.isClosed) _stateController.add(_currentState);
     if (!_boolController.isClosed) _boolController.add(effectiveOnline);
-    effectiveOnline ? _stopHeartbeat() : _startHeartbeat();
+    if (effectiveOnline) {
+      _stopHeartbeat();
+    } else {
+      _startHeartbeat();
+      onScheduleNativeAlarm?.call();
+    }
   }
 
   void _startHeartbeat() {
