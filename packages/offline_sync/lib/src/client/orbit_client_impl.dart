@@ -91,6 +91,7 @@ class OrbitClientImpl implements OrbitClient {
     return table;
   }
 
+  @override
   OrbitTable<T> registerTypedTable<T>({
     required String name,
     required T Function(Map<String, dynamic> json) fromJson,

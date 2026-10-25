@@ -139,6 +139,17 @@ abstract class OrbitClient {
     RestEndpoints<T>? endpoints,
   });
 
+  /// Alias for [registerModel] for developers who prefer typed table naming.
+  OrbitTable<T> registerTypedTable<T>({
+    required String name,
+    required T Function(Map<String, dynamic> json) fromJson,
+    required Map<String, dynamic> Function(T item) toJson,
+    String primaryKey = 'id',
+    List<String> indexes = const [],
+    List<String> foreignKeys = const [],
+    RestEndpoints<T>? endpoints,
+  });
+
   /// Registers an untyped table schema with custom columns, foreign keys, and endpoint URL.
   Future<void> registerTable(
     String entityName,
