@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:offline_sync/src/connectivity/connectivity_monitor.dart';
-import 'package:offline_sync/src/connectivity/services/heartbeat_scheduler.dart';
 
 class _FakeProbe implements INetworkProbe {
   int callCount = 0;
@@ -22,32 +21,32 @@ class _FakeProbe implements INetworkProbe {
 }
 
 void main() {
-  group('Layer 3 Connectivity: Heartbeat Scheduler & Lifecycle', () {
-    test('HeartbeatScheduler fires periodically when active and halts when stopped', () async {
-      int checkCount = 0;
-      final scheduler = HeartbeatScheduler(
-        interval: const Duration(milliseconds: 30),
-        onCheck: () async {
-          checkCount++;
-          return false;
-        },
+  group('Layer 3 Connectivity: Heartbeat & Lifecycle', () {
+    test('ConnectivityMonitor polls periodically in dead zone and stops when online', () async {
+      final probe = _FakeProbe()..nextOnline = false;
+      final monitor = ConnectivityMonitor(
+        probe: probe,
+        heartbeatInterval: const Duration(milliseconds: 30),
       );
 
-      expect(scheduler.isActive, isFalse);
-      scheduler.start();
-      expect(scheduler.isActive, isTrue);
+      // Force offline to start heartbeat
+      await monitor.checkReachability();
+      expect(monitor.isOnline, isFalse);
+      final initialCount = probe.callCount;
 
       await Future<void>.delayed(const Duration(milliseconds: 95));
-      expect(checkCount, greaterThanOrEqualTo(2));
+      expect(probe.callCount, greaterThanOrEqualTo(initialCount + 2));
 
-      scheduler.stop();
-      expect(scheduler.isActive, isFalse);
-      final countAfterStop = checkCount;
+      // Reconnecting stops heartbeat
+      probe.nextOnline = true;
+      await monitor.checkReachability(bypassDebounce: true);
+      expect(monitor.isOnline, isTrue);
 
+      final countWhenOnline = probe.callCount;
       await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(checkCount, equals(countAfterStop));
+      expect(probe.callCount, equals(countWhenOnline));
 
-      scheduler.dispose();
+      monitor.dispose();
     });
 
     test('notifyAppResumed triggers immediate reachability check bypassing debounce', () async {

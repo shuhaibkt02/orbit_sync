@@ -9,7 +9,6 @@ import 'domain/policies/debounce_policy.dart';
 import 'infrastructure/http_network_probe.dart';
 import 'infrastructure/default_network_type_provider.dart';
 import 'services/debounced_state_machine.dart';
-import 'services/heartbeat_scheduler.dart';
 
 export 'domain/interfaces/i_connectivity_monitor.dart';
 export 'domain/interfaces/i_network_probe.dart';
@@ -30,8 +29,9 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   final INetworkProbe _probe;
   final INetworkTypeProvider _typeProvider;
   final DebouncedStateMachine _stateMachine;
-  late final HeartbeatScheduler _heartbeatScheduler;
   StreamSubscription<NetworkConnectionType>? _typeSub;
+  Timer? _heartbeatTimer;
+  bool _isHeartbeatChecking = false;
   bool _isDisposed = false;
 
   final StreamController<ConnectivityState> _stateController =
@@ -53,11 +53,6 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   })  : _probe = probe ?? HttpNetworkProbe(client: httpClient, defaultTimeout: timeout),
         _typeProvider = typeProvider ?? DefaultNetworkTypeProvider(),
         _stateMachine = DebouncedStateMachine(policy: debouncePolicy) {
-    _heartbeatScheduler = HeartbeatScheduler(
-      interval: heartbeatInterval,
-      onCheck: () => checkReachability(bypassDebounce: true),
-    );
-
     _typeSub = _typeProvider.onTypeChanged.listen((type) {
       if (_isDisposed) return;
       if (type.isDisconnected) {
@@ -154,10 +149,30 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     if (!_boolController.isClosed) _boolController.add(effectiveOnline);
 
     if (!effectiveOnline) {
-      _heartbeatScheduler.start();
+      _startHeartbeat();
     } else {
-      _heartbeatScheduler.stop();
+      _stopHeartbeat();
     }
+  }
+
+  void _startHeartbeat() {
+    if (_heartbeatTimer != null || _isDisposed) return;
+    _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) async {
+      if (_isHeartbeatChecking || _isDisposed) return;
+      _isHeartbeatChecking = true;
+      try {
+        final ok = await checkReachability(bypassDebounce: true);
+        if (ok) _stopHeartbeat();
+      } catch (_) {
+      } finally {
+        _isHeartbeatChecking = false;
+      }
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   @override
@@ -170,7 +185,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     if (_isDisposed) return;
     _isDisposed = true;
     _typeSub?.cancel();
-    _heartbeatScheduler.dispose();
+    _stopHeartbeat();
     _stateMachine.dispose();
     _probe.dispose();
     _typeProvider.dispose();

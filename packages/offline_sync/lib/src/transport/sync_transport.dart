@@ -1,12 +1,12 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
-import 'domain/interfaces/i_sync_transport.dart';
 import 'domain/interfaces/sync_http_adapter.dart';
+import 'domain/models/transport_response.dart';
 import 'infrastructure/dio_http_adapter.dart';
 import 'infrastructure/http_sync_transport.dart';
 import 'infrastructure/in_memory_sync_transport.dart';
 
-export 'domain/interfaces/i_sync_transport.dart';
 export 'domain/interfaces/sync_http_adapter.dart';
 export 'domain/models/transport_request.dart';
 export 'domain/models/transport_response.dart';
@@ -16,8 +16,40 @@ export 'infrastructure/dio_http_adapter.dart';
 export 'infrastructure/http_sync_transport.dart';
 export 'infrastructure/in_memory_sync_transport.dart';
 
-/// Public transport boundary separating local consensus from transmission wires.
-abstract interface class SyncTransport implements ISyncTransport {
+/// Single source of truth for transport wire boundaries in Orbit.
+abstract interface class SyncTransport {
+  /// Pushes a batch of mutations to the remote push endpoint.
+  Future<TransportResponse> pushBatch({
+    required List<Map<String, dynamic>> mutations,
+    required String idempotencyKey,
+    String? chaos,
+  });
+
+  /// Pushes a single mutation with clean domain payload (zero metadata pollution).
+  Future<TransportResponse> pushCustom({
+    required String url,
+    required String method,
+    required String mutationId,
+    required int createdAtMs,
+    Map<String, dynamic>? payload,
+    String? entityId,
+  });
+
+  /// Pulls a delta page from the remote pull endpoint.
+  Future<TransportResponse> pull({
+    required int sinceCursor,
+    required int limit,
+    Map<String, dynamic>? scopeFilter,
+    bool snapshot = false,
+    String? chaos,
+  });
+
+  /// Optional stream emitted when the remote server signals new changes.
+  Stream<void>? get onRemoteChange => null;
+
+  /// Closes underlying connections or resources.
+  void dispose() {}
+
   /// 1. Standard REST / HTTP Transport (Pure Dart package:http)
   factory SyncTransport.http({
     required String serverUrl,
@@ -73,22 +105,7 @@ abstract interface class SyncTransport implements ISyncTransport {
         cannedPullChanges: cannedPullChanges,
         pullNextCursor: pullNextCursor,
       );
-
-  /// 4. Roadmap v1.1: Real-Time WebSockets
-  static SyncTransport webSocket({required String url}) =>
-      throw UnsupportedError(
-        'WebSocket transport is planned for Orbit v1.1. Track progress at https://github.com/orbit-sync/orbit/issues/websocket',
-      );
-
-  /// 5. Roadmap v1.2: High-Performance gRPC Protobuf
-  static SyncTransport grpc({required String host, required int port}) =>
-      throw UnsupportedError(
-        'gRPC transport is planned for Orbit v1.2. Track progress at https://github.com/orbit-sync/orbit/issues/grpc',
-      );
-
-  /// 6. Roadmap v1.3: GraphQL
-  static SyncTransport graphql({required String endpoint}) =>
-      throw UnsupportedError(
-        'GraphQL transport is planned for Orbit v1.3. Track progress at https://github.com/orbit-sync/orbit/issues/graphql',
-      );
 }
+
+/// Backwards-compatible alias eliminating interface duplication.
+typedef ISyncTransport = SyncTransport;
