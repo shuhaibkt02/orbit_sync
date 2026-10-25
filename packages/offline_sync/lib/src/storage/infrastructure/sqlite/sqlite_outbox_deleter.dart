@@ -1,12 +1,10 @@
 import 'package:sqlite_async/sqlite_async.dart';
-import 'uuid_v7.dart';
-import 'sync_validator.dart';
-import 'baseline_manager.dart';
+import '../../domain/validation/sync_validator.dart';
+import '../uuid/uuid_v7.dart';
+import 'sqlite_baseline_manager.dart';
 
-/// Handles entity deletions, rapid grace window annihilation, and foreign key cascade capture.
-class OutboxDeleter {
-  /// Atomically marks domain entity deleted and appends delete envelope to outbox.
-  /// If an unsynced creation is deleted within its grace window, both rows are annihilated locally (0 network requests).
+/// SQLite helper for outbox deletions, rapid annihilation, and foreign key cascade capture.
+class SqliteOutboxDeleter {
   static Future<String?> delete({
     required SqliteDatabase db,
     required Set<String> knownColumns,
@@ -32,14 +30,12 @@ class OutboxDeleter {
         knownColumns.add('$entity:id');
       }
 
-      // 1. Grace Window Annihilation: Check if an unsynced creation is still in hold window
       final pendingCreation = await tx.getAll(
         "SELECT mutation_id FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending' AND dispatch_after > ? AND base_snapshot_json IS NULL",
         [entity, id, now],
       );
 
       if (pendingCreation.isNotEmpty) {
-        // Zero-Network Local Annihilation: Delete local domain row and purge pending outbox mutation
         if (tableExists) {
           await tx.execute('DELETE FROM "$entity" WHERE "id" = ?', [id]);
         }
@@ -50,17 +46,15 @@ class OutboxDeleter {
         return null;
       }
 
-      // 2. Standard or Undoable Delete
       String? baseSnapshotJson;
       int baseVersion = 1;
 
       if (tableExists) {
-        final baseline = await BaselineManager.readExistingBaseline(tx, entity, id);
+        final baseline = await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
         baseSnapshotJson = baseline.snapshot;
         baseVersion = baseline.version;
       }
 
-      // 3. Foreign Key Cascade Capture: Find child tables that reference $entity and stage delete mutations
       final dispatchAfter = undoWindow != null ? now + undoWindow.inMilliseconds : now;
       if (tableExists) {
         try {

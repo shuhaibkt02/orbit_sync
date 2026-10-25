@@ -3,10 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:sqlite3/sqlite3.dart' show ResultSet, Row;
-import 'uuid_v7.dart';
-import 'sync_storage.dart';
+import 'storage/sync_storage.dart';
 import 'sync_worker.dart';
 import 'sync_profile.dart';
+import 'sync_transport.dart';
+import 'http_sync_transport.dart';
 import 'connectivity_monitor.dart';
 import 'sync_failure.dart';
 import 'backoff_policy.dart';
@@ -35,6 +36,7 @@ class OfflineSyncClient {
   static Future<OfflineSyncClient> initialize({
     required String databasePath,
     String serverUrl = '',
+    SyncTransport? transport,
     SyncProfile profile = SyncProfile.standard,
     http.Client? httpClient,
     BackoffPolicy? backoffPolicy,
@@ -50,6 +52,7 @@ class OfflineSyncClient {
     void Function(String message)? onLog,
     String? healthCheckUrl,
     Duration connectivityTimeout = const Duration(seconds: 3),
+    Future<bool> Function()? reachabilityChecker,
   }) async {
     final storage = await SyncStorage.open(
       path: databasePath,
@@ -59,6 +62,7 @@ class OfflineSyncClient {
     final worker = SyncWorker(
       storage: storage,
       serverUrl: serverUrl,
+      transport: transport,
       profile: profile,
       client: httpClient,
       backoffPolicy: backoffPolicy,
@@ -76,6 +80,7 @@ class OfflineSyncClient {
     final connectivity = ConnectivityMonitor(
       timeout: connectivityTimeout,
       defaultProbeUrl: healthCheckUrl ?? (serverUrl.isNotEmpty ? serverUrl : null),
+      reachabilityChecker: reachabilityChecker,
     );
 
     final client = OfflineSyncClient._(
@@ -137,6 +142,11 @@ class OfflineSyncClient {
     int schemaVersion = 1,
     String? url,
     String? httpMethod,
+    Duration? holdFor,
+    Duration? sla,
+    Duration? ttl,
+    int priority = 0,
+    String? correlationTag,
   }) async {
     final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
     final effectiveUrl = url ?? _entityUrls[entity];
@@ -149,6 +159,11 @@ class OfflineSyncClient {
       schemaVersion: schemaVersion,
       endpointUrl: effectiveUrl,
       httpMethod: httpMethod,
+      holdFor: holdFor,
+      sla: sla,
+      ttl: ttl,
+      priority: priority,
+      correlationTag: correlationTag,
     );
   }
 
@@ -160,6 +175,11 @@ class OfflineSyncClient {
     String? id,
     String? url,
     String? httpMethod,
+    Duration? holdFor,
+    Duration? sla,
+    Duration? ttl,
+    int priority = 0,
+    String? correlationTag,
   }) async {
     final effectiveId = id ?? (data['id'] as String?) ?? UuidV7.generate();
     await save(
@@ -168,16 +188,29 @@ class OfflineSyncClient {
       data: data,
       url: url,
       httpMethod: httpMethod,
+      holdFor: holdFor,
+      sla: sla,
+      ttl: ttl,
+      priority: priority,
+      correlationTag: correlationTag,
     );
     return effectiveId;
   }
 
+  /// Prunes expired clean records from the local cache table [entity].
+  /// Guarantees that dirty records with pending outbox mutations are never deleted.
+  Future<int> pruneExpiredCache(String entity) async {
+    return await storage.pruneExpiredCache(entity);
+  }
+
   /// Atomically deletes an entity and appends a delete envelope to the outbox.
-  Future<String> delete({
+  /// If [undoWindow] is passed, the deletion can be reversed locally via [undoDelete].
+  Future<String?> delete({
     required String entity,
     required String id,
     String? url,
     String? httpMethod,
+    Duration? undoWindow,
   }) async {
     final effectiveUrl = url ?? _entityUrls[entity];
     return await storage.delete(
@@ -185,7 +218,16 @@ class OfflineSyncClient {
       id: id,
       endpointUrl: effectiveUrl,
       httpMethod: httpMethod,
+      undoWindow: undoWindow,
     );
+  }
+
+  /// Reverses an un-synced deletion during its [undoWindow].
+  Future<bool> undoDelete({
+    required String entity,
+    required String id,
+  }) async {
+    return await storage.undoDelete(entity: entity, id: id);
   }
 
   /// Restores records from local offline storage. Works 100% offline.
@@ -224,7 +266,7 @@ class OfflineSyncClient {
     _isSyncing = true;
     try {
       // 1. Pull remote delta changes first (resolve remote changes & deletions before pushing)
-      if (worker.serverUrl.isNotEmpty) {
+      if (worker.serverUrl.isNotEmpty || worker.transport is! HttpSyncTransport) {
         await worker.pullAll();
       }
 
@@ -463,7 +505,8 @@ class OfflineSyncClient {
     if (headers != null) {
       req.headers.addAll(headers);
     }
-    final streamed = await worker.httpClient.send(req);
+    final client = worker.httpClient ?? http.Client();
+    final streamed = await client.send(req);
     final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException('Failed to hydrate $entity from $url: HTTP ${resp.statusCode}');

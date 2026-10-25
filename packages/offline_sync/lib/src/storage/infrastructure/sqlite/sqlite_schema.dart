@@ -1,8 +1,8 @@
 import 'package:sqlite_async/sqlite_async.dart';
-import 'sync_validator.dart';
+import '../../domain/validation/sync_validator.dart';
 
 /// Manages SQLite system table schemas, indices, and entity table creation.
-class StorageSchema {
+class SqliteSchema {
   static const systemEntityCols = {
     'id',
     'version',

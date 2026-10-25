@@ -1,14 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite_async/sqlite_async.dart';
-import 'uuid_v7.dart';
+import '../../domain/interfaces/i_storage_recovery.dart';
+import '../uuid/uuid_v7.dart';
 
-/// Handles physical file corruption detection, quarantine backups,
-/// and cloud backup time-travel restore validation.
-class StorageRecovery {
-  /// Proactively inspects the 16-byte SQLite header before spawning isolates.
-  /// If damaged or truncated, quarantines the files to prevent isolate crashes.
-  static void sniffAndQuarantineIfCorrupted(
+/// Concrete SQLite file corruption recovery and cloud backup integrity checker.
+class SqliteRecovery implements IStorageRecovery {
+  const SqliteRecovery();
+
+  @override
+  void sniffAndQuarantineIfCorrupted(
     String path,
     void Function(String corruptPath)? onDatabaseCorrupted,
   ) {
@@ -42,8 +43,8 @@ class StorageRecovery {
     }
   }
 
-  /// Quarantines corrupted SQLite files (.db, -wal, -shm) to a timestamped backup path.
-  static void quarantineCorruptFiles(
+  @override
+  void quarantineCorruptFiles(
     String path,
     void Function(String corruptPath)? onDatabaseCorrupted,
   ) {
@@ -70,9 +71,8 @@ class StorageRecovery {
     onDatabaseCorrupted?.call(corruptPath);
   }
 
-  /// Guards against Cloud Backup Time-Travel restores (Section 5.7)
-  /// by comparing device Keychain/Keystore installation ID with SQLite metadata.
-  static Future<void> verifyInstallationIntegrity(
+  @override
+  Future<void> verifyInstallationIntegrity(
     SqliteDatabase db, {
     required Future<String?> Function(String key) secureStorageReader,
     required Future<void> Function(String key, String value) secureStorageWriter,

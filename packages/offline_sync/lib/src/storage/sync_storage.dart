@@ -3,37 +3,52 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart' show ResultSet;
 import 'package:sqlite_async/sqlite_async.dart';
 
-import 'storage_recovery.dart';
-import 'storage_schema.dart';
-import 'id_map_repository.dart';
-import 'baseline_manager.dart';
-import 'outbox_writer.dart';
-import 'outbox_deleter.dart';
-import 'cache_cleaner.dart';
+import 'domain/interfaces/i_outbox_repository.dart';
+import 'domain/interfaces/i_id_map_repository.dart';
+import 'domain/interfaces/i_storage_recovery.dart';
+import 'infrastructure/sqlite/sqlite_schema.dart';
+import 'infrastructure/sqlite/sqlite_recovery.dart';
+import 'infrastructure/sqlite/sqlite_outbox_repository.dart';
+import 'infrastructure/sqlite/sqlite_id_map_repository.dart';
 
-export 'sync_validator.dart';
-export 'storage_recovery.dart';
-export 'storage_schema.dart';
-export 'id_map_repository.dart';
-export 'baseline_manager.dart';
-export 'outbox_writer.dart';
-export 'outbox_deleter.dart';
-export 'cache_cleaner.dart';
+export 'domain/models/outbox_mutation.dart';
+export 'domain/models/id_mapping.dart';
+export 'domain/validation/sync_validator.dart';
+export 'domain/interfaces/i_outbox_repository.dart';
+export 'domain/interfaces/i_id_map_repository.dart';
+export 'domain/interfaces/i_storage_recovery.dart';
+export 'infrastructure/uuid/uuid_v7.dart';
+export 'infrastructure/sqlite/sqlite_schema.dart';
+export 'infrastructure/sqlite/sqlite_recovery.dart';
+export 'infrastructure/sqlite/sqlite_outbox_repository.dart';
+export 'infrastructure/sqlite/sqlite_id_map_repository.dart';
 
-/// Clean coordinator facade managing local SQLite storage, WAL pooling,
-/// transactional outbox, shadow baselines, and reactive query streams.
+/// Clean coordinator facade following SOLID & Clean Architecture.
+/// Injects domain repository interfaces, manages lifecycle, and provides 0ms local operations.
 class SyncStorage {
   final SqliteDatabase db;
   final String path;
-  final Set<String> _knownColumns = <String>{};
-  late final IdMapRepository _idMapRepo;
+  final IOutboxRepository _outboxRepo;
+  final IIdMapRepository _idMapRepo;
 
-  SyncStorage._(this.db, this.path) {
-    _idMapRepo = IdMapRepository(db);
-  }
+  SyncStorage._({
+    required this.db,
+    required this.path,
+    required IOutboxRepository outboxRepo,
+    required IIdMapRepository idMapRepo,
+  })  : _outboxRepo = outboxRepo,
+        _idMapRepo = idMapRepo;
 
-  /// Opens or creates database at [path] with connection pooling.
-  /// If disk corruption is detected, quarantines damaged files and opens a clean database.
+  /// Dependency-injected constructor allowing custom domain repository implementations.
+  SyncStorage.withRepositories({
+    required this.db,
+    required this.path,
+    required IOutboxRepository outboxRepo,
+    required IIdMapRepository idMapRepo,
+  })  : _outboxRepo = outboxRepo,
+        _idMapRepo = idMapRepo;
+
+  /// Opens or creates database at [path] with connection pooling and recovery.
   static Future<SyncStorage> open({
     required String path,
     int maxReaders = 4,
@@ -42,6 +57,7 @@ class SyncStorage {
     Future<String?> Function(String key)? secureStorageReader,
     Future<void> Function(String key, String value)? secureStorageWriter,
     void Function(String sqliteId, String secureId)? onTimeTravelBackupDetected,
+    IStorageRecovery recovery = const SqliteRecovery(),
   }) async {
     // 1. Invoke host platform backup exclusion shield if provided
     if (backupShield != null && path != ':memory:') {
@@ -50,8 +66,8 @@ class SyncStorage {
       } catch (_) {}
     }
 
-    // 2. Proactive header check for pre-existing disk files before isolate spawn
-    StorageRecovery.sniffAndQuarantineIfCorrupted(path, onDatabaseCorrupted);
+    // 2. Proactive header check before isolate spawn
+    recovery.sniffAndQuarantineIfCorrupted(path, onDatabaseCorrupted);
 
     const sqliteOptions = SqliteOptions(
       journalMode: SqliteJournalMode.wal,
@@ -83,7 +99,7 @@ class SyncStorage {
       try {
         await db.close();
       } catch (_) {}
-      StorageRecovery.quarantineCorruptFiles(path, onDatabaseCorrupted);
+      recovery.quarantineCorruptFiles(path, onDatabaseCorrupted);
 
       db = SqliteDatabase(
         path: path,
@@ -93,12 +109,11 @@ class SyncStorage {
       await db.initialize();
     }
 
-    final storage = SyncStorage._(db, path);
-    await StorageSchema.initSystemSchema(db);
+    await SqliteSchema.initSystemSchema(db);
 
     // 3. Verify installation integrity against cloud backup time-travel bugs
     if (secureStorageReader != null && secureStorageWriter != null) {
-      await StorageRecovery.verifyInstallationIntegrity(
+      await recovery.verifyInstallationIntegrity(
         db,
         secureStorageReader: secureStorageReader,
         secureStorageWriter: secureStorageWriter,
@@ -106,7 +121,15 @@ class SyncStorage {
       );
     }
 
-    return storage;
+    final outboxRepo = SqliteOutboxRepository(db);
+    final idMapRepo = SqliteIdMapRepository(db);
+
+    return SyncStorage._(
+      db: db,
+      path: path,
+      outboxRepo: outboxRepo,
+      idMapRepo: idMapRepo,
+    );
   }
 
   /// Registers an entity table with custom columns and optional foreign key clauses.
@@ -115,9 +138,7 @@ class SyncStorage {
     Map<String, String> columnTypes, {
     String? foreignKeyClause,
   }) {
-    return StorageSchema.registerEntityTable(
-      db,
-      _knownColumns,
+    return _outboxRepo.registerEntityTable(
       entityName,
       columnTypes,
       foreignKeyClause: foreignKeyClause,
@@ -140,9 +161,7 @@ class SyncStorage {
     int priority = 0,
     String? correlationTag,
   }) {
-    return OutboxWriter.save(
-      db: db,
-      knownColumns: _knownColumns,
+    return _outboxRepo.save(
       entity: entity,
       id: id,
       data: data,
@@ -167,9 +186,7 @@ class SyncStorage {
     String? httpMethod,
     Duration? undoWindow,
   }) {
-    return OutboxDeleter.delete(
-      db: db,
-      knownColumns: _knownColumns,
+    return _outboxRepo.delete(
       entity: entity,
       id: id,
       endpointUrl: endpointUrl,
@@ -180,7 +197,7 @@ class SyncStorage {
 
   /// Restores a deleted record locally if within its undoWindow.
   Future<bool> undoDelete({required String entity, required String id}) {
-    return BaselineManager.undoDelete(db, entity: entity, id: id);
+    return _outboxRepo.undoDelete(entity: entity, id: id);
   }
 
   /// Records a local temporary ID to canonical server ID mapping.
@@ -220,32 +237,32 @@ class SyncStorage {
 
   /// Prunes completed synced outbox records older than [olderThan].
   Future<int> pruneSynced({Duration olderThan = const Duration(days: 7)}) {
-    return CacheCleaner.pruneSynced(db, olderThan: olderThan);
+    return _outboxRepo.pruneSynced(olderThan: olderThan);
   }
 
   /// Prunes expired local domain cache records where `expires_at < now`.
   Future<int> pruneExpiredCache(String entity) {
-    return CacheCleaner.pruneExpiredCache(db, _knownColumns, entity);
+    return _outboxRepo.pruneExpiredCache(entity);
   }
 
   /// Rolls back an optimistic mutation using its stored base snapshot.
   Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) {
-    return BaselineManager.rollbackOptimistic(db, mutationId, status: status);
+    return _outboxRepo.rollbackOptimistic(mutationId, status: status);
   }
 
   /// Executes an asynchronous query against SQLite and returns the result set.
   Future<ResultSet> query(String query, [List<dynamic> parameters = const []]) {
-    return db.getAll(query, parameters);
+    return _outboxRepo.query(query, parameters);
   }
 
   /// Streams reactive updates on any SQL query without requiring codegen TableInfo.
   Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []}) {
-    return db.watch(query, parameters: parameters);
+    return _outboxRepo.watch(query, parameters: parameters);
   }
 
   /// Triggers a WAL checkpoint. If [truncate] is true, shrinks WAL file to 0 bytes.
   Future<void> checkpoint({bool truncate = false}) {
-    return CacheCleaner.checkpoint(db, truncate: truncate);
+    return _outboxRepo.checkpoint(truncate: truncate);
   }
 
   /// Slices [items] into safe chunks below SQLite's variable limit (default 250).
@@ -253,8 +270,11 @@ class SyncStorage {
     List<T> items, {
     int chunkSize = 250,
     required Future<void> Function(List<T> chunk) action,
-  }) {
-    return CacheCleaner.batchChunked(items, chunkSize: chunkSize, action: action);
+  }) async {
+    for (var i = 0; i < items.length; i += chunkSize) {
+      final end = (i + chunkSize < items.length) ? i + chunkSize : items.length;
+      await action(items.sublist(i, end));
+    }
   }
 
   bool _closed = false;
@@ -263,6 +283,6 @@ class SyncStorage {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    await db.close();
+    await _outboxRepo.close();
   }
 }

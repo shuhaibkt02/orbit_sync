@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:sqlite_async/sqlite_async.dart';
-import 'sync_validator.dart';
+import '../../domain/validation/sync_validator.dart';
 
-/// Manages pre-mutation shadow baselines, optimistic rollbacks, and undo restorations.
-class BaselineManager {
-  /// Reads existing row baseline snapshot and version for rollback and shadow tracking.
+/// SQLite helper for pre-mutation baseline snapshots, rollback, and undoable delete restoration.
+class SqliteBaselineManager {
   static Future<({String? snapshot, int version})> readExistingBaseline(
     SqliteWriteContext tx,
     String entity,
@@ -27,7 +26,6 @@ class BaselineManager {
     return (snapshot: baseSnapshotJson, version: baseVersion);
   }
 
-  /// Restores a pre-mutation baseline record into its domain table.
   static Future<void> restoreBaselineRecord(
     SqliteWriteContext tx, {
     required String entity,
@@ -60,7 +58,6 @@ class BaselineManager {
     );
   }
 
-  /// Restores a deleted record locally if within its undoWindow.
   static Future<bool> undoDelete(
     SqliteDatabase db, {
     required String entity,
@@ -91,7 +88,6 @@ class BaselineManager {
     });
   }
 
-  /// Rolls back an optimistic mutation using its stored base snapshot.
   static Future<void> rollbackOptimistic(
     SqliteDatabase db,
     String mutationId, {
@@ -109,10 +105,8 @@ class BaselineManager {
       final baseJson = outbox['base_snapshot_json'] as String?;
 
       if (baseJson == null) {
-        // Record was newly inserted optimistically; rollback by deleting it
         await tx.execute('DELETE FROM "$entity" WHERE "id" = ?', [id]);
       } else {
-        // Restore pre-mutation baseline snapshot into domain table
         await restoreBaselineRecord(tx, entity: entity, id: id, baseJson: baseJson);
       }
 

@@ -1,13 +1,14 @@
 import 'package:sqlite_async/sqlite_async.dart';
-import 'sync_validator.dart';
+import '../../domain/interfaces/i_id_map_repository.dart';
+import '../../domain/validation/sync_validator.dart';
 
-/// Repository for mapping local temporary IDs to canonical server-assigned IDs.
-class IdMapRepository {
+/// Concrete SQLite implementation of IIdMapRepository.
+class SqliteIdMapRepository implements IIdMapRepository {
   final SqliteDatabase db;
 
-  IdMapRepository(this.db);
+  const SqliteIdMapRepository(this.db);
 
-  /// Records a local temporary ID to canonical server ID mapping.
+  @override
   Future<void> registerServerId({
     required String entity,
     required String localTempId,
@@ -24,7 +25,7 @@ class IdMapRepository {
     ''', [entity, localTempId, canonicalServerId, now]);
   }
 
-  /// Resolves the canonical server ID for a local temporary ID.
+  @override
   Future<String?> getCanonicalServerId({
     required String entity,
     required String localTempId,
@@ -39,7 +40,7 @@ class IdMapRepository {
     return rows.isNotEmpty ? rows.first['canonical_server_id'] as String? : null;
   }
 
-  /// Resolves the local temporary ID for a canonical server ID.
+  @override
   Future<String?> getLocalTempId({
     required String entity,
     required String canonicalServerId,

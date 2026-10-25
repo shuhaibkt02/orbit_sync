@@ -758,6 +758,33 @@ void main() {
       expect(id1[14], '7');
       expect(id2[14], '7');
     });
+
+    test('Test Case 18: Clean Architecture & SOLID Dependency Inversion (Pluggable Repositories)', () async {
+      final mockOutbox = _MockOutboxRepo();
+      final mockIdMap = _MockIdMapRepo();
+
+      final customStorage = SyncStorage.withRepositories(
+        db: storage.db,
+        path: ':memory:',
+        outboxRepo: mockOutbox,
+        idMapRepo: mockIdMap,
+      );
+
+      final mutId = await customStorage.save(
+        entity: 'tasks',
+        id: 'mock-1',
+        data: {'name': 'Mock Task'},
+      );
+      expect(mutId, equals('mock-mutation-id'));
+      expect(mockOutbox.saveCalled, isTrue);
+
+      await customStorage.registerServerId(
+        entity: 'tasks',
+        localTempId: 'temp-1',
+        canonicalServerId: 'srv-1',
+      );
+      expect(mockIdMap.registerCalled, isTrue);
+    });
   });
 }
 
@@ -802,4 +829,95 @@ class MockExternalOrder {
         : json['metadata'] as Map<String, dynamic>,
     createdAt: DateTime.parse(json['created_at_iso'] as String),
   );
+}
+
+class _MockOutboxRepo implements IOutboxRepository {
+  bool saveCalled = false;
+
+  @override
+  Future<String> save({
+    required String entity,
+    required String id,
+    required Map<String, dynamic> data,
+    int version = 1,
+    String? dependsOnMutationId,
+    int schemaVersion = 1,
+    String? endpointUrl,
+    String? httpMethod,
+    Duration? holdFor,
+    Duration? sla,
+    Duration? ttl,
+    int priority = 0,
+    String? correlationTag,
+  }) async {
+    saveCalled = true;
+    return 'mock-mutation-id';
+  }
+
+  @override
+  Future<String?> delete({
+    required String entity,
+    required String id,
+    String? endpointUrl,
+    String? httpMethod,
+    Duration? undoWindow,
+  }) async => null;
+
+  @override
+  Future<bool> undoDelete({required String entity, required String id}) async => true;
+
+  @override
+  Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) async {}
+
+  @override
+  Future<int> pruneSynced({Duration olderThan = const Duration(days: 7)}) async => 0;
+
+  @override
+  Future<int> pruneExpiredCache(String entity) async => 0;
+
+  @override
+  Future<void> registerEntityTable(
+    String entityName,
+    Map<String, String> columnTypes, {
+    String? foreignKeyClause,
+  }) async {}
+
+  @override
+  Future<ResultSet> query(String query, [List<dynamic> parameters = const []]) async =>
+      throw UnimplementedError();
+
+  @override
+  Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []}) =>
+      const Stream.empty();
+
+  @override
+  Future<void> checkpoint({bool truncate = false}) async {}
+
+  @override
+  Future<void> close() async {}
+}
+
+class _MockIdMapRepo implements IIdMapRepository {
+  bool registerCalled = false;
+
+  @override
+  Future<void> registerServerId({
+    required String entity,
+    required String localTempId,
+    required String canonicalServerId,
+  }) async {
+    registerCalled = true;
+  }
+
+  @override
+  Future<String?> getCanonicalServerId({
+    required String entity,
+    required String localTempId,
+  }) async => 'mock-canonical-id';
+
+  @override
+  Future<String?> getLocalTempId({
+    required String entity,
+    required String canonicalServerId,
+  }) async => 'mock-temp-id';
 }

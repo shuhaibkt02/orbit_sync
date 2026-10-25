@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:sqlite_async/sqlite_async.dart';
-import 'uuid_v7.dart';
-import 'sync_validator.dart';
-import 'storage_schema.dart';
-import 'baseline_manager.dart';
+import '../../domain/validation/sync_validator.dart';
+import '../uuid/uuid_v7.dart';
+import 'sqlite_schema.dart';
+import 'sqlite_baseline_manager.dart';
 
-/// Handles atomic domain record persistence, dynamic column inference, and outbox staging.
-class OutboxWriter {
-  /// Atomically commits domain entity record and outbox mutation envelope.
+/// SQLite helper for saving domain entities and staging outbox mutations.
+class SqliteOutboxWriter {
   static Future<String> save({
     required SqliteDatabase db,
     required Set<String> knownColumns,
@@ -26,7 +25,6 @@ class OutboxWriter {
     int priority = 0,
     String? correlationTag,
   }) async {
-    // 1. Strict validation of all static system parameters
     SyncValidator.validateEntity(entity);
     SyncValidator.validateId(id);
     SyncValidator.validateVersion(version);
@@ -36,7 +34,6 @@ class OutboxWriter {
     SyncValidator.validateDuration(ttl, 'ttl');
     SyncValidator.validateHttpMethod(httpMethod);
 
-    // 2. Validate user payload serialization without touching business fields
     final cleanPayloadJson = SyncValidator.encodePayload(data);
 
     return await db.writeTransaction<String>((tx) async {
@@ -45,18 +42,15 @@ class OutboxWriter {
       final slaSeconds = sla?.inSeconds ?? 86400;
       final expiresAt = ttl != null ? now + ttl.inMilliseconds : null;
 
-      // 3. Ensure domain table exists with static container schema & TTL support
-      await StorageSchema.ensureEntityTableExists(tx, knownColumns, entity);
+      await SqliteSchema.ensureEntityTableExists(tx, knownColumns, entity);
 
-      // 4. Read existing row to capture shadow baseline for rollback & conflict handling
-      final baseline = await BaselineManager.readExistingBaseline(tx, entity, id);
+      final baseline = await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
       final baseSnapshotJson = baseline.snapshot;
       final baseVersion = baseline.version;
 
-      // 5. Ensure missing columns exist dynamically in the SQLite table with proper type affinity
       for (final entry in data.entries) {
         final key = entry.key;
-        if (!StorageSchema.systemEntityCols.contains(key)) {
+        if (!SqliteSchema.systemEntityCols.contains(key)) {
           if (knownColumns.contains('$entity:$key')) continue;
           try {
             final val = entry.value;
@@ -79,7 +73,7 @@ class OutboxWriter {
       final values = <dynamic>[id, version, now, expiresAt, baseSnapshotJson, cleanPayloadJson];
 
       for (final entry in data.entries) {
-        if (!StorageSchema.systemEntityCols.contains(entry.key)) {
+        if (!SqliteSchema.systemEntityCols.contains(entry.key)) {
           columns.add(entry.key);
           final val = entry.value;
           if (val is bool) {
@@ -100,7 +94,6 @@ class OutboxWriter {
         values,
       );
 
-      // 6. Grace Window Check: Coalesce if an active mutation is within its hold window
       final pendingMutations = await tx.getAll(
         "SELECT mutation_id, payload_json, revision_history_json FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending' AND dispatch_after > ? ORDER BY sequence_id DESC LIMIT 1",
         [entity, id, now],
@@ -142,7 +135,6 @@ class OutboxWriter {
         return existingMutationId;
       }
 
-      // 7. Enqueue standard outbox mutation envelope
       final mutationId = UuidV7.generate();
       final op = baseSnapshotJson == null ? 'create' : 'update';
       final method = httpMethod ?? (baseSnapshotJson == null ? 'POST' : 'PUT');

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-/// Rigorous validation engine for Orbit's static system fields.
-/// Enforces type, boundary, and injection security before executing any SQL.
+/// Rigorous validation engine enforcing domain boundaries, types, and injection defense.
 class SyncValidator {
   static final _entityRegex = RegExp(r'^[a-zA-Z0-9_]{1,64}$');
 
