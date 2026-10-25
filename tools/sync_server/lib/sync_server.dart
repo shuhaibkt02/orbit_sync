@@ -51,21 +51,23 @@ class FakeSyncServer {
           return;
         }
 
-        if (path == '/orders') {
+        if (path == '/orders' || path == '/tasks' || path == '/') {
           if (request.method == 'POST') {
             final bodyStr = await utf8.decoder.bind(request).join();
             final data = bodyStr.isNotEmpty ? jsonDecode(bodyStr) as Map<String, dynamic> : <String, dynamic>{};
-            final id = data['id']?.toString() ?? 'order-${records.length}';
-            records['orders:$id'] = data;
+            final entity = path == '/' ? 'tasks' : path.substring(1);
+            final id = data['id']?.toString() ?? '$entity-${records.length}';
+            records['$entity:$id'] = data;
             _sendJson(request.response, HttpStatus.created, {'id': id, 'status': 'created'});
             return;
           }
           if (request.method == 'GET') {
-            final orderList = records.entries
-                .where((e) => e.key.startsWith('orders:'))
+            final entity = path == '/' ? 'tasks' : path.substring(1);
+            final entityList = records.entries
+                .where((e) => e.key.startsWith('$entity:'))
                 .map((e) => e.value)
                 .toList();
-            _sendJson(request.response, HttpStatus.ok, {'orders': orderList, 'count': orderList.length});
+            _sendJson(request.response, HttpStatus.ok, {'items': entityList, 'count': entityList.length});
             return;
           }
         }

@@ -123,21 +123,27 @@ class BatchPushOrchestrator {
     final mutationIds = pending.map((r) => r['mutation_id'] as String).toList();
     final placeholders = List.filled(mutationIds.length, '?').join(', ');
 
+    final SyncPushResult result;
     if (pending.any((r) => r['endpoint_url'] != null)) {
-      return _customPusher.pushCustomEndpoints(
+      result = await _customPusher.pushCustomEndpoints(
         pending: pending,
         mutationIds: mutationIds,
         placeholders: placeholders,
         nowMs: nowMs,
       );
+    } else {
+      result = await _batchPusher.pushBatchEnvelope(
+        pending: pending,
+        mutationIds: mutationIds,
+        placeholders: placeholders,
+        nowMs: nowMs,
+        chaos: chaos,
+      );
     }
 
-    return _batchPusher.pushBatchEnvelope(
-      pending: pending,
-      mutationIds: mutationIds,
-      placeholders: placeholders,
-      nowMs: nowMs,
-      chaos: chaos,
-    );
+    if (result.status == SyncPushStatus.success && result.applied > 0) {
+      onLog?.call('Successfully pushed ${result.applied} mutations');
+    }
+    return result;
   }
 }
