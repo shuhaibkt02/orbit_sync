@@ -52,7 +52,7 @@ class SyncValidator {
   }
 
   static void validateStatus(String status) {
-    const allowed = {'pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict'};
+    const allowed = {'pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict', 'validation_error'};
     if (!allowed.contains(status)) {
       throw ArgumentError('Invalid status: "$status". Allowed: $allowed');
     }

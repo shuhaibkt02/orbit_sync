@@ -27,7 +27,7 @@ class SqliteSchema {
           payload_json TEXT,
           base_snapshot_json TEXT,
           base_version INTEGER NOT NULL DEFAULT 1 CHECK (base_version >= 1),
-          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict')),
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict', 'validation_error')),
           depends_on_mutation_id TEXT,
           correlation_tag TEXT,
           priority INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 2),

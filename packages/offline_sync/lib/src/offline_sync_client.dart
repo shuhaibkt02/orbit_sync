@@ -10,7 +10,6 @@ import 'sync_transport.dart';
 import 'http_sync_transport.dart';
 import 'connectivity_monitor.dart';
 import 'sync_failure.dart';
-import 'backoff_policy.dart';
 import 'sync_status_summary.dart';
 
 /// Top-level developer facade for the offline-first synchronization engine.

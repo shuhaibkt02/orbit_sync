@@ -7,7 +7,7 @@ import 'sync_transport.dart';
 class HttpSyncTransport implements SyncTransport {
   final String serverUrl;
   final http.Client httpClient;
-  final Future<String?> Function()? getAuthToken;
+  Future<String?> Function()? getAuthToken;
   final StreamController<void>? _remoteChangeController;
 
   HttpSyncTransport({
