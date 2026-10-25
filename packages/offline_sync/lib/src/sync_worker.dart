@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:sqlite3/sqlite3.dart' show Row;
 import 'package:sqlite_async/sqlite_async.dart' show SqliteWriteContext;
-import 'sync_storage.dart';
+import 'storage/sync_storage.dart';
 import 'sync_profile.dart';
 import 'backoff_policy.dart';
+import 'sync_transport.dart';
+import 'http_sync_transport.dart';
 
 enum SyncPushStatus { success, networkError, conflict, validationError, poisonPill, unauthorized, needsUpgrade }
 enum SyncPullStatus { success, networkError, expiredCursor, unauthorized }
@@ -52,14 +54,16 @@ class SyncPullResult {
 /// and generation-swap resync.
 class SyncWorker {
   final SyncStorage storage;
-  final String serverUrl;
-  final http.Client httpClient;
+  final SyncTransport transport;
   final SyncProfile profile;
   final int pullPageLimit;
   final Map<String, dynamic>? scopeFilter;
   Future<String?> Function()? getAuthToken;
   Future<void> Function()? onAuthExpired;
   Future<void>? _refreshFuture;
+
+  String get serverUrl => transport is HttpSyncTransport ? (transport as HttpSyncTransport).serverUrl : '';
+  http.Client? get httpClient => transport is HttpSyncTransport ? (transport as HttpSyncTransport).httpClient : null;
 
   Future<void> _handleAuthExpired() async {
     if (onAuthExpired == null) return;
@@ -88,7 +92,8 @@ class SyncWorker {
 
   SyncWorker({
     required this.storage,
-    required this.serverUrl,
+    String serverUrl = '',
+    SyncTransport? transport,
     this.profile = SyncProfile.enterprise,
     http.Client? client,
     BackoffPolicy? backoffPolicy,
@@ -101,8 +106,18 @@ class SyncWorker {
     this.currentSchemaVersion = 1,
     this.migrator,
     this.onLog,
-  })  : httpClient = client ?? http.Client(),
-        backoffPolicy = backoffPolicy ?? BackoffPolicy();
+  })  : transport = transport ??
+            HttpSyncTransport(
+              serverUrl: serverUrl,
+              client: client,
+              getAuthToken: getAuthToken,
+            ),
+        backoffPolicy = backoffPolicy ?? BackoffPolicy() {
+    this.transport.onRemoteChange?.listen((_) {
+      onLog?.call('Orbit: Real-time remote change detected. Triggering sync.');
+      sync();
+    });
+  }
 
   /// Gets the last checkpointed cursor from metadata.
   Future<int> getLastSyncedCursor() async {
@@ -262,34 +277,20 @@ class SyncWorker {
         }
 
         try {
-          final req = http.Request(method, Uri.parse(targetUrl));
-          req.headers['content-type'] = 'application/json';
-          req.headers['idempotency-key'] = mutationId;
-          req.headers['x-client-mutation-id'] = mutationId;
-          req.headers['x-offline-sync'] = 'true';
-          final createdAtIso = DateTime.fromMillisecondsSinceEpoch(r['created_at'] as int).toUtc().toIso8601String();
-          req.headers['x-offline-created-at'] = createdAtIso;
+          final payloadJson = r['payload_json'] as String?;
+          final payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : null;
 
-          if (getAuthToken != null) {
-            final token = await getAuthToken!();
-            if (token != null) req.headers['authorization'] = 'Bearer $token';
+          final resp = await transport.pushCustom(
+            url: targetUrl,
+            method: method,
+            mutationId: mutationId,
+            createdAtMs: r['created_at'] as int,
+            payload: payload,
+            entityId: entityId,
+          );
+          if (resp.error != null) {
+            throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
           }
-
-          if (method != 'DELETE') {
-            final payloadJson = r['payload_json'] as String?;
-            var payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : <String, dynamic>{};
-            final bodyMap = Map<String, dynamic>.from(payload);
-            bodyMap['id'] ??= entityId;
-            bodyMap['_offline_meta'] = {
-              'is_offline': true,
-              'offline_created_at': createdAtIso,
-              'mutation_id': mutationId,
-            };
-            req.body = jsonEncode(bodyMap);
-          }
-
-          final streamed = await httpClient.send(req);
-          final resp = await http.Response.fromStream(streamed);
           final respBody = resp.body;
 
           if (resp.statusCode >= 200 && resp.statusCode < 300) {
@@ -427,19 +428,14 @@ class SyncWorker {
     final idempotencyKey = mutationIds.length == 1 ? mutationIds.first : 'batch-${mutationIds.first}';
 
     try {
-      final uriStr = '$serverUrl/sync/push${chaos != null ? '?chaos=$chaos' : ''}';
-      final req = http.Request('POST', Uri.parse(uriStr));
-      req.headers['content-type'] = 'application/json';
-      req.headers['idempotency-key'] = idempotencyKey;
-
-      if (getAuthToken != null) {
-        final token = await getAuthToken!();
-        if (token != null) req.headers['authorization'] = 'Bearer $token';
+      final resp = await transport.pushBatch(
+        mutations: mutations,
+        idempotencyKey: idempotencyKey,
+        chaos: chaos,
+      );
+      if (resp.error != null) {
+        throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
       }
-
-      req.body = jsonEncode(mutations);
-      final streamed = await httpClient.send(req);
-      final resp = await http.Response.fromStream(streamed);
       final respBody = resp.body;
       final bodyJson = respBody.isNotEmpty ? (jsonDecode(respBody) as Map<String, dynamic>) : <String, dynamic>{};
 
@@ -560,26 +556,25 @@ class SyncWorker {
   /// Handles 3-way merging, invariant validation, and tombstone/scope eviction.
   Future<SyncPullResult> pullPage({String? chaos}) async {
     final since = await getLastSyncedCursor();
-    var uriStr = '$serverUrl/sync/pull?since=$since&limit=$pullPageLimit';
-    if (chaos != null) uriStr += '&chaos=$chaos';
-    if (scopeFilter != null) {
-      uriStr += '&scope=${Uri.encodeComponent(jsonEncode(scopeFilter))}';
-    }
 
     try {
-      final req = http.Request('GET', Uri.parse(uriStr));
-      if (getAuthToken != null) {
-        final token = await getAuthToken!();
-        if (token != null) req.headers['authorization'] = 'Bearer $token';
+      final resp = await transport.pull(
+        sinceCursor: since,
+        limit: pullPageLimit,
+        scopeFilter: scopeFilter,
+        chaos: chaos,
+      );
+      if (resp.error != null) {
+        throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
       }
-
-      final streamed = await httpClient.send(req);
-      final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode == HttpStatus.gone) {
         return const SyncPullResult(status: SyncPullStatus.expiredCursor);
       }
       if (resp.statusCode == HttpStatus.unauthorized) {
         return const SyncPullResult(status: SyncPullStatus.unauthorized);
+      }
+      if (resp.statusCode != HttpStatus.ok) {
+        throw HttpException('HTTP ${resp.statusCode}: ${resp.body}');
       }
 
       final respBody = resp.body;
@@ -771,12 +766,13 @@ class SyncWorker {
   /// and reapplies pending outbox mutations.
   /// ponytail: uses SQLite ALTER TABLE RENAME swap; upgrade to schema-copy migration if foreign key cycles are present.
   Future<bool> resyncGeneration(List<String> entities) async {
-    // 1. Pull snapshot from server
-    final uriStr = '$serverUrl/sync/pull?snapshot=true&limit=1000';
-    final req = http.Request('GET', Uri.parse(uriStr));
-    final streamed = await httpClient.send(req);
-    final resp = await http.Response.fromStream(streamed);
-    if (resp.statusCode != HttpStatus.ok) return false;
+    // 1. Pull snapshot from transport
+    final resp = await transport.pull(
+      sinceCursor: 0,
+      limit: 1000,
+      snapshot: true,
+    );
+    if (resp.statusCode != HttpStatus.ok || resp.error != null) return false;
 
     final respBody = resp.body;
     final bodyJson = jsonDecode(respBody) as Map<String, dynamic>;
@@ -832,5 +828,16 @@ class SyncWorker {
     });
 
     return true;
+  }
+
+  /// Runs a complete push and pull cycle.
+  Future<void> sync({bool force = false}) async {
+    await pushBatch(force: force);
+    await pullAll();
+  }
+
+  /// Closes transport resources.
+  void dispose() {
+    transport.dispose();
   }
 }

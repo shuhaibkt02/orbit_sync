@@ -8,6 +8,7 @@ class ConnectivityMonitor {
   final Duration timeout;
   final Duration heartbeatInterval;
   String? defaultProbeUrl;
+  final Future<bool> Function()? reachabilityChecker;
 
   bool _isOnline = true;
   Timer? _heartbeatTimer;
@@ -17,6 +18,7 @@ class ConnectivityMonitor {
     this.timeout = const Duration(seconds: 3),
     this.heartbeatInterval = const Duration(seconds: 30),
     this.defaultProbeUrl,
+    this.reachabilityChecker,
   });
 
   /// Current reachability status.
@@ -28,6 +30,17 @@ class ConnectivityMonitor {
   /// Probes the target host with a strict [timeout].
   /// Returns true if reachable, false if dead zone or network drop.
   Future<bool> checkReachability({String? targetUrl}) async {
+    if (reachabilityChecker != null) {
+      try {
+        final ok = await reachabilityChecker!();
+        _setOnline(ok);
+        return ok;
+      } catch (_) {
+        _setOnline(false);
+        return false;
+      }
+    }
+
     final rawUrl = targetUrl ?? defaultProbeUrl;
     try {
       if (rawUrl != null && rawUrl.isNotEmpty) {

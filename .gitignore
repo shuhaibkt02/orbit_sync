@@ -23,6 +23,7 @@ build/
 docs/
 issues/
 .agents/
+.arena/
 
 # IDEs
 .idea/
