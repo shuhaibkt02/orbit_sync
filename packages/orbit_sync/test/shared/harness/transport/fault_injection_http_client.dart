@@ -19,6 +19,7 @@ class CapturedRequest {
   });
 
   String get bodyText => utf8.decode(bodyBytes);
+  String get body => bodyText;
 }
 
 /// Deterministic, scripted fault-injecting HTTP client for distributed systems testing.

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import '../storage/sync_storage.dart';
 import '../sync_profile.dart';
@@ -47,21 +48,24 @@ class SyncWorker implements ISyncWorker {
   MutationMigrator? get migrator => _pushOrchestrator.migrator;
   set migrator(MutationMigrator? m) => _pushOrchestrator.migrator = m;
 
+  final int maxConcurrentLanes;
+
   late final ConflictReconciler _reconciler;
   late final PagePullOrchestrator _pullOrchestrator;
   late final BatchPushOrchestrator _pushOrchestrator;
   late final GenerationSwapManager _swapManager;
   StreamSubscription<void>? _remoteChangeSub;
 
-  String get serverUrl => transport is HttpSyncTransport ? (transport as HttpSyncTransport).serverUrl : '';
+  String get baseUrl => transport is HttpSyncTransport ? (transport as HttpSyncTransport).baseUrl : '';
   http.Client? get httpClient => transport is HttpSyncTransport ? (transport as HttpSyncTransport).httpClient : null;
 
   SyncWorker({
     required this.storage,
-    String serverUrl = '',
+    String? baseUrl,
     SyncTransport? transport,
     this.profile = SyncProfile.enterprise,
     http.Client? client,
+    Dio? dio,
     BackoffPolicy? backoffPolicy,
     this.nowMsProvider,
     this.pullPageLimit = 50,
@@ -72,14 +76,21 @@ class SyncWorker implements ISyncWorker {
     int currentSchemaVersion = 1,
     MutationMigrator? migrator,
     this.onLog,
+    this.maxConcurrentLanes = 4,
   })  : _getAuthToken = getAuthToken,
         backoffPolicy = backoffPolicy ?? BackoffPolicy(),
         transport = transport ??
-            HttpSyncTransport(
-              serverUrl: serverUrl,
-              client: client,
-              getAuthToken: getAuthToken,
-            ) {
+            (client != null
+                ? HttpSyncTransport(
+                    baseUrl: baseUrl ?? '',
+                    client: client,
+                    getAuthToken: getAuthToken,
+                  )
+                : SyncTransport.dio(
+                    dio: dio,
+                    baseUrl: baseUrl ?? '',
+                    getAuthToken: getAuthToken,
+                  )) {
     _initServices(currentSchemaVersion, migrator);
     _remoteChangeSub = this.transport.onRemoteChange?.listen((_) {
       onLog?.call('Orbit: Real-time remote change detected. Triggering sync.');
@@ -88,6 +99,7 @@ class SyncWorker implements ISyncWorker {
   }
 
   void _initServices(int initialSchemaVersion, MutationMigrator? initialMigrator) {
+    _swapManager = GenerationSwapManager(storage: storage, transport: transport);
     _reconciler = ConflictReconciler(
       validateInvariants: (entity, merged) => validateInvariants?.call(entity, merged),
     );
@@ -98,6 +110,11 @@ class SyncWorker implements ISyncWorker {
       reconciler: _reconciler,
       pullPageLimit: pullPageLimit,
       scopeFilter: scopeFilter,
+      onAuthExpired: _handleAuthExpired,
+      onExpiredCursor: () async {
+        onLog?.call('Orbit: HTTP 410 Gone (expired cursor). Triggering resyncGeneration.');
+        await _swapManager.resyncGeneration();
+      },
     );
     _pushOrchestrator = BatchPushOrchestrator(
       storage: storage,
@@ -109,8 +126,8 @@ class SyncWorker implements ISyncWorker {
       onLog: onLog,
       onAuthExpired: _handleAuthExpired,
       nowMsProvider: nowMsProvider,
+      maxConcurrentLanes: maxConcurrentLanes,
     );
-    _swapManager = GenerationSwapManager(storage: storage, transport: transport);
   }
 
   Future<void> _handleAuthExpired() async {
@@ -138,12 +155,21 @@ class SyncWorker implements ISyncWorker {
     _reconciler.registerResolver(entity, resolver);
   }
 
+  void registerIdExtractor(String entity, String? Function(dynamic json) extractor) {
+    _pushOrchestrator.registerIdExtractor(entity, extractor);
+  }
+
+  @override
+  Future<int> reclaimZombies() => _pushOrchestrator.reclaimZombies();
+
+  bool _isSyncing = false;
+
   @override
   Future<SyncPushResult> pushBatch({
     int batchSize = 10,
     String? chaos,
     bool force = false,
-  }) {
+  }) async {
     return _pushOrchestrator.pushBatch(batchSize: batchSize, chaos: chaos, force: force);
   }
 
@@ -158,8 +184,14 @@ class SyncWorker implements ISyncWorker {
 
   @override
   Future<void> sync({bool force = false}) async {
-    await pushBatch(force: force);
-    await pullAll();
+    if (_isSyncing) return;
+    _isSyncing = true;
+    try {
+      await pushBatch(force: force);
+      await pullAll();
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   @override

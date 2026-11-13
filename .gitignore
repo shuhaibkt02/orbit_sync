@@ -30,7 +30,11 @@ issues/
 .vscode/
 *.iml
 
-# Python
+# Python & Graphify
 __pycache__/
 *.pyc
 .venv/
+graphify-out/
+.mcp.json
+.claude/
+CLAUDE.md

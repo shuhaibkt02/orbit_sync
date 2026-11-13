@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:orbit_sync/src/client/domain/policies/sqlite_type_sanitizer.dart';
 
 class TestProduct {
@@ -39,11 +39,11 @@ class TestProduct {
 
 void main() {
   late Directory tempDir;
-  late OfflineSyncClient client;
+  late OrbitClient client;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('layer5_challenge4_');
-    client = await OfflineSyncClient.initialize(
+    client = await OrbitClient.initialize(
       databasePath: '${tempDir.path}/test.db',
     );
   });
@@ -77,6 +77,7 @@ void main() {
     test('registerModel provides typed CRUD and automatic index registration', () async {
       final products = client.registerModel<TestProduct>(
         name: 'products',
+        endpoint: '/products',
         fromJson: TestProduct.fromJson,
         toJson: (p) => p.toJson(),
         indexes: ['price'],
@@ -114,9 +115,10 @@ void main() {
         delete: (id) => RestRequest(path: '/api/v1/products/$id', method: HttpMethod.delete),
       );
 
-      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals('POST'));
-      expect(endpoints.update!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals('PUT'));
-      expect(endpoints.delete!('1').method, equals('DELETE'));
+      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals(HttpMethod.post));
+      expect(endpoints.update!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals(HttpMethod.put));
+      expect(endpoints.delete!('1').method, equals(HttpMethod.delete));
+      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).verb, equals('POST'));
     });
   });
 }

@@ -6,6 +6,7 @@ class TransportRequest {
   final String? body;
   final Duration connectTimeout;
   final Duration readTimeout;
+  final String? mutationId;
 
   const TransportRequest({
     required this.uri,
@@ -13,10 +14,11 @@ class TransportRequest {
     this.headers = const {},
     this.body,
     this.connectTimeout = const Duration(seconds: 3),
-    this.readTimeout = const Duration(seconds: 10),
+    this.readTimeout = const Duration(seconds: 15),
+    this.mutationId,
   });
 
   @override
   String toString() =>
-      'TransportRequest(method: $method, uri: $uri, bodyLen: ${body?.length ?? 0})';
+      'TransportRequest(method: $method, uri: $uri, mutationId: $mutationId, bodyLen: ${body?.length ?? 0})';
 }

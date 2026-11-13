@@ -31,8 +31,8 @@ class SyncValidator {
   }
 
   static void validatePriority(int priority) {
-    if (priority < 0 || priority > 2) {
-      throw ArgumentError('Priority must be 0 (Normal), 1 (High), or 2 (Urgent). Got: $priority');
+    if (priority < 0 || priority > 3) {
+      throw ArgumentError('Priority must be between 0 and 3. Got: $priority');
     }
   }
 
@@ -60,7 +60,12 @@ class SyncValidator {
 
   static String encodePayload(Map<String, dynamic> data) {
     try {
-      return jsonEncode(data);
+      return jsonEncode(data, toEncodable: (nonEncodable) {
+        if (nonEncodable is DateTime) {
+          return nonEncodable.millisecondsSinceEpoch;
+        }
+        return nonEncodable.toString();
+      });
     } catch (e) {
       throw ArgumentError('Invalid domain data: payload must be JSON-serializable. Error: $e');
     }

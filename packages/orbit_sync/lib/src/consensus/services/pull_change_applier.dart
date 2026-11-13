@@ -23,17 +23,17 @@ class PullChangeApplier {
     if (isDeleted || isLeftScope) {
       await tx.execute('DELETE FROM "$entity" WHERE "id" = ?', [id]);
       final pendingRows = await tx.getAll(
-        "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending'",
+        "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held')",
         [entity, id],
       );
       if (pendingRows.isNotEmpty) {
         await tx.execute('''
           UPDATE _sync_outbox 
           SET status = 'conflict', error_details_json = ? 
-          WHERE entity_name = ? AND entity_id = ? AND status = 'pending'
+          WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held')
         ''', [
           jsonEncode({
-            'type': 'https://offline-sync.dev/errors/delete-conflict',
+            'type': 'https://orbit-sync.dev/errors/delete-conflict',
             'title': 'Update vs Delete Conflict',
             'detail': 'Record was deleted on the server while modified offline locally.',
           }),
@@ -47,21 +47,22 @@ class PullChangeApplier {
     final remoteData = (change['data'] as Map<String, dynamic>?) ?? {};
     final version = (change['version'] as int?) ?? 1;
     final now = DateTime.now().millisecondsSinceEpoch;
+    final expiresAt = (change['expires_at'] as int?) ?? (remoteData['expires_at'] as int?);
 
     final pendingRows = await tx.getAll(
-      "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status = 'pending' ORDER BY created_at ASC",
+      "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held') ORDER BY created_at ASC",
       [entity, id],
     );
 
     if (pendingRows.isEmpty) {
-      await upsertRow(tx, entity, id, remoteData, version, now, null);
+      await upsertRow(tx, entity, id, remoteData, version, now, expiresAt);
     } else if (pendingRows.first['op'] == 'delete') {
       if (profile != SyncProfile.basic) {
         await tx.execute('''
           UPDATE _sync_outbox SET status = 'conflict', error_details_json = ? WHERE mutation_id = ?
         ''', [
           jsonEncode({
-            'type': 'https://offline-sync.dev/errors/delete-vs-update',
+            'type': 'https://orbit-sync.dev/errors/delete-vs-update',
             'title': 'Delete vs Update Conflict',
             'detail': 'Record was deleted locally while modified remotely on the server.',
           }),
@@ -69,10 +70,10 @@ class PullChangeApplier {
         ]);
       }
     } else if (profile == SyncProfile.basic) {
-      await upsertRow(tx, entity, id, remoteData, version, now, null);
+      await upsertRow(tx, entity, id, remoteData, version, now, expiresAt);
       await tx.execute('''
         UPDATE _sync_outbox SET status = 'conflict', error_details_json = ? 
-        WHERE entity_name = ? AND entity_id = ? AND status = 'pending'
+        WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held')
       ''', [jsonEncode({'title': 'Overwritten by LWW remote change'}), entity, id]);
     } else {
       final pendingMut = pendingRows.first;
@@ -95,7 +96,7 @@ class PullChangeApplier {
           [result.invariantError, mutId],
         );
       } else if (result.merged != null) {
-        await upsertRow(tx, entity, id, result.merged!, version, now, jsonEncode(remoteData));
+        await upsertRow(tx, entity, id, result.merged!, version, now, expiresAt);
         await tx.execute('''
           UPDATE _sync_outbox 
           SET payload_json = ?, base_snapshot_json = ?, base_version = ? 
@@ -111,24 +112,29 @@ class PullChangeApplier {
     String id,
     Map<String, dynamic> data,
     int version,
-    int now,
-    String? baseSnapshot,
-  ) async {
-    final cols = <String>['id', 'version', 'updated_at', '_base_snapshot_json'];
-    final vals = <dynamic>[id, version, now, baseSnapshot];
-
-    for (final entry in data.entries) {
-      if (entry.key != 'id' &&
-          entry.key != 'version' &&
-          entry.key != 'updated_at' &&
-          entry.key != '_base_snapshot_json') {
-        cols.add('"${entry.key}"');
-        vals.add(entry.value);
-      }
+    int now, [
+    dynamic expiresAtOrSnapshot,
+  ]) async {
+    final dataMap = Map<String, dynamic>.from(data);
+    dataMap['id'] = id;
+    dataMap['version'] = version;
+    dataMap['updated_at'] = now;
+    final expiresAt = expiresAtOrSnapshot is int
+        ? expiresAtOrSnapshot
+        : (data['expires_at'] as int?);
+    if (expiresAt != null) {
+      dataMap['expires_at'] = expiresAt;
     }
+    final dataJson = jsonEncode(dataMap);
 
-    final colStr = cols.join(', ');
-    final phStr = cols.map((_) => '?').join(', ');
-    await tx.execute('INSERT OR REPLACE INTO "$entity" ($colStr) VALUES ($phStr)', vals);
+    await tx.execute('''
+      INSERT INTO "$entity" ("id", "version", "updated_at", "expires_at", "data_json")
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        version = excluded.version,
+        updated_at = excluded.updated_at,
+        expires_at = excluded.expires_at,
+        data_json = excluded.data_json;
+    ''', [id, version, now, expiresAt, dataJson]);
   }
 }

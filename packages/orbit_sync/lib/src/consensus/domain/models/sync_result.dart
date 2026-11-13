@@ -1,4 +1,4 @@
-/// Push status outcomes for Layer 2 consensus engine.
+/// Push status outcomes for Layer 5 consensus engine.
 enum SyncPushStatus {
   success,
   networkError,
@@ -9,7 +9,7 @@ enum SyncPushStatus {
   needsUpgrade,
 }
 
-/// Pull status outcomes for Layer 2 consensus engine.
+/// Pull status outcomes for Layer 5 consensus engine.
 enum SyncPullStatus {
   success,
   networkError,

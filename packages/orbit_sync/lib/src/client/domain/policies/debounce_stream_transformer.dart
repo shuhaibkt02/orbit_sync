@@ -15,7 +15,6 @@ extension LeadingImmediateDebounce<T> on Stream<T> {
     bool hasPendingTrailing = false;
 
     controller = StreamController<T>(
-      sync: true,
       onListen: () {
         subscription = listen(
           (data) {
@@ -56,9 +55,9 @@ extension LeadingImmediateDebounce<T> on Stream<T> {
       },
       onPause: () => subscription?.pause(),
       onResume: () => subscription?.resume(),
-      onCancel: () async {
+      onCancel: () {
         debounceTimer?.cancel();
-        await subscription?.cancel();
+        subscription?.cancel();
       },
     );
 

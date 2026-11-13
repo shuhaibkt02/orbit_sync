@@ -19,8 +19,9 @@ dependencies:
   http: ^1.6.0
   dio: ^5.11.1
   crypto: ^3.0.3
+  collection: ^1.18.0
 
 dev_dependencies:
   test: ^1.24.0
   sync_server:
-    path: ../../tools/sync_server
+    path: tool/sync_server

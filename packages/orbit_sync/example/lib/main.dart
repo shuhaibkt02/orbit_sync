@@ -31,7 +31,7 @@ class TaskScreen extends StatefulWidget {
 }
 
 class _TaskScreenState extends State<TaskScreen> {
-  OfflineSyncClient? _orbit;
+  OrbitClient? _orbit;
   OrbitTable<Task>? _tasks;
   MockBackend? _mockBackend;
   String? _initError;
@@ -53,9 +53,8 @@ class _TaskScreenState extends State<TaskScreen> {
       final dir = await getApplicationDocumentsDirectory();
       final mock = await MockBackend.start();
       _mockBackend = mock;
-      final client = await OfflineSyncClient.initialize(databasePath: p.join(dir.path, 'orbit_tasks.db'), serverUrl: mock.url);
-      await client.registerTable('tasks', {'title': 'TEXT NOT NULL', 'is_done': 'INTEGER NOT NULL DEFAULT 0', 'created_at': 'INTEGER NOT NULL DEFAULT 0'});
-      final table = client.registerTypedTable<Task>(name: 'tasks', fromJson: Task.fromJson, toJson: (t) => t.toJson());
+      final client = await OrbitClient.initialize(databasePath: p.join(dir.path, 'orbit_tasks.db'), baseUrl: mock.url);
+      final table = client.collection<Task>(name: 'tasks', endpoint: '/tasks', fromJson: Task.fromJson, toJson: (t) => t.toJson());
       if (mounted) setState(() { _orbit = client; _tasks = table; _initError = null; });
     } catch (e) {
       if (mounted) setState(() => _initError = e.toString());

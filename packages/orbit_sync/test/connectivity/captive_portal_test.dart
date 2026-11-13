@@ -17,7 +17,7 @@ void main() {
 
       final probe = HttpNetworkProbe(client: mockClient);
       final result = await probe.probe(
-        Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
+        Uri.parse('http://cp.cloudflare.com/generate_204'),
       );
 
       expect(result.isOnline, isFalse);
@@ -38,7 +38,7 @@ void main() {
 
       final probe = HttpNetworkProbe(client: mockClient);
       final result = await probe.probe(
-        Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
+        Uri.parse('http://cp.cloudflare.com/generate_204'),
       );
 
       expect(result.isOnline, isFalse);
@@ -54,7 +54,7 @@ void main() {
 
       final probe = HttpNetworkProbe(client: mockClient);
       final result = await probe.probe(
-        Uri.parse('http://connectivitycheck.gstatic.com/generate_204'),
+        Uri.parse('http://cp.cloudflare.com/generate_204'),
       );
 
       expect(result.isOnline, isTrue);

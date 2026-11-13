@@ -15,6 +15,13 @@ class StorageOpener {
     void Function(String sqliteId, String secureId)? onTimeTravelBackupDetected,
     IStorageRecovery recovery = const SqliteRecovery(),
   }) async {
+    if (path != ':memory:') {
+      final file = File(path);
+      if (!file.parent.existsSync()) {
+        file.parent.createSync(recursive: true);
+      }
+    }
+
     if (backupShield != null && path != ':memory:') {
       try { await backupShield(path); } catch (_) {}
     }

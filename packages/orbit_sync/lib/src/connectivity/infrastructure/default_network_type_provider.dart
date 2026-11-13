@@ -4,7 +4,7 @@ import '../domain/models/network_connection_type.dart';
 
 /// Pure Dart cross-platform default network type provider.
 /// Defaults to [NetworkConnectionType.unknown] and [isMetered] = false.
-/// Host apps can inject native connectivity plugins without coupling offline_sync core.
+/// Host apps can inject native connectivity plugins without coupling orbit_sync core.
 class DefaultNetworkTypeProvider implements INetworkTypeProvider {
   final StreamController<NetworkConnectionType> _controller =
       StreamController<NetworkConnectionType>.broadcast();

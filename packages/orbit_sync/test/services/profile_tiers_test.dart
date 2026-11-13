@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
@@ -22,9 +22,9 @@ void main() {
   group('Issue 09: SyncProfile Tiers (Basic, Standard, Enterprise)', () {
     test('Test Case 1: SyncProfile.basic uses LWW conflict resolution and simple failure', () async {
       final dbPath = '${tempDir.path}/basic.db';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: dbPath,
-        serverUrl: server.baseUrl,
+        baseUrl: server.baseUrl,
         profile: SyncProfile.basic,
       );
 
@@ -62,7 +62,7 @@ void main() {
       // Pull from server: basic profile should execute LWW (server overwrites local, outbox marked conflict)
       await client.worker.pullAll();
 
-      final localRows = await client.query("SELECT title, status FROM tasks WHERE id = 'task-1'");
+      final localRows = await client.query("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-1'");
       expect(localRows.first['title'], 'Server Title', reason: 'LWW forces remote state to overwrite local');
       expect(localRows.first['status'], 'done');
 
@@ -86,9 +86,9 @@ void main() {
 
     test('Test Case 2: SyncProfile.standard uses 3-way column merge and routes to DLQ', () async {
       final dbPath = '${tempDir.path}/standard.db';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: dbPath,
-        serverUrl: server.baseUrl,
+        baseUrl: server.baseUrl,
         profile: SyncProfile.standard,
       );
 
@@ -133,7 +133,7 @@ void main() {
       // Pull: Standard profile performs 3-way column merge
       await client.worker.pullAll();
 
-      final localRows = await client.query("SELECT title, status FROM tasks WHERE id = 'task-2'");
+      final localRows = await client.query("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-2'");
       expect(localRows.first['title'], 'Local Updated Title', reason: '3-way merge preserved local non-conflicting field');
       expect(localRows.first['status'], 'reviewed', reason: '3-way merge merged remote non-conflicting field');
 
@@ -156,9 +156,9 @@ void main() {
 
     test('Test Case 3: SyncProfile.enterprise activates Parent-Child DAG selective holding', () async {
       final dbPath = '${tempDir.path}/enterprise.db';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: dbPath,
-        serverUrl: server.baseUrl,
+        baseUrl: server.baseUrl,
         profile: SyncProfile.enterprise,
         validateInvariants: (entity, record) {
           if (record['title'] == 'INVALID_ORDER') return 'Order is invalid';

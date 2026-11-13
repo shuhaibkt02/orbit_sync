@@ -89,7 +89,7 @@ class DashboardQueryHelper {
 
   Future<void> retryAllFailed() async {
     await storage.db.execute(
-      "UPDATE _sync_outbox SET status = 'pending', retry_count = 0, next_retry_at = NULL WHERE status IN ('failed', 'dlq', 'validation_error')",
+      "UPDATE _sync_outbox SET status = 'pending', retry_count = 0, next_retry_at = NULL WHERE status IN ('failed', 'dlq', 'validation_error', 'conflict')",
     );
   }
 
@@ -114,15 +114,15 @@ class DashboardQueryHelper {
       final oldest = r['oldest'] as int?;
       total += count;
 
-      if (status == 'pending' || status == 'in_flight') {
-        if (status == 'pending') pending += count;
+      if (status == 'pending' || status == 'in_flight' || status == 'held') {
+        if (status == 'pending' || status == 'held') pending += count;
         if (status == 'in_flight') inFlight += count;
         if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
           oldestPendingEpoch = oldest;
         }
       } else if (status == 'synced') {
         synced += count;
-      } else if (status == 'failed' || status == 'dlq' || status == 'validation_error') {
+      } else if (status == 'failed' || status == 'dlq' || status == 'validation_error' || status == 'conflict') {
         failed += count;
         if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
           oldestPendingEpoch = oldest;

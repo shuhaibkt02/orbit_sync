@@ -1,7 +1,6 @@
 import 'dart:async';
 import '../../storage/sync_storage.dart';
 import '../../consensus/sync_worker.dart';
-import '../../transport/infrastructure/http_sync_transport.dart';
 import '../../observability/domain/models/sync_event.dart';
 import '../domain/models/sync_job.dart';
 import '../domain/models/sync_summary.dart';
@@ -16,6 +15,7 @@ class SyncCoordinator {
 
   bool _isSyncing = false;
   Completer<void>? _syncCompleter;
+  SyncJob? _currentSyncJob;
 
   SyncCoordinator({
     required this.worker,
@@ -30,16 +30,30 @@ class SyncCoordinator {
     bool force = false,
     bool isPaused = false,
     bool isClosed = false,
+    bool pull = false,
   }) {
     final syncId = UuidV7.generate();
     final job = SyncJob(syncId: syncId);
 
-    if (_isSyncing || isPaused || isClosed) {
+    if (isClosed || isPaused) {
+      job.complete(SyncSummary.empty);
+      return job;
+    }
+
+    if (_isSyncing) {
+      if (_currentSyncJob != null) {
+        _currentSyncJob!.then(
+          (summary) => job.complete(summary),
+          onError: (e, st) => job.completeError(e, st),
+        );
+        return job;
+      }
       job.complete(SyncSummary.empty);
       return job;
     }
 
     _isSyncing = true;
+    _currentSyncJob = job;
     _syncCompleter = Completer<void>();
     eventBus.emitStarted(syncId: syncId);
 
@@ -49,7 +63,7 @@ class SyncCoordinator {
       final sw = Stopwatch()..start();
 
       try {
-        if (worker.serverUrl.isNotEmpty || worker.transport is! HttpSyncTransport) {
+        if (pull) {
           await worker.pullAll();
         }
 
@@ -61,6 +75,14 @@ class SyncCoordinator {
               totalFailed++;
               if (res.status == SyncPushStatus.conflict) {
                 onEvent?.call(ConflictDetectedEvent(timestamp: DateTime.now().toUtc(), entity: '', entityId: ''));
+              } else if (res.status == SyncPushStatus.poisonPill) {
+                onEvent?.call(PoisonPillQuarantinedEvent(
+                  timestamp: DateTime.now().toUtc(),
+                  mutationId: '',
+                  entity: '',
+                  entityId: '',
+                  reason: res.errorMessage ?? 'Poison pill quarantined',
+                ));
               } else if (res.errorMessage?.contains('Rate limited') == true) {
                 onEvent?.call(RateLimitedEvent(timestamp: DateTime.now().toUtc()));
               } else if (res.status == SyncPushStatus.unauthorized) {
@@ -80,6 +102,7 @@ class SyncCoordinator {
         job.complete(SyncSummary(applied: totalApplied, failed: totalFailed + 1, errorMessage: e.toString(), durationMs: sw.elapsedMilliseconds));
       } finally {
         _isSyncing = false;
+        _currentSyncJob = null;
         _syncCompleter?.complete();
         _syncCompleter = null;
       }

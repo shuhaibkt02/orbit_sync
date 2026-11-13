@@ -32,10 +32,10 @@ flutter run
    - Trigger manual force-sync or test data seeding.
 
 4. **Connecting to Your Real Backend:**
-   - Open `lib/main.dart` and point `serverUrl` to your company's REST API:
+   - Open `lib/main.dart` and point `baseUrl` to your company's REST API:
    ```dart
-   final client = await OfflineSyncClient.initialize(
+   final client = await OrbitClient.initialize(
      databasePath: p.join(dir.path, 'orbit_tasks.db'),
-     serverUrl: 'https://api.yourcompany.com',
+     baseUrl: 'https://api.yourcompany.com',
    );
    ```

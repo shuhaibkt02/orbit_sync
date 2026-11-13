@@ -60,7 +60,7 @@ class SyncStorage {
         recovery: recovery,
       );
 
-  /// Registers an entity table with custom columns and optional foreign key clauses.
+  /// Registers an entity table with universal 5-column schema and system indices.
   Future<void> registerEntityTable(
     String entityName,
     Map<String, String> columnTypes, {
@@ -79,15 +79,22 @@ class SyncStorage {
     String? endpointUrl,
     String? httpMethod,
     Duration? holdFor,
+    Duration? coolingTime,
     Duration? sla,
     Duration? ttl,
-    int priority = 0,
+    int priority = 1,
     String? correlationTag,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
+    String? mediaPath,
   }) =>
       _outboxRepo.save(
         entity: entity, id: id, data: data, version: version, dependsOnMutationId: dependsOnMutationId,
-        schemaVersion: schemaVersion, endpointUrl: endpointUrl, httpMethod: httpMethod, holdFor: holdFor,
-        sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag,
+        schemaVersion: schemaVersion, endpointUrl: endpointUrl, httpMethod: httpMethod,
+        holdFor: holdFor, coolingTime: coolingTime,
+        sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag, headers: headers,
+        authorId: authorId, userId: userId, mediaPath: mediaPath,
       );
 
   /// Atomically marks domain entity deleted and appends delete envelope to outbox.
@@ -97,11 +104,27 @@ class SyncStorage {
     String? endpointUrl,
     String? httpMethod,
     Duration? undoWindow,
+    Duration? coolingTime,
+    Duration? holdFor,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
   }) =>
-      _outboxRepo.delete(entity: entity, id: id, endpointUrl: endpointUrl, httpMethod: httpMethod, undoWindow: undoWindow);
+      _outboxRepo.delete(
+        entity: entity,
+        id: id,
+        endpointUrl: endpointUrl,
+        httpMethod: httpMethod,
+        undoWindow: undoWindow,
+        coolingTime: coolingTime,
+        holdFor: holdFor,
+        headers: headers,
+        authorId: authorId,
+        userId: userId,
+      );
 
-  /// Restores a deleted record locally if within its undoWindow.
-  Future<bool> undoDelete({required String entity, required String id}) =>
+  /// Restores a deleted record locally if within its undoWindow / cooling window.
+  Future<bool> undoDelete({String? entity, required String id}) =>
       _outboxRepo.undoDelete(entity: entity, id: id);
 
   /// Records a local temporary ID to canonical server ID mapping.
@@ -120,12 +143,20 @@ class SyncStorage {
   Future<String?> getLocalTempId({required String entity, required String canonicalServerId}) =>
       _idMapRepo.getLocalTempId(entity: entity, canonicalServerId: canonicalServerId);
 
+  /// Prunes completed synced outbox records older than [retention].
+  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) =>
+      _outboxRepo.pruneSyncedOutbox(retention: retention);
+
   /// Prunes completed synced outbox records older than [olderThan].
   Future<int> pruneSynced({Duration olderThan = const Duration(days: 7)}) =>
       _outboxRepo.pruneSynced(olderThan: olderThan);
 
   /// Prunes expired local domain cache records where `expires_at < now`.
   Future<int> pruneExpiredCache(String entity) => _outboxRepo.pruneExpiredCache(entity);
+
+  /// Prunes oldest records (LRU) when cached entity count exceeds [maxCacheRecords].
+  Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) =>
+      _outboxRepo.pruneToQuota(entity, maxCacheRecords: maxCacheRecords);
 
   /// Rolls back an optimistic mutation using its stored base snapshot.
   Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) =>

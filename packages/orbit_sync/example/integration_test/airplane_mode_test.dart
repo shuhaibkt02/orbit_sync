@@ -10,7 +10,7 @@ void main() {
 
   const entity = 'orders';
   const mutationCount = 50;
-  const serverUrl = String.fromEnvironment(
+  const baseUrl = String.fromEnvironment(
     'SYNC_TEST_SERVER',
     defaultValue: 'http://10.0.2.2:8080',
   );
@@ -23,15 +23,15 @@ void main() {
     final supportDir = await getApplicationSupportDirectory();
     final dbPath = p.join(supportDir.path, 'e2e_offline.db');
 
-    final client = await OfflineSyncClient.initialize(
+    final client = await OrbitClient.initialize(
       databasePath: dbPath,
-      serverUrl: serverUrl,
+      baseUrl: baseUrl,
       onLog: (msg) => debugPrint('[SDK LOG] $msg'),
     );
 
     await client.registerEntity(
       entity,
-      url: '$serverUrl/orders',
+      url: '$baseUrl/orders',
       columnTypes: {
         'item': 'TEXT',
         'price': 'INTEGER',

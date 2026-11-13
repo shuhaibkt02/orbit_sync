@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
@@ -25,11 +25,11 @@ void main() {
 
     storageA = await SyncStorage.open(path: '${tempDir.path}/client_a.db', maxReaders: 2);
     await storageA.registerEntityTable('tasks', schema);
-    workerA = SyncWorker(storage: storageA, serverUrl: server.baseUrl);
+    workerA = SyncWorker(storage: storageA, baseUrl: server.baseUrl);
 
     storageB = await SyncStorage.open(path: '${tempDir.path}/client_b.db', maxReaders: 2);
     await storageB.registerEntityTable('tasks', schema);
-    workerB = SyncWorker(storage: storageB, serverUrl: server.baseUrl);
+    workerB = SyncWorker(storage: storageB, baseUrl: server.baseUrl);
   });
 
   tearDown(() async {
@@ -62,15 +62,15 @@ void main() {
       await workerA.pushBatch();
       await workerB.pullAll();
 
-      final bMerged = await storageB.db.get("SELECT title, priority FROM tasks WHERE id = 't-1';");
+      final bMerged = await storageB.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
       expect(bMerged['title'], 'Updated by A');
       expect(bMerged['priority'], 'high');
 
       await workerB.pushBatch();
       await workerA.pullAll();
 
-      final aFinal = await storageA.db.get("SELECT title, priority FROM tasks WHERE id = 't-1';");
-      final bFinal = await storageB.db.get("SELECT title, priority FROM tasks WHERE id = 't-1';");
+      final aFinal = await storageA.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
+      final bFinal = await storageB.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
       expect(aFinal['title'], 'Updated by A');
       expect(aFinal['priority'], 'high');
       expect(bFinal['title'], 'Updated by A');
@@ -126,7 +126,7 @@ void main() {
       expect(conflictOutbox['status'], 'conflict');
       expect(conflictOutbox['error_details_json'], contains('must be strictly before'));
 
-      final localRow = await storageB.db.get("SELECT start_time, end_time FROM tasks WHERE id = 'event-1';");
+      final localRow = await storageB.db.get("SELECT json_extract(data_json, '\$.start_time') as start_time, json_extract(data_json, '\$.end_time') as end_time FROM tasks WHERE id = 'event-1';");
       expect(localRow['start_time'], '09:00');
       expect(localRow['end_time'], '12:00');
     });
@@ -174,7 +174,7 @@ void main() {
       // Device B pulls: resolver merges deltaLocal (-3) + deltaRemote (-2) = final stock 5!
       await workerB.pullAll();
 
-      final bResolved = await storageB.db.get("SELECT stock FROM tasks WHERE id = 'inv-1';");
+      final bResolved = await storageB.db.get("SELECT json_extract(data_json, '\$.stock') as stock FROM tasks WHERE id = 'inv-1';");
       expect(bResolved['stock'], 5);
     });
   });

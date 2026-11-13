@@ -27,28 +27,53 @@ class HttpNetworkProbe implements INetworkProbe {
       final statusCode = streamedResponse.statusCode;
       stopwatch.stop();
 
-      // Drain response stream to release underlying HTTP socket / file descriptor
-      unawaited(streamedResponse.stream.drain<void>().catchError((_) {}));
-
       // 1. Captive Portal 3xx Redirect Interception
       if (statusCode >= 300 && statusCode < 400) {
         final location = streamedResponse.headers['location'];
         final redirectUri = location != null ? Uri.tryParse(location) : null;
-        final isExternalHost = redirectUri != null &&
-            redirectUri.host.isNotEmpty &&
-            redirectUri.host != targetUri.host;
-        final isCanaryRedirect = targetUri.path.contains('generate_204');
+        final isSameHostRedirect = redirectUri != null &&
+            (redirectUri.host.isEmpty || redirectUri.host == targetUri.host) &&
+            !targetUri.path.contains('generate_204') &&
+            !redirectUri.path.toLowerCase().contains('login') &&
+            !redirectUri.path.toLowerCase().contains('portal') &&
+            !redirectUri.path.toLowerCase().contains('guest') &&
+            !redirectUri.path.toLowerCase().contains('auth');
 
-        if (isExternalHost || isCanaryRedirect) {
+        if (!isSameHostRedirect) {
+          unawaited(streamedResponse.stream.drain<void>().catchError((_) {}));
           return ProbeResult.captivePortal(
             statusCode: statusCode,
             redirectUrl: redirectUri,
             latencyMs: stopwatch.elapsedMilliseconds,
+            errorMessage: 'Captive portal detected: unexpected redirect to $location',
           );
         }
       }
 
-      // 2. The Gateway 401/403/404 Reachability Rule:
+      // 2. Captive Portal HTML Detection (Content-Type header or HTML body snippet)
+      final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
+      final isHtmlHeader = contentType.contains('text/html') ||
+          contentType.contains('application/xhtml+xml');
+
+      final bodyBytes = await streamedResponse.stream
+          .expand((chunk) => chunk)
+          .take(2048)
+          .toList();
+      final bodyPrefix = String.fromCharCodes(bodyBytes).trimLeft().toLowerCase();
+      final isHtmlBody = bodyPrefix.startsWith('<!doctype html') ||
+          bodyPrefix.startsWith('<html') ||
+          bodyPrefix.contains('<head>') ||
+          bodyPrefix.contains('<body>');
+
+      if (isHtmlHeader || isHtmlBody) {
+        return ProbeResult.captivePortal(
+          statusCode: statusCode,
+          latencyMs: stopwatch.elapsedMilliseconds,
+          errorMessage: 'Captive portal detected: HTML login page returned',
+        );
+      }
+
+      // 3. The Gateway 401/403/404 Reachability Rule:
       // Direct responses from the configured gateway physically prove DNS and TLS work.
       if (statusCode == 200 ||
           statusCode == 204 ||

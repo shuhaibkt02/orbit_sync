@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: Zero Metadata Pollution & Clean Body Rule', () {
@@ -17,7 +17,7 @@ void main() {
       });
 
       final transport = SyncTransport.http(
-        serverUrl: 'https://api.example.com',
+        baseUrl: 'https://api.example.com',
         httpClient: mockClient,
       );
 
@@ -35,14 +35,15 @@ void main() {
         createdAtMs: DateTime.utc(2026, 10, 25, 12, 0, 0).millisecondsSinceEpoch,
         payload: domainPayload,
         entityId: 'temp-id-001',
+        headers: {'X-Custom-Tenant': 'tenant-42'},
       );
 
       expect(response.isSuccess, isTrue);
       expect(response.statusCode, equals(201));
 
-      // 1. Verify JSON body is 100% clean domain data
+      // 1. Verify JSON body is 100% clean domain data: zero injected temporary ID
       final decodedBody = jsonDecode(capturedBody!) as Map<String, dynamic>;
-      expect(decodedBody['id'], equals('temp-id-001'));
+      expect(decodedBody.containsKey('id'), isFalse);
       expect(decodedBody['title'], equals('Clean Architecture Task'));
       expect(decodedBody['priority'], equals('high'));
       expect(decodedBody['tags'], equals(['sync', 'offline']));
@@ -53,28 +54,43 @@ void main() {
       expect(decodedBody.containsKey('mutation_id'), isFalse);
       expect(decodedBody.containsKey('_sync_status'), isFalse);
 
-      // 2. Verify all sync metadata is transported exclusively via HTTP headers
-      expect(capturedHeaders!['idempotency-key'], equals('mut-12345'));
-      expect(capturedHeaders!['x-client-mutation-id'], equals('mut-12345'));
-      expect(capturedHeaders!['x-offline-sync'], equals('true'));
-      expect(capturedHeaders!['x-offline-created-at'], equals('2026-10-25T12:00:00.000Z'));
+      // 2. Zero Metadata Pollution: zero injected metadata in headers (vanilla REST)
       expect(capturedHeaders!['content-type'], equals('application/json'));
+      expect(capturedHeaders!['x-custom-tenant'] ?? capturedHeaders!['X-Custom-Tenant'], equals('tenant-42'));
+      expect(capturedHeaders!.containsKey('idempotency-key'), isFalse);
+      expect(capturedHeaders!.containsKey('x-client-mutation-id'), isFalse);
+      expect(capturedHeaders!.containsKey('x-offline-sync'), isFalse);
+      expect(capturedHeaders!.containsKey('x-offline-created-at'), isFalse);
+
+      // Verify that when the domain payload explicitly provides an id, it is preserved
+      await transport.pushCustom(
+        url: 'https://api.example.com/v1/tasks',
+        method: 'POST',
+        mutationId: 'mut-12346',
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        payload: {'id': 'explicit-id-123', 'title': 'Preserved ID'},
+        entityId: 'explicit-id-123',
+      );
+      final explicitDecoded = jsonDecode(capturedBody!) as Map<String, dynamic>;
+      expect(explicitDecoded['id'], equals('explicit-id-123'));
     });
 
     test('DELETE operations send zero body payload and format route ID properly', () async {
       String? capturedMethod;
       String? capturedUrl;
       String? capturedBody;
+      Map<String, String>? capturedHeaders;
 
       final mockClient = MockClient((request) async {
         capturedMethod = request.method;
         capturedUrl = request.url.toString();
         capturedBody = request.body;
+        capturedHeaders = request.headers;
         return http.Response('', 204);
       });
 
       final transport = SyncTransport.http(
-        serverUrl: 'https://api.example.com',
+        baseUrl: 'https://api.example.com',
         httpClient: mockClient,
       );
 
@@ -84,12 +100,18 @@ void main() {
         mutationId: 'mut-del-77',
         createdAtMs: DateTime.now().millisecondsSinceEpoch,
         entityId: 'task-404',
+        headers: {'X-Audit-Reason': 'User request'},
       );
 
       expect(response.isSuccess, isTrue);
       expect(capturedMethod, equals('DELETE'));
       expect(capturedUrl, equals('https://api.example.com/v1/tasks/task-404'));
       expect(capturedBody, isEmpty);
+      expect(capturedHeaders!['x-audit-reason'] ?? capturedHeaders!['X-Audit-Reason'], equals('User request'));
+      expect(capturedHeaders!.containsKey('idempotency-key'), isFalse);
+      expect(capturedHeaders!.containsKey('x-client-mutation-id'), isFalse);
+      expect(capturedHeaders!.containsKey('x-offline-sync'), isFalse);
+      expect(capturedHeaders!.containsKey('x-offline-created-at'), isFalse);
     });
   });
 }

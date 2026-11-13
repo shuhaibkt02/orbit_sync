@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
@@ -52,9 +52,17 @@ void main() {
       expect(emissions, equals([0, 1, 2]));
     });
 
-    test('Test Case 5: Native SQLite Data Type Affinity on Dynamic Columns', () async {
+    test('Test Case 5: Native SQLite Expression Indexes and JSON Queries on Document Columns', () async {
+      await storage.registerEntityTable('typed_tasks', {
+        'title': 'TEXT',
+        'total_count': 'INTEGER',
+        'unit_price': 'REAL',
+        'is_completed': 'INTEGER',
+      });
+      await SqliteSchema.createExpressionIndex(storage.db, 'typed_tasks', 'total_count');
+
       await storage.save(
-        entity: 'tasks',
+        entity: 'typed_tasks',
         id: 'task-types-1',
         data: {
           'title': 'Typed Task',
@@ -64,19 +72,25 @@ void main() {
         },
       );
 
-      final tableInfo = await storage.db.getAll('PRAGMA table_info(tasks);');
-      final typeMap = {for (final r in tableInfo) r['name'] as String: r['type'] as String};
+      final tableInfo = await storage.db.getAll('PRAGMA table_info(typed_tasks);');
+      final columnNames = tableInfo.map((r) => r['name'] as String).toSet();
+      expect(columnNames, equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}));
 
-      expect(typeMap['total_count'], 'INTEGER');
-      expect(typeMap['unit_price'], 'REAL');
-      expect(typeMap['is_completed'], 'INTEGER');
-
-      final gtResult = await storage.db.getAll('SELECT id FROM tasks WHERE total_count > 40;');
+      final gtResult = await storage.db.getAll("SELECT id FROM typed_tasks WHERE json_extract(data_json, '\$.total_count') > 40;");
       expect(gtResult.length, 1);
       expect(gtResult.first['id'], 'task-types-1');
     });
 
     test('Test Case 10: External Host Domain Model (End-to-End Serialization & Query Cycle)', () async {
+      await storage.registerEntityTable('orders', {
+        'customer_id': 'TEXT',
+        'total_amount': 'REAL',
+        'item_count': 'INTEGER',
+        'is_tax_exempt': 'INTEGER',
+        'metadata': 'TEXT',
+        'created_at_iso': 'TEXT',
+      });
+
       final order1 = MockExternalOrder(
         id: 'ord-alpha-101',
         customerId: 'cust-alpha-99',
@@ -113,13 +127,14 @@ void main() {
       );
 
       final rows = await storage.db.getAll(
-        'SELECT * FROM orders WHERE total_amount > ? AND is_tax_exempt = 1 ORDER BY total_amount DESC;',
+        "SELECT * FROM orders WHERE json_extract(data_json, '\$.total_amount') > ? AND json_extract(data_json, '\$.is_tax_exempt') = 1 ORDER BY json_extract(data_json, '\$.total_amount') DESC;",
         [50.0],
       );
 
       expect(rows.length, 1);
 
-      final restored = MockExternalOrder.fromJson(Map<String, dynamic>.from(rows.first));
+      final doc = jsonDecode(rows.first['data_json'] as String) as Map<String, dynamic>;
+      final restored = MockExternalOrder.fromJson(doc);
 
       expect(restored.id, order1.id);
       expect(restored.customerId, 'cust-alpha-99');

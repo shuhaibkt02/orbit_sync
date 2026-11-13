@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Process Crash & OS SIGKILL Durability', () {
@@ -64,7 +64,7 @@ void main() {
       // Assert pre-existing data is intact
       final preExisting = await reopenedStorage.db.getAll("SELECT * FROM items WHERE id = 'pre-existing'");
       expect(preExisting.length, equals(1));
-      expect(preExisting.first['name'], equals('Original Item'));
+      expect(jsonDecode(preExisting.first['data_json'] as String)['name'], equals('Original Item'));
 
       // Assert uncommitted writes were 100% rolled back by WAL recovery
       final rolledBackItem = await reopenedStorage.db.getAll("SELECT * FROM items WHERE id = 'crash-item'");

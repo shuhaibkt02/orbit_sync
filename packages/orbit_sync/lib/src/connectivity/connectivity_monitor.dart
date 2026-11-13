@@ -21,9 +21,17 @@ export 'domain/policies/debounce_policy.dart';
 
 /// Clean Architecture coordinator facade for Layer 3 Connectivity Sensing Layer.
 class ConnectivityMonitor implements IConnectivityMonitor {
+  static const String fallbackProbeUrl = 'http://cp.cloudflare.com/generate_204';
+
   final Duration timeout;
   final Duration heartbeatInterval;
-  String? defaultProbeUrl;
+  String? baseUrl;
+  String? probeUrl;
+  String? _defaultProbeUrl;
+
+  String? get defaultProbeUrl => _defaultProbeUrl ?? probeUrl ?? baseUrl ?? fallbackProbeUrl;
+  set defaultProbeUrl(String? value) => _defaultProbeUrl = value;
+
   final Future<bool> Function()? reachabilityChecker;
   final Future<void> Function()? onScheduleNativeAlarm;
   void Function(Duration timeout, String endpoint)? onProbeTimeout;
@@ -46,7 +54,9 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   ConnectivityMonitor({
     this.timeout = const Duration(seconds: 3),
     this.heartbeatInterval = const Duration(seconds: 30),
-    this.defaultProbeUrl,
+    this.baseUrl,
+    this.probeUrl,
+    String? defaultProbeUrl,
     this.reachabilityChecker,
     this.onScheduleNativeAlarm,
     this.onProbeTimeout,
@@ -54,7 +64,8 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     INetworkTypeProvider? typeProvider,
     DebouncePolicy debouncePolicy = DebouncePolicy.standard,
     http.Client? httpClient,
-  })  : _probe = probe ?? HttpNetworkProbe(client: httpClient, defaultTimeout: timeout),
+  })  : _defaultProbeUrl = defaultProbeUrl,
+        _probe = probe ?? HttpNetworkProbe(client: httpClient, defaultTimeout: timeout),
         _typeProvider = typeProvider ?? DefaultNetworkTypeProvider(),
         _stateMachine = DebouncedStateMachine(policy: debouncePolicy) {
     _typeSub = _typeProvider.onTypeChanged.listen((type) {
@@ -62,6 +73,7 @@ class ConnectivityMonitor implements IConnectivityMonitor {
       if (type.isDisconnected) {
         _updatePhysicalState(isPhysicallyOnline: false, isCaptivePortal: false, bypassDebounce: true);
       } else {
+        _publishState(isCaptivePortal: _currentState.isCaptivePortal);
         checkReachability(bypassDebounce: false);
       }
     });
@@ -104,10 +116,10 @@ class ConnectivityMonitor implements IConnectivityMonitor {
       }
     }
 
-    final rawUrl = targetUrl ?? defaultProbeUrl;
-    final targetUri = (rawUrl != null && rawUrl.isNotEmpty)
-        ? (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? Uri.parse(rawUrl) : Uri.parse('http://$rawUrl'))
-        : Uri.parse('http://connectivitycheck.gstatic.com/generate_204');
+    final rawUrl = targetUrl ?? probeUrl ?? _defaultProbeUrl ?? baseUrl ?? fallbackProbeUrl;
+    final targetUri = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+        ? Uri.parse(rawUrl)
+        : Uri.parse('http://$rawUrl');
 
     final result = await _probe.probe(targetUri, timeout: timeout);
     if (!result.isOnline) onProbeTimeout?.call(timeout, targetUri.toString());
@@ -122,6 +134,9 @@ class ConnectivityMonitor implements IConnectivityMonitor {
       bypassDebounce: bypassDebounce,
       onStateChanged: (online) => _publishState(isCaptivePortal: isCaptivePortal),
     );
+    if (_currentState.isCaptivePortal != isCaptivePortal) {
+      _publishState(isCaptivePortal: isCaptivePortal);
+    }
   }
 
   void _publishState({bool isCaptivePortal = false}) {

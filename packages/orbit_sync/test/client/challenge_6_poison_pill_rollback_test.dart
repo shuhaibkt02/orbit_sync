@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:orbit_sync/src/client/domain/policies/causal_horizon_guard.dart';
 
 void main() {
@@ -49,7 +50,8 @@ void main() {
 
       final row = await storage.db.getAll('SELECT * FROM forms WHERE id = ?', ['form-99']);
       expect(row.length, equals(1));
-      expect(row.first['notes'], equals('Important field data'));
+      final decoded = jsonDecode(row.first['data_json'] as String);
+      expect(decoded['notes'], equals('Important field data'));
       expect(row.first['_sync_status'], equals('rejected'));
       expect(row.first['_sync_error'], equals('Invalid postal code'));
     });

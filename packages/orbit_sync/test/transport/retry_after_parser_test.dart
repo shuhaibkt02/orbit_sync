@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: HTTP 429 Retry-After & Jitter Policy', () {

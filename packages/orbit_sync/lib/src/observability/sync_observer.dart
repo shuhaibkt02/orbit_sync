@@ -6,7 +6,7 @@ import 'services/sla_monitor.dart';
 /// Central observability hub emitting typed telemetry streams and managing in-memory logs.
 class SyncObserver {
   final SyncLogger logger;
-  final SlaMonitor? slaMonitor;
+  SlaMonitor? slaMonitor;
   final Future<void> Function(String mutationId, {bool syncNow})? onRetryMutation;
   final Future<void> Function({bool syncNow})? onRetryAllFailed;
 
@@ -21,6 +21,14 @@ class SyncObserver {
     this.onRetryAllFailed,
   }) : logger = logger ?? SyncLogger() {
     _slaSub = slaMonitor?.events.listen(publish);
+  }
+
+  /// Re-binds SLA monitor to a new database instance after switching sessions.
+  void updateSlaMonitor(SlaMonitor newSlaMonitor) {
+    _slaSub?.cancel();
+    slaMonitor?.dispose();
+    slaMonitor = newSlaMonitor;
+    _slaSub = newSlaMonitor.events.listen(publish);
   }
 
   Stream<SyncEvent> get events => _controller.stream;

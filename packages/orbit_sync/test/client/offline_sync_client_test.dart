@@ -2,21 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
   late Directory tempDir;
   late FakeSyncServer server;
-  late OfflineSyncClient client;
+  late OrbitClient client;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('client_facade_test_');
     server = await FakeSyncServer.start(port: 0);
 
-    client = await OfflineSyncClient.initialize(
+    client = await OrbitClient.initialize(
       databasePath: '${tempDir.path}/app.db',
-      serverUrl: server.baseUrl,
+      baseUrl: server.baseUrl,
       maxReaders: 2,
     );
 
@@ -32,7 +32,7 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Issue 07: Unified Developer Client Facade (OfflineSyncClient)', () {
+  group('Issue 07: Unified Developer Client Facade (OrbitClient)', () {
     test('Test Case 1: Integrated CRUD & Zero-Codegen Stream Reactivity', () async {
       final emissions = <int>[];
       final completer = Completer<void>();
@@ -77,7 +77,8 @@ void main() {
       await client.delete(entity: 'tasks', id: id1);
       final afterDelete = await client.query('SELECT * FROM tasks;');
       expect(afterDelete.length, 1);
-      expect(afterDelete.first['title'], 'Wash car');
+      final decodedAfter = jsonDecode(afterDelete.first['data_json'] as String);
+      expect(decodedAfter['title'], 'Wash car');
     });
 
     test('Test Case 2: Coordinated Bidirectional Sync (push + pull)', () async {
@@ -102,17 +103,18 @@ void main() {
         data: {'title': 'Client Created Task', 'priority': 'high'},
       );
 
-      // 3. Trigger coordinated sync()
-      await client.sync();
+      // 3. Trigger coordinated sync() with pull to fetch remote changelog
+      await client.sync(pull: true);
 
       // Assert client pushed localId to server
       expect(server.records.containsKey('tasks:$localId'), isTrue);
       expect(server.records['tasks:$localId']!['title'], 'Client Created Task');
 
       // Assert client pulled remote-1 into local database
-      final localRows = await client.query("SELECT title FROM tasks WHERE id = 'remote-1';");
+      final localRows = await client.query("SELECT data_json FROM tasks WHERE id = 'remote-1';");
       expect(localRows, isNotEmpty);
-      expect(localRows.first['title'], 'Server Created Task');
+      final decodedRemote = jsonDecode(localRows.first['data_json'] as String);
+      expect(decodedRemote['title'], 'Server Created Task');
     });
 
     test('Test Case 3: Periodic Sync & Lifecycle Pause/Resume', () async {
@@ -170,9 +172,9 @@ void main() {
 
     test('Test Case 5: attachConnectivity triggers sync and logs are captured', () async {
       final logs = <String>[];
-      final loggedClient = await OfflineSyncClient.initialize(
+      final loggedClient = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/logged.db',
-        serverUrl: server.baseUrl,
+        baseUrl: server.baseUrl,
         onLog: logs.add,
       );
       await loggedClient.registerTable('tasks', {'title': 'TEXT'});
@@ -223,7 +225,7 @@ void main() {
       final fullEndpointUrl = 'http://${restServer.address.host}:${restServer.port}/api/v1/custom-tasks';
 
       // 2. Initialize client as an outsider: developer supplies exact full URL
-      final universalClient = await OfflineSyncClient.initialize(
+      final universalClient = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/universal.db',
       );
       await universalClient.registerEntity(
@@ -249,14 +251,15 @@ void main() {
       // 5. SYNC: Drains queue directly to the developer's exact URL
       await universalClient.sync();
 
-      // 6. Assert standard REST dispatch and offline headers
+      // 6. Assert standard REST dispatch and zero metadata pollution (body and headers)
       expect(receivedMethod, equals('POST'));
       expect(receivedPath, equals('/api/v1/custom-tasks'));
-      expect(receivedHeaders['x-offline-sync'], equals('true'));
-      expect(receivedHeaders['x-offline-created-at'], isNotNull);
-      expect(receivedHeaders['idempotency-key'], isNotNull);
+      expect(receivedHeaders.containsKey('x-offline-sync'), isFalse);
+      expect(receivedHeaders.containsKey('x-offline-created-at'), isFalse);
+      expect(receivedHeaders.containsKey('idempotency-key'), isTrue);
+      expect(receivedHeaders.containsKey('x-client-mutation-id'), isFalse);
       expect(receivedBody['title'], equals('Universal offline task'));
-      // Zero Metadata Pollution: headers carry metadata, body remains 100% clean domain data
+      // Zero Metadata Pollution: body and headers remain 100% clean domain data
       expect(receivedBody.containsKey('_offline_meta'), isFalse);
 
       // Assert outbox marked synced
@@ -294,9 +297,9 @@ void main() {
         await request.response.close();
       });
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/deadzone.db',
-        serverUrl: 'http://${liveServer.address.host}:${liveServer.port}',
+        baseUrl: 'http://${liveServer.address.host}:${liveServer.port}',
         connectivityTimeout: const Duration(milliseconds: 100),
       );
       await client.registerEntity('tasks', url: 'http://${liveServer.address.host}:${liveServer.port}/tasks');
@@ -336,7 +339,7 @@ void main() {
         await request.response.close();
       });
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/failures.db',
       );
       await client.registerEntity(
@@ -380,7 +383,7 @@ void main() {
         await request.response.close();
       });
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/hydrate.db',
       );
       await client.registerEntity('notes', url: 'http://${restServer.address.host}:${restServer.port}/notes');
@@ -410,18 +413,18 @@ void main() {
       final dbPath = '${tempDir.path}/headless.db';
 
       // 1. Simulate UI storing a task before app is closed
-      final mainClient = await OfflineSyncClient.initialize(databasePath: dbPath);
+      final mainClient = await OrbitClient.initialize(databasePath: dbPath);
       await mainClient.registerEntity('tasks', url: server.baseUrl);
       await mainClient.store('tasks', {'title': 'Pre-kill task'});
       await mainClient.close(); // App is killed!
 
       // 2. Simulate OS Alarm/WorkManager waking up in headless isolate
-      await OfflineSyncClient.headlessSync(
+      await OrbitClient.headlessSync(
         databasePath: dbPath,
       );
 
       // Verify that headless sync safely drained the queue without UI running
-      final checkClient = await OfflineSyncClient.initialize(databasePath: dbPath);
+      final checkClient = await OrbitClient.initialize(databasePath: dbPath);
       final outboxPending = await checkClient.query("SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
       expect(outboxPending.first['count'], equals(0));
       await checkClient.close();

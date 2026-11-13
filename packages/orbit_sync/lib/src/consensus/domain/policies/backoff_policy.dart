@@ -12,7 +12,7 @@ class BackoffPolicy {
     this.base = const Duration(seconds: 1),
     this.max = const Duration(minutes: 15),
     this.jitterFraction = 0.25,
-    this.maxRetries = 10,
+    this.maxRetries = 5,
     Random? rng,
   }) : _rng = rng ?? Random();
 

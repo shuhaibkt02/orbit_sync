@@ -45,8 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Zero-SQL developer dashboard methods: `watchSummary()`, `getFailures()`, `retryAllFailed()`.
 - **Zero-Codegen:**
   - Removed all required `build_runner` boilerplate. Standard Dart classes and maps work out of the box.
-- **152 Automated Tests:**
-  - 100% green test suite spanning unit tests, crash durability, network failure injection, and concurrency.
+- **346 Automated Tests:**
+  - 100% green test suite spanning unit tests, crash durability, network failure injection, multi-lane concurrency, and 3-way delta reconciliation.
+- **Blueprint Engine Modernization:**
+  - Strict Universal 5-Column JSON Document Store (`id`, `version`, `updated_at`, `expires_at`, `data_json`).
+  - Hybrid Earliest-Deadline-First (EDF) scheduling with SLA escalation and 4-tier Priority Queue.
+  - Multi-lane FIFO execution with cross-entity parallelism and zero head-of-line blocking.
+  - Cleaned all legacy relational foreign-key scans and obsolete schema migrations.
 
 ## [0.1.0] - 2026-10-16
 

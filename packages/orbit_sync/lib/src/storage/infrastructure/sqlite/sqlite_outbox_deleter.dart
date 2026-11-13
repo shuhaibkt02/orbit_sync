@@ -1,9 +1,10 @@
+import 'dart:convert';
 import 'package:sqlite_async/sqlite_async.dart';
 import '../../domain/validation/sync_validator.dart';
 import '../uuid/uuid_v7.dart';
 import 'sqlite_baseline_manager.dart';
 
-/// SQLite helper for outbox deletions, rapid annihilation, and foreign key cascade capture.
+/// SQLite helper for outbox deletions and rapid annihilation.
 class SqliteOutboxDeleter {
   static Future<String?> delete({
     required SqliteDatabase db,
@@ -13,10 +14,16 @@ class SqliteOutboxDeleter {
     String? endpointUrl,
     String? httpMethod,
     Duration? undoWindow,
+    Duration? coolingTime,
+    Duration? holdFor,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
   }) async {
+    final effectiveUndo = undoWindow ?? coolingTime ?? holdFor;
     SyncValidator.validateEntity(entity);
     SyncValidator.validateId(id);
-    SyncValidator.validateDuration(undoWindow, 'undoWindow');
+    SyncValidator.validateDuration(effectiveUndo, 'undoWindow');
     SyncValidator.validateHttpMethod(httpMethod);
 
     return await db.writeTransaction<String?>((tx) async {
@@ -55,7 +62,7 @@ class SqliteOutboxDeleter {
         baseVersion = baseline.version;
       }
 
-      final dispatchAfter = undoWindow != null ? now + undoWindow.inMilliseconds : now;
+      final dispatchAfter = effectiveUndo != null ? now + effectiveUndo.inMilliseconds : now;
       if (tableExists) {
         try {
           final tables = await tx.getAll(
@@ -69,18 +76,19 @@ class SqliteOutboxDeleter {
               if (fk['table'] == entity) {
                 final childFkCol = fk['from'] as String;
                 final childRows = await tx.getAll(
-                  'SELECT id, data_json, _base_snapshot_json FROM "$childTable" WHERE "$childFkCol" = ?;',
+                  'SELECT id, data_json FROM "$childTable" WHERE "$childFkCol" = ?;',
                   [id],
                 );
                 for (final child in childRows) {
                   final childId = child['id'] as String;
                   final childMutationId = UuidV7.generate();
-                  final childBase = (child['data_json'] as String?) ?? (child['_base_snapshot_json'] as String?);
+                  final childBase = child['data_json'] as String?;
                   await tx.execute('''
                     INSERT INTO _sync_outbox (
                       mutation_id, entity_name, entity_id, op, endpoint_url, http_method, payload_json,
-                      base_snapshot_json, base_version, status, dispatch_after, created_at, updated_at
-                    ) VALUES (?, ?, ?, 'delete', NULL, 'DELETE', NULL, ?, 1, 'pending', ?, ?, ?)
+                      base_snapshot_json, base_version, status, dispatch_after, created_at, updated_at,
+                      priority, sla_seconds, schema_version
+                    ) VALUES (?, ?, ?, 'delete', NULL, 'DELETE', NULL, ?, 1, 'pending', ?, ?, ?, 1, 86400, 1)
                   ''', [
                     childMutationId,
                     childTable,
@@ -104,8 +112,9 @@ class SqliteOutboxDeleter {
       await tx.execute('''
         INSERT INTO _sync_outbox (
           mutation_id, entity_name, entity_id, op, endpoint_url, http_method, payload_json,
-          base_snapshot_json, base_version, status, dispatch_after, created_at, updated_at
-        ) VALUES (?, ?, ?, 'delete', ?, ?, NULL, ?, ?, 'pending', ?, ?, ?)
+          base_snapshot_json, base_version, status, dispatch_after, created_at, updated_at,
+          headers_json, author_id, user_id
+        ) VALUES (?, ?, ?, 'delete', ?, ?, NULL, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
       ''', [
         mutationId,
         entity,
@@ -117,9 +126,20 @@ class SqliteOutboxDeleter {
         dispatchAfter,
         now,
         now,
+        headers != null ? jsonEncode(headers) : null,
+        authorId,
+        userId,
       ]);
 
       return mutationId;
     });
   }
+
+  /// Restores a deleted record locally if within its undoWindow / cooling window.
+  static Future<bool> undoDelete(
+    SqliteDatabase db, {
+    String? entity,
+    required String id,
+  }) =>
+      SqliteBaselineManager.undoDelete(db, entity: entity, id: id);
 }

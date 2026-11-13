@@ -43,10 +43,15 @@ class SqliteOutboxRepository implements IOutboxRepository {
     String? endpointUrl,
     String? httpMethod,
     Duration? holdFor,
+    Duration? coolingTime,
     Duration? sla,
     Duration? ttl,
-    int priority = 0,
+    int priority = 1,
     String? correlationTag,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
+    String? mediaPath,
   }) {
     return SqliteOutboxWriter.save(
       db: db,
@@ -60,10 +65,15 @@ class SqliteOutboxRepository implements IOutboxRepository {
       endpointUrl: endpointUrl,
       httpMethod: httpMethod,
       holdFor: holdFor,
+      coolingTime: coolingTime,
       sla: sla,
       ttl: ttl,
       priority: priority,
       correlationTag: correlationTag,
+      headers: headers,
+      authorId: authorId,
+      userId: userId,
+      mediaPath: mediaPath,
     );
   }
 
@@ -74,6 +84,11 @@ class SqliteOutboxRepository implements IOutboxRepository {
     String? endpointUrl,
     String? httpMethod,
     Duration? undoWindow,
+    Duration? coolingTime,
+    Duration? holdFor,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
   }) {
     return SqliteOutboxDeleter.delete(
       db: db,
@@ -83,17 +98,27 @@ class SqliteOutboxRepository implements IOutboxRepository {
       endpointUrl: endpointUrl,
       httpMethod: httpMethod,
       undoWindow: undoWindow,
+      coolingTime: coolingTime,
+      holdFor: holdFor,
+      headers: headers,
+      authorId: authorId,
+      userId: userId,
     );
   }
 
   @override
-  Future<bool> undoDelete({required String entity, required String id}) {
+  Future<bool> undoDelete({String? entity, required String id}) {
     return SqliteBaselineManager.undoDelete(db, entity: entity, id: id);
   }
 
   @override
   Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) {
     return SqliteBaselineManager.rollbackOptimistic(db, mutationId, status: status);
+  }
+
+  @override
+  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) {
+    return SqliteCacheCleaner.pruneSyncedOutbox(db, retention: retention);
   }
 
   @override
@@ -104,6 +129,11 @@ class SqliteOutboxRepository implements IOutboxRepository {
   @override
   Future<int> pruneExpiredCache(String entity) {
     return SqliteCacheCleaner.pruneExpiredCache(db, knownColumns, entity);
+  }
+
+  @override
+  Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) {
+    return SqliteCacheCleaner.pruneToQuota(db, entity, maxCacheRecords: maxCacheRecords);
   }
 
   @override

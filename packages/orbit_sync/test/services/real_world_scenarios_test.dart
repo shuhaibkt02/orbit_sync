@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void seedServer(FakeSyncServer server, String entity, String id, Map<String, dynamic> data, {int version = 1}) {
@@ -76,7 +76,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario1.db',
       );
       await client.registerEntity('orders', url: targetUrl);
@@ -124,7 +124,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/invoices';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario2.db',
       );
       await client.registerEntity('invoices', url: targetUrl);
@@ -161,9 +161,9 @@ void main() {
 
     test('Scenario 3: Update vs Delete Conflict Across Devices (Remote deletion evicts local record, preserves draft as conflict)', () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario3.db',
-        serverUrl: fakeServer.baseUrl,
+        baseUrl: fakeServer.baseUrl,
       );
       await client.registerTable('notes', {'title': 'TEXT'});
 
@@ -171,7 +171,7 @@ void main() {
 
       // 1. Initial state: record exists on server and synced to client
       seedServer(fakeServer, 'notes', noteId, {'title': 'Original Note'}, version: 1);
-      await client.sync();
+      await client.sync(pull: true);
 
       var note = await client.restoreById('notes', noteId);
       expect(note, isNotNull);
@@ -189,7 +189,7 @@ void main() {
       deleteOnServer(fakeServer, 'notes', noteId, version: 2);
 
       // 4. Device syncs (pulls remote changes)
-      await client.sync();
+      await client.sync(pull: true);
 
       // Active table: local record must be evicted
       final activeRows = await client.query('SELECT * FROM notes WHERE id = ?', [noteId]);
@@ -211,9 +211,9 @@ void main() {
 
     test('Scenario 4: Delete vs Update Conflict Across Devices (Local delete prevents ghost resurrection)', () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario4.db',
-        serverUrl: fakeServer.baseUrl,
+        baseUrl: fakeServer.baseUrl,
       );
       await client.registerTable('tasks', {'title': 'TEXT'});
 
@@ -221,7 +221,7 @@ void main() {
 
       // Initial task exists on server
       seedServer(fakeServer, 'tasks', taskId, {'title': 'Task 1'}, version: 1);
-      await client.sync();
+      await client.sync(pull: true);
 
       // User deletes task locally offline
       await client.delete(entity: 'tasks', id: taskId);
@@ -242,9 +242,9 @@ void main() {
 
     test('Scenario 5: Multi-Device 3-Way Concurrent Field Convergence', () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario5.db',
-        serverUrl: fakeServer.baseUrl,
+        baseUrl: fakeServer.baseUrl,
       );
       await client.registerTable('articles', {
         'title': 'TEXT',
@@ -260,7 +260,7 @@ void main() {
         'content': 'Initial body',
         'author': 'Alice',
       }, version: 1);
-      await client.sync();
+      await client.sync(pull: true);
 
       // Device modifies 'title' offline
       await client.save(
@@ -278,7 +278,7 @@ void main() {
       }, version: 2);
 
       // Sync: 3-way merge should converge non-conflicting columns
-      await client.sync();
+      await client.sync(pull: true);
 
       final active = await client.restoreById('articles', docId);
       expect(active!['title'], equals('Draft 1 Final'));
@@ -290,7 +290,7 @@ void main() {
     });
 
     test('Scenario 6: High Concurrency Write Storm (100 concurrent async writes without SQLITE_BUSY)', () async {
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/concurrency.db',
         maxReaders: 4,
       );
@@ -345,7 +345,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/secure';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/auth_race.db',
         getAuthToken: () async => currentToken,
         onAuthExpired: () async {
@@ -404,7 +404,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/tasks';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/captive.db',
       );
       await client.registerTable('tasks', {'title': 'TEXT'});
@@ -424,7 +424,7 @@ void main() {
     });
 
     test('Scenario 10: Dynamic Schema Evolution with Rich Heterogeneous Types', () async {
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/types.db',
       );
       // Register with only title
@@ -450,7 +450,7 @@ void main() {
     });
 
     test('Scenario 11: Transactional Atomicity (Rollback on failure leaves 0 partial writes)', () async {
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/atomic.db',
       );
       await client.registerTable('accounts', {'balance': 'INTEGER NOT NULL'});

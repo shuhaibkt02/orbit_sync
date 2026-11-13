@@ -3,15 +3,6 @@ import '../../domain/validation/sync_validator.dart';
 
 /// Manages SQLite system table schemas, indices, and entity table creation.
 class SqliteSchema {
-  static const systemEntityCols = {
-    'id',
-    'version',
-    'updated_at',
-    'expires_at',
-    '_base_snapshot_json',
-    'data_json',
-  };
-
   /// Initializes system tables: _sync_outbox, _sync_id_map, and _sync_metadata
   static Future<void> initSystemSchema(SqliteDatabase db) async {
     await db.writeTransaction((tx) async {
@@ -28,14 +19,18 @@ class SqliteSchema {
           base_snapshot_json TEXT,
           base_version INTEGER NOT NULL DEFAULT 1 CHECK (base_version >= 1),
           status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict', 'validation_error')),
+          author_id TEXT,
+          user_id TEXT,
+          media_path TEXT,
           depends_on_mutation_id TEXT,
           correlation_tag TEXT,
-          priority INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 2),
+          priority INTEGER NOT NULL DEFAULT 1 CHECK (priority BETWEEN 0 AND 3),
           sla_seconds INTEGER DEFAULT 86400 CHECK (sla_seconds >= 0),
           schema_version INTEGER NOT NULL DEFAULT 1 CHECK (schema_version >= 1),
           error_details_json TEXT,
           dispatch_after INTEGER,
           revision_history_json TEXT,
+          headers_json TEXT,
           retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
           next_retry_at INTEGER,
           created_at INTEGER NOT NULL,
@@ -43,9 +38,15 @@ class SqliteSchema {
         );
       ''');
 
-      // Startup recovery: Reset stranded in_flight records from interrupted sessions
+      // Startup recovery: Reset stranded in_flight records from crashed/interrupted sessions (> 60s)
+      // Protects active foreground requests when OS background task (WorkManager) opens DB in second isolate.
       try {
-        await tx.execute("UPDATE _sync_outbox SET status = 'pending' WHERE status = 'in_flight';");
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final timeoutMs = 60 * 1000; // 60 seconds
+        await tx.execute(
+          "UPDATE _sync_outbox SET status = 'pending' WHERE status = 'in_flight' AND (updated_at = 0 OR updated_at < ?);",
+          [now - timeoutMs],
+        );
       } catch (_) {}
 
       await tx.execute('''
@@ -59,13 +60,23 @@ class SqliteSchema {
       ''');
 
       await tx.execute('''
-        CREATE INDEX IF NOT EXISTS idx_sync_outbox_entity 
-        ON _sync_outbox(entity_name, entity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_sync_outbox_sla_warning 
+        ON _sync_outbox(status, (created_at + sla_seconds * 800) ASC);
       ''');
 
       await tx.execute('''
         CREATE INDEX IF NOT EXISTS idx_sync_outbox_deps 
         ON _sync_outbox(depends_on_mutation_id);
+      ''');
+
+      await tx.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sync_outbox_entity 
+        ON _sync_outbox(entity_name, entity_id, status);
+      ''');
+
+      await tx.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sync_outbox_synced_prune 
+        ON _sync_outbox(status, updated_at);
       ''');
 
       await tx.execute('''
@@ -92,7 +103,7 @@ class SqliteSchema {
     });
   }
 
-  /// Registers an entity table with custom columns and optional foreign key clauses.
+  /// Registers an entity table with universal 5-column schema and system indices.
   static Future<void> registerEntityTable(
     SqliteDatabase db,
     Set<String> knownColumns,
@@ -101,37 +112,40 @@ class SqliteSchema {
     String? foreignKeyClause,
   }) async {
     SyncValidator.validateEntity(entityName);
-    final colDefs = columnTypes.entries.map((e) => '"${e.key}" ${e.value}').join(', ');
-    final fullCols = colDefs.isNotEmpty ? ', $colDefs' : '';
-    final fk = foreignKeyClause != null ? ', $foreignKeyClause' : '';
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS "$entityName" (
-        "id" TEXT PRIMARY KEY,
-        "version" INTEGER NOT NULL DEFAULT 1 CHECK ("version" >= 1),
-        "updated_at" INTEGER NOT NULL,
-        "expires_at" INTEGER,
-        "_base_snapshot_json" TEXT,
-        "data_json" TEXT NOT NULL DEFAULT '{}'
-        $fullCols
-        $fk
-      );
-    ''');
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS "$entityName" (
+          "id" TEXT PRIMARY KEY,
+          "version" INTEGER NOT NULL DEFAULT 1 CHECK ("version" >= 1),
+          "updated_at" INTEGER NOT NULL,
+          "expires_at" INTEGER,
+          "data_json" TEXT NOT NULL DEFAULT '{}'
+        );
+      ''');
 
-    knownColumns.addAll([
-      '$entityName:id',
-      '$entityName:version',
-      '$entityName:updated_at',
-      '$entityName:expires_at',
-      '$entityName:_base_snapshot_json',
-      '$entityName:data_json',
-    ]);
-    for (final col in columnTypes.keys) {
-      knownColumns.add('$entityName:$col');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS "idx_${entityName}_updated" ON "$entityName"(updated_at DESC);
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS "idx_${entityName}_expires" ON "$entityName"(expires_at) WHERE expires_at IS NOT NULL;
+      ''');
+
+      knownColumns.addAll([
+        '$entityName:id',
+        '$entityName:version',
+        '$entityName:updated_at',
+        '$entityName:expires_at',
+        '$entityName:data_json',
+      ]);
+    } catch (e) {
+      if (e is ClosedException) return;
+      rethrow;
     }
   }
 
-  /// Ensures default dynamic table and its expires_at index exist.
+  /// Ensures default 5-column entity table and its system indices exist.
   static Future<void> ensureEntityTableExists(
     SqliteWriteContext tx,
     Set<String> knownColumns,
@@ -145,13 +159,16 @@ class SqliteSchema {
         "version" INTEGER NOT NULL DEFAULT 1 CHECK ("version" >= 1),
         "updated_at" INTEGER NOT NULL,
         "expires_at" INTEGER,
-        "_base_snapshot_json" TEXT,
         "data_json" TEXT NOT NULL DEFAULT '{}'
       );
     ''');
 
     await tx.execute('''
-      CREATE INDEX IF NOT EXISTS "idx_${entity}_expires" ON "$entity"("expires_at");
+      CREATE INDEX IF NOT EXISTS "idx_${entity}_updated" ON "$entity"(updated_at DESC);
+    ''');
+
+    await tx.execute('''
+      CREATE INDEX IF NOT EXISTS "idx_${entity}_expires" ON "$entity"(expires_at) WHERE expires_at IS NOT NULL;
     ''');
 
     knownColumns.addAll([
@@ -159,8 +176,24 @@ class SqliteSchema {
       '$entity:version',
       '$entity:updated_at',
       '$entity:expires_at',
-      '$entity:_base_snapshot_json',
       '$entity:data_json',
     ]);
+  }
+
+  /// Creates a fast SQLite B-Tree expression index on a JSON property within `data_json`.
+  static Future<void> createExpressionIndex(
+    SqliteDatabase db,
+    String entity,
+    String jsonProperty,
+  ) async {
+    SyncValidator.validateEntity(entity);
+    if (!RegExp(r'^[a-zA-Z0-9_.]+$').hasMatch(jsonProperty)) {
+      throw ArgumentError('Invalid JSON property for indexing: $jsonProperty');
+    }
+    final safeProp = jsonProperty.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS "idx_${entity}_$safeProp" 
+      ON "$entity"(json_extract(data_json, '\$.$jsonProperty'));
+    ''');
   }
 }

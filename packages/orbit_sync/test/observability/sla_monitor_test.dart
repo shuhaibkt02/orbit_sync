@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 6 Observability: SLA Monitor & Heartbeat Evaluation', () {

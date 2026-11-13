@@ -47,7 +47,7 @@ class ScriptedBatchServer {
   Future<void> _handleRequest(HttpRequest request) async {
     final bodyStr = await utf8.decoder.bind(request).join();
     final body = bodyStr.isNotEmpty ? (jsonDecode(bodyStr) as Map<String, dynamic>) : <String, dynamic>{};
-    final id = (body['id'] as String?) ?? request.uri.pathSegments.last;
+    final id = (body['id'] as String?) ?? request.headers.value('x-entity-id') ?? request.headers.value('X-Entity-ID') ?? request.uri.pathSegments.last;
     receivedItemIds.add(id);
 
     final outcome = _outcomes[id];

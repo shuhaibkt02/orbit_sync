@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import '../shared/harness/clock/controllable_clock.dart';
 import '../shared/harness/transport/fault.dart';
 import '../shared/harness/transport/fault_injection_http_client.dart';
@@ -33,7 +33,7 @@ void main() {
         ],
       );
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/suppress_retry.db',
         httpClient: faultClient,
         backoffPolicy: policy,
@@ -82,7 +82,7 @@ void main() {
         ],
       );
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/dlq_max_retries.db',
         httpClient: faultClient,
         backoffPolicy: policy,
@@ -121,7 +121,7 @@ void main() {
         ],
       );
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/validation_error.db',
         httpClient: faultClient,
       );
@@ -153,7 +153,7 @@ void main() {
         ],
       );
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/http_date_backoff.db',
         httpClient: faultClient,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
@@ -170,6 +170,119 @@ void main() {
       // Validates RFC 7231 parsing + full randomized jitter (±20% of 60s)
       expect(retryAt, greaterThanOrEqualTo(baseTargetMs + 48000));
       expect(retryAt, lessThanOrEqualTo(baseTargetMs + 72000));
+
+      await client.close();
+      faultClient.close();
+    });
+
+    test('Test 5: HTTP 429 Retry-After with integer seconds parses and sets next_retry_at', () async {
+      final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
+
+      final faultClient = FaultInjectionHttpClient(
+        script: [
+          const ReturnStatus(429, headers: {'retry-after': '30'}, body: 'Too Many Requests'),
+          const ReturnStatus(200, body: '{"status":"ok"}'),
+        ],
+      );
+
+      final client = await OrbitClient.initialize(
+        databasePath: '${tempDir.path}/seconds_backoff.db',
+        httpClient: faultClient,
+        nowMsProvider: () => clock.millisecondsSinceEpoch,
+      );
+      await client.registerEntity('items', url: 'https://example.com/api/items');
+
+      final itemId = await client.store('items', {'name': 'Seconds Test'});
+      await client.sync();
+
+      final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      expect(rows.first['status'], equals('pending'));
+      expect(rows.first['retry_count'], equals(0)); // Rate limit does not burn retry count
+      final baseTargetMs = clock.millisecondsSinceEpoch;
+      final retryAt = rows.first['next_retry_at'] as int;
+      // 30 seconds ± 20% jitter = 24s .. 36s
+      expect(retryAt, greaterThanOrEqualTo(baseTargetMs + 24000));
+      expect(retryAt, lessThanOrEqualTo(baseTargetMs + 36000));
+
+      await client.close();
+      faultClient.close();
+    });
+
+    test('Test 6: HTTP 401 Unauthorized releases lease to pending and triggers onAuthExpired', () async {
+      var authExpiredCalled = false;
+
+      final faultClient = FaultInjectionHttpClient(
+        script: [
+          const ReturnStatus(401, body: '{"error":"token_expired"}'),
+        ],
+      );
+
+      final client = await OrbitClient.initialize(
+        databasePath: '${tempDir.path}/auth_expired.db',
+        httpClient: faultClient,
+        onAuthExpired: () async {
+          authExpiredCalled = true;
+        },
+      );
+      await client.registerEntity('items', url: 'https://example.com/api/items');
+
+      final itemId = await client.store('items', {'name': 'Auth Test Item'});
+      await client.sync();
+
+      expect(authExpiredCalled, isTrue);
+
+      final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      expect(rows.first['status'], equals('pending'));
+      expect(rows.first['retry_count'], equals(0)); // Auth expiration does not burn retry attempts
+      expect(rows.first['next_retry_at'], isNull);
+
+      await client.close();
+      faultClient.close();
+    });
+
+    test('Test 7: HTTP 5xx with default BackoffPolicy applies 5 retries then transitions to dlq', () async {
+      final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
+      final policy = BackoffPolicy(
+        base: const Duration(seconds: 1),
+        jitterFraction: 0,
+      );
+      expect(policy.maxRetries, equals(5));
+
+      final faultClient = FaultInjectionHttpClient(
+        script: [
+          const ReturnStatus(500, body: 'Err 1'),
+          const ReturnStatus(502, body: 'Err 2'),
+          const ReturnStatus(503, body: 'Err 3'),
+          const ReturnStatus(504, body: 'Err 4'),
+          const ReturnStatus(500, body: 'Err 5'),
+        ],
+      );
+
+      final client = await OrbitClient.initialize(
+        databasePath: '${tempDir.path}/dlq_5_retries.db',
+        httpClient: faultClient,
+        backoffPolicy: policy,
+        nowMsProvider: () => clock.millisecondsSinceEpoch,
+      );
+      await client.registerEntity('items', url: 'https://example.com/api/items');
+
+      final itemId = await client.store('items', {'name': '5xx DLQ Item'});
+
+      for (var i = 1; i <= 5; i++) {
+        await client.sync();
+        final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+        expect(rows.first['retry_count'], equals(i));
+        if (i < 5) {
+          expect(rows.first['status'], equals('pending'));
+          expect(rows.first['next_retry_at'], isNotNull);
+          // Advance past backoff window for next retry
+          clock.advance(const Duration(seconds: 20));
+        } else {
+          // 5th retry exhausts maxRetries (5) -> moves to dlq
+          expect(rows.first['status'], equals('dlq'));
+          expect(rows.first['next_retry_at'], isNull);
+        }
+      }
 
       await client.close();
       faultClient.close();

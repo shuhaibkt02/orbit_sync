@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 /// Test environment bundle for Layer 2 consensus test suites.
@@ -39,7 +39,7 @@ class TestConsensusEnv {
 
     final worker = SyncWorker(
       storage: storage,
-      serverUrl: server.baseUrl,
+      baseUrl: server.baseUrl,
       pullPageLimit: pullPageLimit,
     );
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../storage/sync_storage.dart';
+import '../../storage/infrastructure/sqlite/sqlite_cache_cleaner.dart';
 import '../domain/policies/sqlite_type_sanitizer.dart';
 
 /// Hydrates local offline storage from remote collections while
@@ -22,14 +23,24 @@ class EntityHydrator {
     Map<String, String>? headers,
     Future<String?> Function()? getAuthToken,
     http.Client? httpClient,
+    Future<String> Function(String url, Map<String, String>? headers)? customFetcher,
   }) async {
-    final req = http.Request('GET', Uri.parse(url));
-    req.headers['content-type'] = 'application/json';
+    final Map<String, String> reqHeaders = {'content-type': 'application/json'};
     if (getAuthToken != null) {
       final token = await getAuthToken();
-      if (token != null) req.headers['authorization'] = 'Bearer $token';
+      if (token != null) reqHeaders['authorization'] = token.startsWith('Bearer ') ? token : 'Bearer $token';
     }
-    if (headers != null) req.headers.addAll(headers);
+    if (headers != null) reqHeaders.addAll(headers);
+
+    if (customFetcher != null) {
+      final body = await customFetcher(url, reqHeaders);
+      final decoded = jsonDecode(body);
+      final List<dynamic> items = decoded is List ? decoded : (decoded['data'] as List? ?? []);
+      return await hydrateBatch(entity: entity, items: items.cast<Map<String, dynamic>>());
+    }
+
+    final req = http.Request('GET', Uri.parse(url));
+    req.headers.addAll(reqHeaders);
 
     final client = httpClient ?? http.Client();
     try {
@@ -55,6 +66,7 @@ class EntityHydrator {
     required String entity,
     required List<Map<String, dynamic>> items,
     String primaryKey = 'id',
+    int? maxCacheRecords,
   }) async {
     if (items.isEmpty) return 0;
 
@@ -70,17 +82,8 @@ class EntityHydrator {
         if (sanitized['updated_at'] == null) sanitized['updated_at'] = now;
         if (sanitized['version'] == null) sanitized['version'] = 1;
 
-        for (final entry in sanitized.entries) {
-          if (entry.key != primaryKey && entry.key != 'id' && entry.key != 'version' && entry.key != 'updated_at') {
-            try {
-              final type = sanitizer.inferColumnType(entry.value);
-              await tx.execute('ALTER TABLE $entity ADD COLUMN ${entry.key} $type');
-            } catch (_) {}
-          }
-        }
-
         final outboxRows = await tx.getAll(
-          "SELECT mutation_id, status FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight') LIMIT 1",
+          "SELECT mutation_id, status FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held', 'validation_error') ORDER BY sequence_id ASC LIMIT 1",
           [entity, id],
         );
 
@@ -93,29 +96,25 @@ class EntityHydrator {
           continue;
         }
 
-        final cols = <String>[primaryKey];
-        final vals = <dynamic>[id];
-        final updates = <String>[];
+        final version = sanitized['version'] is int ? sanitized['version'] as int : 1;
+        final updatedAt = sanitized['updated_at'] is int ? sanitized['updated_at'] as int : now;
+        final expiresAt = sanitized['expires_at'] is int ? sanitized['expires_at'] as int : null;
+        final dataJson = jsonEncode(rawItem);
 
-        for (final entry in sanitized.entries) {
-          if (entry.key != primaryKey && entry.key != 'id') {
-            cols.add(entry.key);
-            vals.add(entry.value);
-            updates.add('${entry.key} = excluded.${entry.key}');
-          }
-        }
-
-        final colStr = cols.join(', ');
-        final placeholders = List.filled(cols.length, '?').join(', ');
-        final updateClause = updates.isNotEmpty ? updates.join(', ') : '$primaryKey = excluded.$primaryKey';
-
-        final sql = '''
-          INSERT INTO $entity ($colStr) VALUES ($placeholders)
-          ON CONFLICT($primaryKey) DO UPDATE SET $updateClause
-        ''';
-
-        await tx.execute(sql, vals);
+        await tx.execute('''
+          INSERT INTO "$entity" ("id", "version", "updated_at", "expires_at", "data_json")
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT("id") DO UPDATE SET
+            "version" = excluded."version",
+            "updated_at" = excluded."updated_at",
+            "expires_at" = excluded."expires_at",
+            "data_json" = excluded."data_json"
+        ''', [id, version, updatedAt, expiresAt, dataJson]);
         insertedOrUpdated++;
+      }
+
+      if (maxCacheRecords != null && maxCacheRecords > 0) {
+        await SqliteCacheCleaner.pruneToQuotaTx(tx, entity, maxCacheRecords: maxCacheRecords);
       }
 
       return insertedOrUpdated;

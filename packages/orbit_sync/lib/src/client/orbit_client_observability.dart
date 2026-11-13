@@ -20,10 +20,4 @@ extension OrbitClientObservability on OrbitClient {
   Stream<RateLimitedEvent> get onRateLimited => observer.onRateLimited;
   Stream<AuthExpiredEvent> get onAuthExpired => observer.onAuthExpired;
   SyncLogger get logger => observer.logger;
-
-  Future<void> retryMutation(String mutationId, {bool syncNow = false}) =>
-      observer.retryMutation(mutationId, syncNow: syncNow);
-
-  Future<void> retryAllFailed({bool syncNow = false}) =>
-      observer.retryAllFailed(syncNow: syncNow);
 }

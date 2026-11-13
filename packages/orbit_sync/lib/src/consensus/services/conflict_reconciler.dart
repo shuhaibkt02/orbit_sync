@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import '../domain/interfaces/i_conflict_resolver.dart';
+
+const _deepEq = DeepCollectionEquality();
 
 /// Reconciles concurrent local edits and remote server changes using 3-way merge
 /// and pluggable join-semilattice resolvers.
@@ -45,9 +48,12 @@ class ConflictReconciler {
       final base = baseSnapshot ?? const {};
 
       for (final key in localRecord.keys) {
-        if (localRecord[key] != base[key]) {
-          // Local made a change to this column
-          mergedData[key] = localRecord[key];
+        if (!_deepEq.equals(localRecord[key], base[key])) {
+          // Local made a change to this column.
+          // If remote also modified this column, remote takes precedence on collision.
+          if (_deepEq.equals(remoteRecord[key], base[key])) {
+            mergedData[key] = localRecord[key];
+          }
         }
       }
     }
@@ -57,7 +63,7 @@ class ConflictReconciler {
       final error = validateInvariants!(entity, mergedData);
       if (error != null) {
         final rfcError = jsonEncode({
-          'type': 'https://offline-sync.dev/errors/invariant-conflict',
+          'type': 'https://orbit-sync.dev/errors/invariant-conflict',
           'title': 'Invariant Validation Failed',
           'detail': error,
         });

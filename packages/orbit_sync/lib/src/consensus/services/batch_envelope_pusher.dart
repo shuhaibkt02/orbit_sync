@@ -55,20 +55,28 @@ class BatchEnvelopePusher {
         'entity': r['entity_name'],
         'id': r['entity_id'],
         'op': r['op'],
-        'payload': payload,
+        'payload': sanitizePayload(payload),
         'version': r['base_version'],
         'schema_version': targetVersion,
       });
     }
 
-    final idempotencyKey = mutationIds.length == 1 ? mutationIds.first : 'batch-${mutationIds.first}';
+    final idempotencyKey = mutationIds.length == 1
+        ? mutationIds.first
+        : 'batch-${(mutationIds.toList()..sort()).join(':')}';
 
+    final TransportResponse resp;
     try {
-      final resp = await transport.pushBatch(
+      resp = await transport.pushBatch(
         mutations: mutations,
         idempotencyKey: idempotencyKey,
         chaos: chaos,
       );
+    } catch (_) {
+      rethrow;
+    }
+
+    try {
       if (resp.error != null) {
         throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
       }
@@ -86,7 +94,8 @@ class BatchEnvelopePusher {
         return const SyncPushResult(status: SyncPushStatus.unauthorized);
       }
       if (resp.statusCode == HttpStatus.tooManyRequests) {
-        final nextRetry = CustomRestPusher.parseNextRetryAfter(resp.headers['retry-after'], nowMs, backoffPolicy);
+        final retryHeader = CustomRestPusher.getRetryAfterHeader(resp.headers);
+        final nextRetry = CustomRestPusher.parseNextRetryAfter(retryHeader, nowMs, backoffPolicy);
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id IN ($placeholders)",
           [nextRetry, ...mutationIds],
@@ -95,30 +104,50 @@ class BatchEnvelopePusher {
       }
       if (resp.statusCode == HttpStatus.badRequest) {
         final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
-        await storage.db.execute(
-          'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
-          [targetStatus, respBody, mutationIds.first],
-        );
-        if (mutationIds.length > 1) {
-          final rem = mutationIds.sublist(1);
+        final targets = _extractFailingMutationIds(bodyJson, mutationIds);
+        final targetIds = targets.isNotEmpty ? targets : {mutationIds.first};
+        for (final targetId in targetIds) {
+          await storage.db.execute(
+            'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
+            [targetStatus, respBody, targetId],
+          );
+        }
+        final rem = mutationIds.where((id) => !targetIds.contains(id)).toList();
+        if (rem.isNotEmpty) {
           final remPh = List.filled(rem.length, '?').join(', ');
           await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)", rem);
         }
         return SyncPushResult(status: SyncPushStatus.poisonPill, errorMessage: respBody);
       }
       if (resp.statusCode == HttpStatus.conflict) {
+        await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)", mutationIds);
         return SyncPushResult(status: SyncPushStatus.conflict, details: bodyJson);
       }
       if (resp.statusCode == HttpStatus.unprocessableEntity) {
-        await storage.rollbackOptimistic(mutationIds.first, status: 'validation_error');
-        await storage.db.execute(
-          'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
-          [respBody, mutationIds.first],
-        );
+        final targets = _extractFailingMutationIds(bodyJson, mutationIds);
+        final targetIds = targets.isNotEmpty ? targets : {mutationIds.first};
+        for (final targetId in targetIds) {
+          await storage.rollbackOptimistic(targetId, status: 'validation_error');
+          await storage.db.execute(
+            'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
+            [respBody, targetId],
+          );
+        }
+        final rem = mutationIds.where((id) => !targetIds.contains(id)).toList();
+        if (rem.isNotEmpty) {
+          final remPh = List.filled(rem.length, '?').join(', ');
+          await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)", rem);
+        }
         return SyncPushResult(status: SyncPushStatus.validationError, details: bodyJson);
       }
       if (resp.statusCode == HttpStatus.ok) {
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL WHERE mutation_id IN ($placeholders)", mutationIds);
+        await storage.db.execute("UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL, updated_at = ? WHERE mutation_id IN ($placeholders)", [nowMs, ...mutationIds]);
+        await storage.db.execute('''
+          UPDATE _sync_outbox 
+          SET status = 'pending', updated_at = ? 
+          WHERE status = 'held' 
+            AND depends_on_mutation_id IN ($placeholders)
+        ''', [nowMs, ...mutationIds]);
         return SyncPushResult(status: SyncPushStatus.success, applied: mutations.length);
       }
 
@@ -138,4 +167,32 @@ class BatchEnvelopePusher {
       return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
     }
   }
+}
+
+Set<String> _extractFailingMutationIds(Map<String, dynamic> bodyJson, List<String> batchIds) {
+  final result = <String>{};
+  void check(dynamic val) {
+    if (val is String && batchIds.contains(val)) result.add(val);
+  }
+  check(bodyJson['mutation_id']);
+  check(bodyJson['mutationId']);
+  final list = bodyJson['errors'] ?? bodyJson['rejected'] ?? bodyJson['failures'];
+  if (list is List) {
+    for (final item in list) {
+      if (item is Map) {
+        check(item['mutation_id']);
+        check(item['mutationId']);
+        check(item['id']);
+        if (item['index'] is int) {
+          final idx = item['index'] as int;
+          if (idx >= 0 && idx < batchIds.length) {
+            result.add(batchIds[idx]);
+          }
+        }
+      } else if (item is String) {
+        check(item);
+      }
+    }
+  }
+  return result;
 }

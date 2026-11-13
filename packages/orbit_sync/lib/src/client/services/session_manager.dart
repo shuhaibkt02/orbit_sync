@@ -13,6 +13,28 @@ class SessionManager {
     return '$appDir/orbit_sessions/$hash/orbit.db';
   }
 
+  /// Resolves the physical SQLite database path for isolated users or guest fallback.
+  String resolveUserDatabasePath({
+    String? databasePath,
+    String? appDir,
+    String? baseDir,
+    String? userId,
+  }) {
+    if (databasePath != null && databasePath.isNotEmpty) {
+      return databasePath;
+    }
+    final base = appDir ?? baseDir;
+    if (base == null || base.isEmpty) {
+      throw ArgumentError('Either databasePath or appDir/baseDir must be provided.');
+    }
+    final cleanBase = base.replaceAll(RegExp(r'[/\\]+$'), '');
+    final cleanUser = userId?.trim();
+    if (cleanUser != null && cleanUser.isNotEmpty) {
+      return '$cleanBase/orbit/users/$cleanUser/orbit.db';
+    }
+    return '$cleanBase/orbit/guest/orbit.db';
+  }
+
   Future<void> assertTokenSubject({
     required String? token,
     required String expectedUserId,
@@ -58,6 +80,7 @@ class SessionManager {
       if (pendingGuestRows.isEmpty) return 0;
 
       int mergedCount = 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
       await targetStorage.db.writeTransaction((tx) async {
         for (final row in pendingGuestRows) {
           final mutId = row['mutation_id'] as String;
@@ -70,38 +93,49 @@ class SessionManager {
 
           await tx.execute('''
             INSERT OR IGNORE INTO _sync_outbox (
-              mutation_id, entity_name, entity_id, op, payload_json, 
-              endpoint_url, http_method, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+              mutation_id, entity_name, entity_id, op, endpoint_url, 
+              http_method, payload_json, base_snapshot_json, base_version,
+              status, author_id, user_id, media_path, depends_on_mutation_id,
+              correlation_tag, priority, sla_seconds, schema_version,
+              error_details_json, dispatch_after, revision_history_json,
+              headers_json, retry_count, next_retry_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ''', [
             mutId,
             entity,
             entityId,
             op,
-            payload,
             endpoint,
             method,
-            DateTime.now().millisecondsSinceEpoch,
+            payload,
+            row['base_snapshot_json'],
+            row['base_version'] ?? 1,
+            row['author_id'],
+            row['user_id'],
+            row['media_path'],
+            row['depends_on_mutation_id'],
+            row['correlation_tag'],
+            row['priority'] ?? 0,
+            row['sla_seconds'] ?? 86400,
+            row['schema_version'] ?? 1,
+            row['error_details_json'],
+            row['dispatch_after'],
+            row['revision_history_json'],
+            row['headers_json'],
+            row['retry_count'] ?? 0,
+            row['next_retry_at'],
+            row['created_at'] ?? now,
+            now,
           ]);
 
           // Also transfer domain record if payload exists
           if (payload != null && op != 'delete') {
             try {
-              final data = jsonDecode(payload) as Map<String, dynamic>;
-              final cols = <String>['id'];
-              final vals = <dynamic>[entityId];
-              for (final e in data.entries) {
-                if (e.key != 'id') {
-                  cols.add(e.key);
-                  vals.add(e.value?.toString());
-                  try {
-                    await tx.execute('ALTER TABLE $entity ADD COLUMN ${e.key} TEXT');
-                  } catch (_) {}
-                }
-              }
-              final colStr = cols.join(', ');
-              final placeholders = List.filled(cols.length, '?').join(', ');
-              await tx.execute('INSERT OR REPLACE INTO $entity ($colStr) VALUES ($placeholders)', vals);
+              await SqliteSchema.ensureEntityTableExists(tx, {}, entity);
+              await tx.execute(
+                'INSERT OR REPLACE INTO "$entity" (id, version, updated_at, expires_at, data_json) VALUES (?, 1, ?, NULL, ?)',
+                [entityId, now, payload],
+              );
             } catch (_) {}
           }
           mergedCount++;

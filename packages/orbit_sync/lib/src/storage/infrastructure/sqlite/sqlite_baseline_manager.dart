@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:sqlite_async/sqlite_async.dart';
 import '../../domain/validation/sync_validator.dart';
 
@@ -10,18 +9,12 @@ class SqliteBaselineManager {
     String entity,
     String id,
   ) async {
-    final existingRows = await tx.getAll('SELECT * FROM "$entity" WHERE "id" = ?', [id]);
+    final existingRows = await tx.getAll('SELECT version, data_json FROM "$entity" WHERE id = ?', [id]);
     if (existingRows.isEmpty) {
       return (snapshot: null, version: 1);
     }
     final row = existingRows.first;
-    var baseSnapshotJson = (row['data_json'] as String?) ?? (row['_base_snapshot_json'] as String?);
-    if (baseSnapshotJson == null || baseSnapshotJson == '{}') {
-      final rowMap = Map<String, dynamic>.from(row);
-      rowMap.remove('_base_snapshot_json');
-      rowMap.remove('data_json');
-      baseSnapshotJson = jsonEncode(rowMap);
-    }
+    final baseSnapshotJson = row['data_json'] as String?;
     final baseVersion = (row['version'] as int?) ?? 1;
     return (snapshot: baseSnapshotJson, version: baseVersion);
   }
@@ -31,56 +24,63 @@ class SqliteBaselineManager {
     required String entity,
     required String id,
     required String baseJson,
+    int? version,
+    int? expiresAt,
   }) async {
-    final baseline = jsonDecode(baseJson) as Map<String, dynamic>;
-    final cols = <String>['id', 'version', 'updated_at', '_base_snapshot_json', 'data_json'];
-    final vals = <dynamic>[id, 1, DateTime.now().millisecondsSinceEpoch, null, baseJson];
-
-    for (final entry in baseline.entries) {
-      if (!cols.contains(entry.key)) {
-        cols.add(entry.key);
-        final v = entry.value;
-        if (v is bool) {
-          vals.add(v ? 1 : 0);
-        } else if (v is Map || (v is List && v is! Uint8List)) {
-          vals.add(jsonEncode(v));
-        } else {
-          vals.add(v);
+    int v = version ?? 1;
+    int? exp = expiresAt;
+    try {
+      final decoded = jsonDecode(baseJson);
+      if (decoded is Map<String, dynamic>) {
+        if (version == null && decoded['version'] is int) {
+          v = decoded['version'] as int;
+        }
+        if (exp == null && decoded['expires_at'] is int) {
+          exp = decoded['expires_at'] as int;
         }
       }
-    }
+    } catch (_) {}
 
-    final colList = cols.map((c) => '"$c"').join(', ');
-    final placeholders = cols.map((_) => '?').join(', ');
-    await tx.execute(
-      'INSERT OR REPLACE INTO "$entity" ($colList) VALUES ($placeholders)',
-      vals,
-    );
+    await tx.execute('''
+      INSERT OR REPLACE INTO "$entity" (
+        "id", "version", "updated_at", "expires_at", "data_json"
+      ) VALUES (?, ?, ?, ?, ?)
+    ''', [id, v, DateTime.now().millisecondsSinceEpoch, exp, baseJson]);
   }
 
   static Future<bool> undoDelete(
     SqliteDatabase db, {
-    required String entity,
+    String? entity,
     required String id,
   }) async {
-    SyncValidator.validateEntity(entity);
+    if (entity != null) SyncValidator.validateEntity(entity);
     SyncValidator.validateId(id);
 
     return await db.writeTransaction<bool>((tx) async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final pendingDeletes = await tx.getAll(
-        "SELECT mutation_id, base_snapshot_json FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND op = 'delete' AND status = 'pending' AND dispatch_after > ?",
-        [entity, id, now],
+        entity != null
+            ? "SELECT mutation_id, entity_name, base_snapshot_json, base_version FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND op = 'delete' AND status = 'pending' AND dispatch_after > ?"
+            : "SELECT mutation_id, entity_name, base_snapshot_json, base_version FROM _sync_outbox WHERE entity_id = ? AND op = 'delete' AND status = 'pending' AND dispatch_after > ?",
+        entity != null ? [entity, id, now] : [id, now],
       );
 
       if (pendingDeletes.isEmpty) return false;
 
       final mutation = pendingDeletes.first;
       final mutationId = mutation['mutation_id'] as String;
+      final targetEntity = entity ?? (mutation['entity_name'] as String);
       final baseJson = mutation['base_snapshot_json'] as String?;
+      final baseVersion = (mutation['base_version'] as int?) ?? 1;
 
       if (baseJson != null) {
-        await restoreBaselineRecord(tx, entity: entity, id: id, baseJson: baseJson);
+        await restoreBaselineRecord(
+          tx,
+          entity: targetEntity,
+          id: id,
+          baseJson: baseJson,
+          version: baseVersion,
+        );
       }
 
       await tx.execute('DELETE FROM _sync_outbox WHERE mutation_id = ?', [mutationId]);
@@ -104,10 +104,18 @@ class SqliteBaselineManager {
       final id = outbox['entity_id'] as String;
       final baseJson = outbox['base_snapshot_json'] as String?;
 
+      final baseVersion = (outbox['base_version'] as int?) ?? 1;
+
       if (baseJson == null) {
         await tx.execute('DELETE FROM "$entity" WHERE "id" = ?', [id]);
       } else {
-        await restoreBaselineRecord(tx, entity: entity, id: id, baseJson: baseJson);
+        await restoreBaselineRecord(
+          tx,
+          entity: entity,
+          id: id,
+          baseJson: baseJson,
+          version: baseVersion,
+        );
       }
 
       await tx.execute(

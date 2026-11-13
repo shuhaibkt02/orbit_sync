@@ -7,7 +7,7 @@ import 'apple_pressable.dart';
 
 /// Apple modal sheet displaying real-time Orbit offline sync engine metrics.
 class SyncTelemetrySheet extends StatefulWidget {
-  final OfflineSyncClient client;
+  final OrbitClient client;
   final Future<void> Function() onSeedDemo;
 
   const SyncTelemetrySheet({
@@ -17,7 +17,7 @@ class SyncTelemetrySheet extends StatefulWidget {
   });
 
   static Future<void> show(BuildContext context, {
-    required OfflineSyncClient client,
+    required OrbitClient client,
     required Future<void> Function() onSeedDemo,
   }) {
     return showModalBottomSheet(

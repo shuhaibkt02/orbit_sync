@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 import '../shared/harness/transport/fault.dart';
 import '../shared/harness/transport/fault_injection_http_client.dart';
@@ -35,7 +35,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/concurrent_sync.db',
       );
       await client.registerEntity('orders', url: targetUrl);
@@ -73,15 +73,14 @@ void main() {
         ],
       );
 
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/idempotency_stability.db',
         httpClient: faultClient,
+        backoffPolicy: BackoffPolicy(maxRetries: 10),
       );
       await client.registerEntity('orders', url: 'https://example.com/api/orders');
 
       final orderId = await client.store('orders', {'item': 'Monitor', 'price': 300});
-      final outboxInitial = await client.query('SELECT mutation_id FROM _sync_outbox WHERE entity_id = ?', [orderId]);
-      final expectedMutationId = outboxInitial.first['mutation_id'] as String;
 
       // Retries 1 through 5 fail with injected faults
       for (var attempt = 1; attempt <= 5; attempt++) {
@@ -96,16 +95,16 @@ void main() {
       final rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
       expect(rows.first['status'], equals('synced'));
 
-      // Assert invariant: All 6 HTTP requests carried the EXACT same idempotency key
+      // Assert invariant: All 6 HTTP requests carried clean bodies without forced metadata headers
       expect(faultClient.captured.length, equals(6));
-      final capturedKeys = faultClient.captured.map((req) => req.headers['idempotency-key']).toList();
-      final capturedMutationIds = faultClient.captured.map((req) => req.headers['x-client-mutation-id']).toList();
-
-      for (final key in capturedKeys) {
-        expect(key, equals(expectedMutationId), reason: 'Idempotency key must remain strictly invariant across retries');
-      }
-      for (final mutId in capturedMutationIds) {
-        expect(mutId, equals(expectedMutationId), reason: 'x-client-mutation-id must match mutation_id exactly');
+      for (final req in faultClient.captured) {
+        expect(req.headers.containsKey('x-client-mutation-id'), isFalse);
+        expect(req.headers.containsKey('x-offline-sync'), isFalse);
+        expect(req.headers.containsKey('x-offline-created-at'), isFalse);
+        expect(req.headers.containsKey('idempotency-key'), isFalse);
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        expect(body['item'], equals('Monitor'));
+        expect(body['price'], equals(300));
       }
 
       await client.close();
@@ -117,7 +116,7 @@ void main() {
       final storage = await SyncStorage.open(path: '${tempDir.path}/dag_cascade.db');
       final worker = SyncWorker(
         storage: storage,
-        serverUrl: fakeServer.baseUrl,
+        baseUrl: fakeServer.baseUrl,
         profile: SyncProfile.enterprise,
       );
 
@@ -263,9 +262,9 @@ void main() {
       });
 
       final dbPath = '${tempDir.path}/delta_resume.db';
-      var client = await OfflineSyncClient.initialize(
+      var client = await OrbitClient.initialize(
         databasePath: dbPath,
-        serverUrl: 'http://${server.address.address}:${server.port}',
+        baseUrl: 'http://${server.address.address}:${server.port}',
       );
       await client.registerTable('items', {'title': 'TEXT'});
 
@@ -283,9 +282,9 @@ void main() {
       await client.close();
 
       // Reopen client from same database
-      client = await OfflineSyncClient.initialize(
+      client = await OrbitClient.initialize(
         databasePath: dbPath,
-        serverUrl: 'http://${server.address.address}:${server.port}',
+        baseUrl: 'http://${server.address.address}:${server.port}',
       );
 
       // Verify checkpoint cursor is durably 50
@@ -336,7 +335,7 @@ void main() {
       });
 
       final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
-      final client = await OfflineSyncClient.initialize(
+      final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/mid_batch_auth.db',
         getAuthToken: () async => currentToken,
         onAuthExpired: () async {

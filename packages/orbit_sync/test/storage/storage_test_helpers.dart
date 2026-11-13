@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 /// Helper to create and initialize an isolated SyncStorage instance with a temp directory.
 Future<({Directory tempDir, SyncStorage storage})> createTestStorage() async {
@@ -73,10 +73,15 @@ class MockOutboxRepo implements IOutboxRepository {
     String? endpointUrl,
     String? httpMethod,
     Duration? holdFor,
+    Duration? coolingTime,
     Duration? sla,
     Duration? ttl,
     int priority = 0,
     String? correlationTag,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
+    String? mediaPath,
   }) async {
     saveCalled = true;
     return 'mock-mutation-id';
@@ -89,19 +94,30 @@ class MockOutboxRepo implements IOutboxRepository {
     String? endpointUrl,
     String? httpMethod,
     Duration? undoWindow,
+    Duration? coolingTime,
+    Duration? holdFor,
+    Map<String, String>? headers,
+    String? authorId,
+    String? userId,
   }) async => null;
 
   @override
-  Future<bool> undoDelete({required String entity, required String id}) async => true;
+  Future<bool> undoDelete({String? entity, required String id}) async => true;
 
   @override
   Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) async {}
+
+  @override
+  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) async => 0;
 
   @override
   Future<int> pruneSynced({Duration olderThan = const Duration(days: 7)}) async => 0;
 
   @override
   Future<int> pruneExpiredCache(String entity) async => 0;
+
+  @override
+  Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) async => 0;
 
   @override
   Future<void> registerEntityTable(

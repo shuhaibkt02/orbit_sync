@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
@@ -85,6 +86,11 @@ void main() {
       );
 
       // 7. Reserved SQL keywords ('order', 'group', 'where') do not cause query syntax errors
+      await storage.registerEntityTable('order', {
+        'group': 'TEXT',
+        'where': 'TEXT',
+        'check': 'INTEGER',
+      });
       final reservedMutId = await storage.save(
         entity: 'order',
         id: 'ord-reserved-1',
@@ -96,8 +102,9 @@ void main() {
       );
       expect(reservedMutId, isNotEmpty);
       final reservedRow = await storage.db.get('SELECT * FROM "order" WHERE "id" = ?;', ['ord-reserved-1']);
-      expect(reservedRow['group'], 'vip_customers');
-      expect(reservedRow['where'], 'warehouse_north');
+      final storedData = jsonDecode(reservedRow['data_json'] as String) as Map<String, dynamic>;
+      expect(storedData['group'], 'vip_customers');
+      expect(storedData['where'], 'warehouse_north');
     });
   });
 }

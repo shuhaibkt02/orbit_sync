@@ -53,6 +53,25 @@ class DefaultHttpAdapter implements SyncHttpAdapter {
   }
 
   @override
+  Future<TransportResponse> pushMultipart({
+    required Uri uri,
+    String method = 'POST',
+    required String fieldName,
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+    Map<String, dynamic>? extraFields,
+    Map<String, String>? headers,
+    Duration? timeout,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    return TransportResponse(
+      statusCode: 0,
+      error: UnsupportedError('pushMultipart is not supported by DefaultHttpAdapter. Use DioHttpAdapter.'),
+    );
+  }
+
+  @override
   void dispose() {
     if (_isOwned) {
       _client.close();

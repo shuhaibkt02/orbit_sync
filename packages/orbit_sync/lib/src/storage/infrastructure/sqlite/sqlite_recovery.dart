@@ -96,7 +96,7 @@ class SqliteRecovery implements IStorageRecovery {
       // Secure storage wiped or new device with restored SQLite database
       onTimeTravelBackupDetected?.call(sqliteId, 'none');
       // Hold all pending outbox mutations from firing blindly
-      await db.execute("UPDATE _sync_outbox SET status = 'held' WHERE status = 'pending';");
+      await db.execute("UPDATE _sync_outbox SET status = 'held' WHERE status IN ('pending', 'in_flight');");
       final newId = UuidV7.generate();
       await secureStorageWriter(key, newId);
       await db.execute('INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES (?, ?);', [key, newId]);
@@ -104,7 +104,7 @@ class SqliteRecovery implements IStorageRecovery {
       // MISMATCH: An outdated backup from another device/session was restored over this device!
       onTimeTravelBackupDetected?.call(sqliteId!, secureId!);
       // Hold all pending outbox mutations from firing blindly against modern server state
-      await db.execute("UPDATE _sync_outbox SET status = 'held' WHERE status = 'pending';");
+      await db.execute("UPDATE _sync_outbox SET status = 'held' WHERE status IN ('pending', 'in_flight');");
     }
   }
 }

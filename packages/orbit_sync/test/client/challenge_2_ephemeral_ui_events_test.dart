@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   late Directory tempDir;
-  late OfflineSyncClient client;
+  late OrbitClient client;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('layer5_challenge2_');
-    client = await OfflineSyncClient.initialize(
+    client = await OrbitClient.initialize(
       databasePath: '${tempDir.path}/test.db',
       transport: SyncTransport.inMemory(),
     );

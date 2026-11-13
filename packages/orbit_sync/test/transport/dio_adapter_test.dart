@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: Enterprise Dio Adapter', () {
@@ -28,7 +28,7 @@ void main() {
       );
 
       final transport = SyncTransport.dio(
-        serverUrl: 'https://enterprise.example.com',
+        baseUrl: 'https://enterprise.example.com',
         dio: dio,
         getAuthToken: () async => 'enterprise-jwt-token',
       );
@@ -75,7 +75,7 @@ void main() {
       );
 
       final transport = SyncTransport.dio(
-        serverUrl: 'https://enterprise.example.com',
+        baseUrl: 'https://enterprise.example.com',
         dio: dio,
       );
 
@@ -104,7 +104,7 @@ void main() {
       );
 
       final transport = SyncTransport.dio(
-        serverUrl: 'https://enterprise.example.com',
+        baseUrl: 'https://enterprise.example.com',
         dio: dio,
       );
 

@@ -13,6 +13,8 @@ class PagePullOrchestrator {
   final SyncTransport transport;
   final int pullPageLimit;
   final Map<String, dynamic>? scopeFilter;
+  final Future<void> Function()? onAuthExpired;
+  final Future<void> Function()? onExpiredCursor;
   final PullChangeApplier _applier;
 
   PagePullOrchestrator({
@@ -22,6 +24,8 @@ class PagePullOrchestrator {
     required ConflictReconciler reconciler,
     this.pullPageLimit = 50,
     this.scopeFilter,
+    this.onAuthExpired,
+    this.onExpiredCursor,
   }) : _applier = PullChangeApplier(profile: profile, reconciler: reconciler);
 
   /// Pulls a single page of changes and reconciles into SQLite.
@@ -42,6 +46,9 @@ class PagePullOrchestrator {
         return const SyncPullResult(status: SyncPullStatus.expiredCursor);
       }
       if (resp.statusCode == HttpStatus.unauthorized) {
+        if (onAuthExpired != null) {
+          await onAuthExpired!();
+        }
         return const SyncPullResult(status: SyncPullStatus.unauthorized);
       }
       if (resp.statusCode != HttpStatus.ok) {
@@ -96,6 +103,12 @@ class PagePullOrchestrator {
     int totalChanges = 0;
     while (true) {
       final res = await pullPage();
+      if (res.status == SyncPullStatus.expiredCursor) {
+        if (onExpiredCursor != null) {
+          await onExpiredCursor!();
+        }
+        break;
+      }
       if (res.status != SyncPullStatus.success) break;
       totalChanges += res.changeCount;
       if (!res.hasMore) break;

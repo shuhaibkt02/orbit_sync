@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
@@ -20,7 +20,7 @@ void main() {
     await storage.registerEntityTable('orders', {'customer': 'TEXT', 'total': 'REAL'});
     await storage.registerEntityTable('order_items', {'order_id': 'TEXT', 'item_name': 'TEXT', 'price': 'REAL'}, foreignKeyClause: 'FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE');
     await storage.registerEntityTable('tasks', {'title': 'TEXT'});
-    worker = SyncWorker(storage: storage, serverUrl: server.baseUrl);
+    worker = SyncWorker(storage: storage, baseUrl: server.baseUrl);
   });
 
   tearDown(() async {
@@ -39,7 +39,10 @@ void main() {
       final childMut1 = await storage.save(entity: 'order_items', id: itemId1, data: {'order_id': orderId, 'item_name': 'Widget A', 'price': 100.0}, dependsOnMutationId: parentMutId);
       final childMut2 = await storage.save(entity: 'order_items', id: itemId2, data: {'order_id': orderId, 'item_name': 'Widget B', 'price': 150.0}, dependsOnMutationId: parentMutId);
 
-      final activeItems = await storage.db.getAll('SELECT item_name, price FROM order_items WHERE order_id = ? ORDER BY price ASC;', [orderId]);
+      final activeItems = await storage.db.getAll(
+        "SELECT json_extract(data_json, '\$.item_name') as item_name, json_extract(data_json, '\$.price') as price FROM order_items WHERE json_extract(data_json, '\$.order_id') = ? ORDER BY json_extract(data_json, '\$.price') ASC;",
+        [orderId],
+      );
       expect(activeItems.length, 2);
       expect(activeItems[0]['item_name'], 'Widget A');
       expect(activeItems[1]['item_name'], 'Widget B');
@@ -57,15 +60,20 @@ void main() {
       final itemId = UuidV7.generate();
 
       final parentMut = await storage.save(entity: 'orders', id: orderId, data: {'customer': 'Globex Corp'});
-      await storage.save(entity: 'order_items', id: itemId, data: {'order_id': orderId, 'item_name': 'Gadget'}, dependsOnMutationId: parentMut);
+      final childMut = await storage.save(entity: 'order_items', id: itemId, data: {'order_id': orderId, 'item_name': 'Gadget'}, dependsOnMutationId: parentMut);
 
-      final pushRes = await worker.pushBatch(batchSize: 2);
-      expect(pushRes.status, SyncPushStatus.success);
-      expect(pushRes.applied, 2);
+      final push1 = await worker.pushBatch(batchSize: 2);
+      expect(push1.status, SyncPushStatus.success);
+      expect(push1.applied, 1);
 
-      final pRow = await storage.db.get("SELECT status FROM _sync_outbox WHERE entity_name = 'orders';");
-      final cRow = await storage.db.get("SELECT status FROM _sync_outbox WHERE entity_name = 'order_items';");
+      final pRow = await storage.db.get("SELECT status FROM _sync_outbox WHERE mutation_id = ?;", [parentMut]);
       expect(pRow['status'], 'synced');
+
+      final push2 = await worker.pushBatch(batchSize: 2);
+      expect(push2.status, SyncPushStatus.success);
+      expect(push2.applied, 1);
+
+      final cRow = await storage.db.get("SELECT status FROM _sync_outbox WHERE mutation_id = ?;", [childMut]);
       expect(cRow['status'], 'synced');
     });
 
@@ -141,6 +149,203 @@ void main() {
 
       final cAfter = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMutId]);
       expect(cAfter['status'], 'synced');
+    });
+
+    test('Test DAG Dependency Hold: Child mutation remains held while parent is pending or in_flight', () async {
+      final parentMut = await storage.save(
+        entity: 'orders',
+        id: UuidV7.generate(),
+        data: {'customer': 'Pending Parent'},
+      );
+      final childMut = await storage.save(
+        entity: 'order_items',
+        id: UuidV7.generate(),
+        data: {'item': 'Held Child'},
+        dependsOnMutationId: parentMut,
+      );
+
+      // Parent is 'pending' -> Child should be 'held'
+      final childBefore = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(childBefore['status'], 'held');
+
+      // Transition parent to 'in_flight'
+      await storage.db.execute("UPDATE _sync_outbox SET status = 'in_flight' WHERE mutation_id = ?", [parentMut]);
+
+      // Child must remain held while parent is in_flight
+      final childDuringInFlight = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(childDuringInFlight['status'], 'held');
+
+      // Attempting pushBatch must not dispatch the held child
+      final pushRes = await worker.pushBatch(batchSize: 2);
+      expect(pushRes.applied, 0);
+
+      final childStillHeld = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(childStillHeld['status'], 'held');
+    });
+
+    test('Test Automatic Unlock: When parent reaches synced, child transitions to pending and pushes successfully', () async {
+      final parentMut = await storage.save(
+        entity: 'orders',
+        id: UuidV7.generate(),
+        data: {'customer': 'Unlock Customer'},
+      );
+      final childMut = await storage.save(
+        entity: 'order_items',
+        id: UuidV7.generate(),
+        data: {'item': 'Unlocked Item'},
+        dependsOnMutationId: parentMut,
+      );
+
+      // Child is initially held
+      final cInit = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(cInit['status'], 'held');
+
+      // Push parent -> parent reaches synced
+      final push1 = await worker.pushBatch(batchSize: 1);
+      expect(push1.status, SyncPushStatus.success);
+      expect(push1.applied, 1);
+
+      final pStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentMut]);
+      expect(pStatus['status'], 'synced');
+
+      // Child automatically transitioned to 'pending'
+      final cUnlocked = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(cUnlocked['status'], 'pending');
+
+      // Child pushes successfully
+      final push2 = await worker.pushBatch(batchSize: 1);
+      expect(push2.status, SyncPushStatus.success);
+      expect(push2.applied, 1);
+
+      final cSynced = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(cSynced['status'], 'synced');
+    });
+
+    test('Test Doomed Child Protection: If parent fails to dlq or validation_error, child remains held and does not dispatch', () async {
+      // 1. Test parent failure to DLQ (400 Bad Request)
+      final dlqParentMut = await storage.save(
+        entity: 'orders',
+        id: 'dlq-parent-1',
+        data: {'customer': 'poison-pill'},
+      );
+      final dlqChildMut = await storage.save(
+        entity: 'order_items',
+        id: UuidV7.generate(),
+        data: {'item': 'Doomed Child 1'},
+        dependsOnMutationId: dlqParentMut,
+      );
+
+      // Push parent with bad request chaos -> parent enters DLQ
+      final pushDlq = await worker.pushBatch(batchSize: 1, chaos: 'bad_request');
+      expect(pushDlq.status, SyncPushStatus.poisonPill);
+
+      final dlqParentStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [dlqParentMut]);
+      expect(dlqParentStatus['status'], 'dlq');
+
+      final dlqChildStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [dlqChildMut]);
+      expect(dlqChildStatus['status'], 'held');
+
+      // Try pushing again: child must remain held and must not dispatch
+      final pushDlqChild = await worker.pushBatch(batchSize: 1);
+      expect(pushDlqChild.applied, 0);
+
+      final dlqChildStillHeld = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [dlqChildMut]);
+      expect(dlqChildStillHeld['status'], 'held');
+
+      // 2. Test parent failure to validation_error (422 Unprocessable Entity)
+      final valParentMut = await storage.save(
+        entity: 'orders',
+        id: 'val-parent-1',
+        data: {'customer': 'Invalid Schema Parent'},
+      );
+      final valChildMut = await storage.save(
+        entity: 'order_items',
+        id: UuidV7.generate(),
+        data: {'item': 'Doomed Child 2'},
+        dependsOnMutationId: valParentMut,
+      );
+
+      // Simulate HTTP 422 on parent
+      await storage.db.execute("UPDATE _sync_outbox SET status = 'validation_error' WHERE mutation_id = ?", [valParentMut]);
+
+      // Push batch
+      final pushVal = await worker.pushBatch(batchSize: 1);
+      expect(pushVal.applied, 0);
+
+      final valChildStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [valChildMut]);
+      expect(valChildStatus['status'], 'held');
+    });
+
+    test('Test Two-Step Media Coordination: Parent entity POST extracts ID and triggers child multipart upload with the extracted ID', () async {
+      final inMemoryTransport = InMemorySyncTransport(
+        pushStatusCode: 201,
+        pushResponseBody: '{"id": "ord_srv_99", "status": "created"}',
+      );
+
+      final mediaWorker = SyncWorker(
+        storage: storage,
+        transport: inMemoryTransport,
+      );
+
+      mediaWorker.registerIdExtractor('orders', (json) => (json as Map)['id'] as String?);
+
+      await storage.registerEntityTable('order_attachments', {'description': 'TEXT'});
+
+      final parentMut = await storage.save(
+        entity: 'orders',
+        id: 'temp-order-100',
+        data: {'customer': 'Corporate Client', 'total': 999.0},
+        endpointUrl: '/api/v1/orders',
+        httpMethod: 'POST',
+      );
+
+      final childMut = await storage.save(
+        entity: 'order_attachments',
+        id: 'att-100',
+        data: {'field_name': 'receipt', 'file_name': 'receipt.pdf'},
+        endpointUrl: '/api/v1/orders/{id}/receipt',
+        httpMethod: 'POST',
+        mediaPath: '/documents/receipt.pdf',
+        dependsOnMutationId: parentMut,
+      );
+
+      // Step 0: Child is initially held
+      final initChildRow = await storage.db.get('SELECT status, endpoint_url FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(initChildRow['status'], 'held');
+      expect(initChildRow['endpoint_url'], '/api/v1/orders/{id}/receipt');
+
+      // Step 1: Push parent JSON document
+      final push1 = await mediaWorker.pushBatch(batchSize: 1);
+      expect(push1.status, SyncPushStatus.success);
+      expect(push1.applied, 1);
+
+      // Verify parent reached synced
+      final parentRow = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentMut]);
+      expect(parentRow['status'], 'synced');
+
+      // Verify child mutation was updated with canonical server ID ord_srv_99 and unlocked to pending
+      final childAfterStep1 = await storage.db.get('SELECT status, endpoint_url FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(childAfterStep1['status'], 'pending');
+      expect(childAfterStep1['endpoint_url'], '/api/v1/orders/ord_srv_99/receipt');
+
+      // Step 2: Push child binary media upload via pushMultipart
+      final push2 = await mediaWorker.pushBatch(batchSize: 1);
+      expect(push2.status, SyncPushStatus.success);
+      expect(push2.applied, 1);
+
+      // Verify multipart streaming was invoked with the confirmed parent ID
+      expect(inMemoryTransport.multipartPushes.length, 1);
+      final multipartCall = inMemoryTransport.multipartPushes.first;
+      expect(multipartCall['uri'].toString(), '/api/v1/orders/ord_srv_99/receipt');
+      expect(multipartCall['filePath'], '/documents/receipt.pdf');
+      expect(multipartCall['fieldName'], 'receipt');
+      expect(multipartCall['fileName'], 'receipt.pdf');
+
+      // Verify child reached synced
+      final childSynced = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMut]);
+      expect(childSynced['status'], 'synced');
+
+      mediaWorker.dispose();
     });
   });
 }

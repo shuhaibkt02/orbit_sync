@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
@@ -50,9 +50,10 @@ void main() {
       );
 
       final row1 = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      expect(row1['title'], 'Original Title');
-      expect(row1['priority'], 'low');
-      expect(row1['_base_snapshot_json'], isNull);
+      final data1 = jsonDecode(row1['data_json'] as String) as Map<String, dynamic>;
+      expect(data1['title'], 'Original Title');
+      expect(data1['priority'], 'low');
+      expect(row1.containsKey('_base_snapshot_json'), isFalse);
 
       final mut2 = await storage.save(
         entity: 'tasks',
@@ -62,8 +63,9 @@ void main() {
       );
 
       final row2 = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      expect(row2['title'], 'Optimistic Title');
-      expect(row2['priority'], 'high');
+      final data2 = jsonDecode(row2['data_json'] as String) as Map<String, dynamic>;
+      expect(data2['title'], 'Optimistic Title');
+      expect(data2['priority'], 'high');
 
       final outbox2 = await storage.db.get('SELECT * FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
       final baseSnapshot = jsonDecode(outbox2['base_snapshot_json'] as String) as Map<String, dynamic>;
@@ -73,8 +75,9 @@ void main() {
       await storage.rollbackOptimistic(mut2, status: 'conflict');
 
       final rowRestored = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      expect(rowRestored['title'], 'Original Title');
-      expect(rowRestored['priority'], 'low');
+      final dataRestored = jsonDecode(rowRestored['data_json'] as String) as Map<String, dynamic>;
+      expect(dataRestored['title'], 'Original Title');
+      expect(dataRestored['priority'], 'low');
 
       final outboxStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
       expect(outboxStatus['status'], 'conflict');
@@ -82,26 +85,31 @@ void main() {
 
     test('Test Case 13: Foreign Key Cascade Capture on Outbox Deletion', () async {
       await storage.registerEntityTable('invoices', {'customer': 'TEXT'});
-      await storage.registerEntityTable(
-        'line_items',
-        {'invoice_id': 'TEXT', 'description': 'TEXT'},
-        foreignKeyClause: 'FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE',
-      );
+      await storage.db.execute('''
+        CREATE TABLE IF NOT EXISTS "line_items" (
+          "id" TEXT PRIMARY KEY,
+          "version" INTEGER NOT NULL DEFAULT 1 CHECK ("version" >= 1),
+          "updated_at" INTEGER NOT NULL,
+          "expires_at" INTEGER,
+          "data_json" TEXT NOT NULL DEFAULT '{}',
+          "invoice_id" TEXT,
+          FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE
+        );
+      ''');
 
       await storage.save(
         entity: 'invoices',
         id: 'inv-100',
         data: {'customer': 'Acme Corp'},
       );
-      await storage.save(
-        entity: 'line_items',
-        id: 'item-1',
-        data: {'invoice_id': 'inv-100', 'description': 'Widget A'},
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await storage.db.execute(
+        'INSERT INTO line_items (id, version, updated_at, expires_at, data_json, invoice_id) VALUES (?, 1, ?, null, ?, ?)',
+        ['item-1', now, '{"id":"item-1","description":"Widget A"}', 'inv-100'],
       );
-      await storage.save(
-        entity: 'line_items',
-        id: 'item-2',
-        data: {'invoice_id': 'inv-100', 'description': 'Widget B'},
+      await storage.db.execute(
+        'INSERT INTO line_items (id, version, updated_at, expires_at, data_json, invoice_id) VALUES (?, 1, ?, null, ?, ?)',
+        ['item-2', now, '{"id":"item-2","description":"Widget B"}', 'inv-100'],
       );
 
       final delMut = await storage.delete(entity: 'invoices', id: 'inv-100');

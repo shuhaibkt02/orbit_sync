@@ -15,6 +15,7 @@ class InMemorySyncTransport implements SyncTransport {
 
   final List<List<Map<String, dynamic>>> pushedBatches = [];
   final List<Map<String, dynamic>> customPushes = [];
+  final List<Map<String, dynamic>> multipartPushes = [];
   final StreamController<void> _remoteChangeController =
       StreamController<void>.broadcast();
 
@@ -59,6 +60,7 @@ class InMemorySyncTransport implements SyncTransport {
     required int createdAtMs,
     Map<String, dynamic>? payload,
     String? entityId,
+    Map<String, String>? headers,
   }) async {
     if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
     if (pushError != null) return TransportResponse(statusCode: 0, error: pushError);
@@ -70,6 +72,37 @@ class InMemorySyncTransport implements SyncTransport {
       'createdAtMs': createdAtMs,
       'payload': payload,
       'entityId': entityId,
+      'headers': headers,
+    });
+    return TransportResponse(statusCode: pushStatusCode, body: pushResponseBody);
+  }
+
+  @override
+  Future<TransportResponse> pushMultipart({
+    required Uri uri,
+    String method = 'POST',
+    required String fieldName,
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+    Map<String, dynamic>? extraFields,
+    Map<String, String>? headers,
+    Duration? timeout,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
+    if (pushError != null) return TransportResponse(statusCode: 0, error: pushError);
+
+    multipartPushes.add({
+      'uri': uri,
+      'method': method,
+      'fieldName': fieldName,
+      'filePath': filePath,
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'extraFields': extraFields,
+      'headers': headers,
+      'timeout': timeout,
     });
     return TransportResponse(statusCode: pushStatusCode, body: pushResponseBody);
   }
@@ -96,6 +129,7 @@ class InMemorySyncTransport implements SyncTransport {
   void reset() {
     pushedBatches.clear();
     customPushes.clear();
+    multipartPushes.clear();
     pushStatusCode = 200;
     pushResponseBody = '{"status":"ok"}';
     pullStatusCode = 200;

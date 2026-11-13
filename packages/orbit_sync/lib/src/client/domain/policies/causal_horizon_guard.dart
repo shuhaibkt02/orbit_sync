@@ -22,24 +22,33 @@ class CausalHorizonGuard {
     return count > 0;
   }
 
-  /// Softly marks a domain record as rejected rather than hard-deleting it,
+  /// Softly marks an outbox mutation as rejected rather than hard-deleting it,
   /// preserving user input in the form/draft state.
   Future<void> softRejectRecord({
     required String entity,
     required String id,
     String? errorMessage,
   }) async {
+    SyncValidator.validateEntity(entity);
+    SyncValidator.validateId(id);
     try {
-      await storage.db.execute('ALTER TABLE $entity ADD COLUMN _sync_status TEXT');
+      await storage.db.execute('ALTER TABLE "$entity" ADD COLUMN _sync_status TEXT');
     } catch (_) {}
     try {
-      await storage.db.execute('ALTER TABLE $entity ADD COLUMN _sync_error TEXT');
+      await storage.db.execute('ALTER TABLE "$entity" ADD COLUMN _sync_error TEXT');
     } catch (_) {}
 
     await storage.db.execute(
-      "UPDATE $entity SET _sync_status = 'rejected', _sync_error = ? WHERE id = ?",
+      'UPDATE "$entity" SET _sync_status = \'rejected\', _sync_error = ? WHERE id = ?',
       [errorMessage ?? 'Validation failed', id],
     );
+
+    await storage.db.writeTransaction((tx) async {
+      await tx.execute(
+        "UPDATE _sync_outbox SET status = 'validation_error', error_details_json = ? WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held')",
+        [errorMessage ?? 'Validation failed', entity, id],
+      );
+    });
   }
 
   /// Holds all child mutations whose parent was permanently rejected using
@@ -54,7 +63,8 @@ class CausalHorizonGuard {
         )
         UPDATE _sync_outbox SET status = 'held' WHERE mutation_id IN (SELECT mutation_id FROM descendants);
       ''', [parentMutationId]);
-      return 1;
+      final cntRow = await tx.get('SELECT changes() as cnt;');
+      return (cntRow['cnt'] as int?) ?? 0;
     });
     return result;
   }

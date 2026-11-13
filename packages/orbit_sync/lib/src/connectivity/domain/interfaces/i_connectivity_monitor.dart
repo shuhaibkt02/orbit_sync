@@ -18,7 +18,7 @@ abstract interface class IConnectivityMonitor {
   /// Broadcast stream of rich [ConnectivityState] updates.
   Stream<ConnectivityState> get onStateChanged;
 
-  /// Legacy boolean stream for backward compatibility (true = online).
+  /// Boolean stream convenience emitting true when online and false when offline.
   Stream<bool> get onConnectivityChanged;
 
   /// Probes network reachability with optional debounce bypass.

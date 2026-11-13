@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
@@ -25,7 +25,7 @@ void main() {
       'last_name': 'TEXT',
     });
 
-    worker = SyncWorker(storage: storage, serverUrl: server.baseUrl);
+    worker = SyncWorker(storage: storage, baseUrl: server.baseUrl);
   });
 
   tearDown(() async {

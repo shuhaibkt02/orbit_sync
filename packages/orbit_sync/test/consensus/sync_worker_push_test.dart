@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'consensus_test_helpers.dart';
 
 void main() {
@@ -125,7 +125,7 @@ void main() {
       int simulatedNow = baseNow;
       final timeGatedWorker = SyncWorker(
         storage: env.storage,
-        serverUrl: env.server.baseUrl,
+        baseUrl: env.server.baseUrl,
         nowMsProvider: () => simulatedNow,
       );
 

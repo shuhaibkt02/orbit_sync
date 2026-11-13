@@ -284,7 +284,7 @@ class FakeSyncServer {
                 item['data'] = null;
               }
             }
-            outChanges.append(item);
+            outChanges.add(item);
           }
 
           _sendJson(request.response, HttpStatus.ok, {

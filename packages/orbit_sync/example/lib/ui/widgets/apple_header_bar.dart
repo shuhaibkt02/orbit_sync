@@ -9,7 +9,7 @@ import 'sync_telemetry_sheet.dart';
 
 /// Frosted-glass header bar with live synchronization telemetry capsule.
 class AppleHeaderBar extends StatelessWidget {
-  final OfflineSyncClient orbit;
+  final OrbitClient orbit;
   final Future<void> Function() onSeedDemo;
 
   const AppleHeaderBar({

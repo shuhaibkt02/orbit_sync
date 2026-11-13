@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:sync_server/sync_server.dart';
 
 void main() {
@@ -15,7 +15,7 @@ void main() {
 
     storage = await SyncStorage.open(path: '${tempDir.path}/client.db', maxReaders: 4);
     await storage.registerEntityTable('tasks', {'title': 'TEXT', 'dept': 'TEXT'});
-    worker = SyncWorker(storage: storage, serverUrl: server.baseUrl, pullPageLimit: 50);
+    worker = SyncWorker(storage: storage, baseUrl: server.baseUrl, pullPageLimit: 50);
   });
 
   tearDown(() async {
@@ -62,7 +62,7 @@ void main() {
       );
       final newWorker = SyncWorker(
         storage: reopenedStorage,
-        serverUrl: server.baseUrl,
+        baseUrl: server.baseUrl,
         pullPageLimit: 50,
       );
 
@@ -104,7 +104,7 @@ void main() {
 
       await worker.pullAll();
 
-      final scopedRow = await storage.db.get("SELECT title FROM tasks WHERE id = 't-scoped';");
+      final scopedRow = await storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
       expect(scopedRow['title'], 'Dept Eng');
 
       server.cursor++;
@@ -120,7 +120,7 @@ void main() {
 
       await worker.pullAll();
 
-      final evictedRow = await storage.db.getOptional("SELECT title FROM tasks WHERE id = 't-scoped';");
+      final evictedRow = await storage.db.getOptional("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
       expect(evictedRow, isNull);
     });
   });

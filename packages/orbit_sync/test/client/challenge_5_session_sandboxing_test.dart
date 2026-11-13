@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:orbit_sync/src/client/services/session_manager.dart';
 
 void main() {
@@ -50,7 +50,7 @@ void main() {
       final guestPath = '${tempDir.path}/guest.db';
       final targetPath = '${tempDir.path}/user.db';
 
-      final guestClient = await OfflineSyncClient.initialize(databasePath: guestPath);
+      final guestClient = await OrbitClient.initialize(databasePath: guestPath);
       await guestClient.registerTable('cart_items', {'item': 'TEXT'});
       await guestClient.store('cart_items', {'item': 'Offline Guest Item'});
       await guestClient.close();
@@ -63,7 +63,7 @@ void main() {
       expect(count, equals(1));
 
       // Assert target user database now has the unpushed item
-      final userClient = await OfflineSyncClient.initialize(databasePath: targetPath);
+      final userClient = await OrbitClient.initialize(databasePath: targetPath);
       final pending = await userClient.query("SELECT * FROM _sync_outbox WHERE status = 'pending'");
       expect(pending.length, equals(1));
       expect(pending.first['entity_name'], equals('cart_items'));

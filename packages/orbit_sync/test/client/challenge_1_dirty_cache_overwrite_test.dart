@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'package:orbit_sync/src/client/services/entity_hydrator.dart';
 
 void main() {
@@ -32,8 +32,9 @@ void main() {
 
       // Verify offline state
       final localBefore = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
-      expect(localBefore.first['total'], equals(250.0));
-      expect(localBefore.first['status'], equals('draft'));
+      final decodedBefore = jsonDecode(localBefore.first['data_json'] as String);
+      expect(decodedBefore['total'], equals(250.0));
+      expect(decodedBefore['status'], equals('draft'));
 
       // 2. Incoming server hydration snapshot with old dosage/total (100.0)
       final count = await hydrator.hydrateBatch(
@@ -48,12 +49,14 @@ void main() {
 
       // 3. Assert local dirty order was NOT clobbered!
       final localAfter = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
-      expect(localAfter.first['total'], equals(250.0));
-      expect(localAfter.first['status'], equals('draft'));
+      final decodedAfter = jsonDecode(localAfter.first['data_json'] as String);
+      expect(decodedAfter['total'], equals(250.0));
+      expect(decodedAfter['status'], equals('draft'));
 
       // 4. Assert clean order (ord-102) was successfully stored
       final ord102 = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-102']);
-      expect(ord102.first['total'], equals(500.0));
+      final decoded102 = jsonDecode(ord102.first['data_json'] as String);
+      expect(decoded102['total'], equals(500.0));
     });
 
     test('Shadow Baseline Re-basing updates base_snapshot_json for dirty mutations', () async {

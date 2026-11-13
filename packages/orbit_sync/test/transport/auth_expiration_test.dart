@@ -1,7 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: HTTP 401 Auth Expiration & Forwarding', () {
@@ -11,7 +11,7 @@ void main() {
       });
 
       final transport = SyncTransport.http(
-        serverUrl: 'https://api.example.com',
+        baseUrl: 'https://api.example.com',
         httpClient: mockClient,
       );
 
@@ -40,7 +40,7 @@ void main() {
       });
 
       final transport = SyncTransport.http(
-        serverUrl: 'https://api.example.com',
+        baseUrl: 'https://api.example.com',
         httpClient: mockClient,
         getAuthToken: () async => currentToken,
       );

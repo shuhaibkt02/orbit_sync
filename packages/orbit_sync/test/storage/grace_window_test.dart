@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:orbit_sync/offline_sync.dart';
+import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
@@ -93,7 +93,8 @@ void main() {
 
       final domainRestored = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-undo-1';");
       expect(domainRestored.length, 1);
-      expect(domainRestored.first['title'], 'Undoable Task');
+      final restoredData = jsonDecode(domainRestored.first['data_json'] as String) as Map<String, dynamic>;
+      expect(restoredData['title'], 'Undoable Task');
 
       final deleteOutbox = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-undo-1' AND op = 'delete';");
       expect(deleteOutbox, isEmpty);

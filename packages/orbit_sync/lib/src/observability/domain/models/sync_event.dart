@@ -4,8 +4,6 @@ sealed class SyncEvent {
   const SyncEvent({required this.timestamp});
 }
 
-typedef SyncObserverEvent = SyncEvent;
-
 // 1. Connectivity Triggers
 class OnlineEvent extends SyncEvent {
   final String? networkType;

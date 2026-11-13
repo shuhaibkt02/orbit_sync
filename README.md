@@ -47,45 +47,167 @@ In your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  orbit_sync: ^1.0.0 # (or path: packages/orbit_sync)
-  sqlite3_flutter_libs: ^0.5.24 # Native SQLite binaries
-  path_provider: ^2.1.2
+  orbit_sync: ^1.0.0
+  sqlite3_flutter_libs: ^0.5.24 # Required: Native SQLite C-binaries with WAL support
+  path_provider: ^2.1.2         # Required: Persistent app database storage path
 ```
+
+> [!IMPORTANT]
+> **Flutter Platform Dependencies:**
+> `orbit_sync` is a pure Dart package powered by `sqlite_async`. On Flutter (Android, iOS, macOS, Windows, Linux), you **must** include `sqlite3_flutter_libs` to bundle the native SQLite binaries and `path_provider` to resolve the app storage directory.
 
 ### 2. Save & Sync Data in 4 Lines of Dart
 
 ```dart
+import 'package:flutter/widgets.dart';
 import 'package:orbit_sync/orbit_sync.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+
+class Task {
+  final String? id;
+  final String title;
+  final bool isDone;
+
+  Task({this.id, required this.title, this.isDone = false});
+
+  factory Task.fromJson(Map<String, dynamic> json) => Task(
+        id: json['id'] as String?,
+        title: json['title'] as String,
+        isDone: json['is_done'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'title': title,
+        'is_done': isDone,
+      };
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Initialize Orbit
   final dir = await getApplicationDocumentsDirectory();
-  final orbit = await OfflineSyncClient.initialize(
+  final orbit = await OrbitClient.initialize(
     databasePath: p.join(dir.path, 'app.db'),
-    serverUrl: 'https://api.yourcompany.com',
+    baseUrl: 'https://api.yourcompany.com',
   );
 
-  // 2. Register your table in 1 line (no code-gen needed!)
-  await orbit.registerTable('tasks', {
-    'title': 'TEXT NOT NULL',
-    'is_done': 'INTEGER NOT NULL DEFAULT 0',
+  // 2. Register collection with REST endpoint (Zero-Codegen!)
+  final tasks = orbit.collection<Task>(
+    name: 'tasks',
+    endpoint: '/tasks',
+    fromJson: Task.fromJson,
+    toJson: (t) => t.toJson(),
+  );
+
+  // 3. Save! Works 100% offline or online (0ms delay)
+  await tasks.save(Task(title: 'Inspect warehouse'));
+
+  // 4. Reactive streaming query (transparently handles Dart booleans & DateTimes in whereArgs)
+  tasks.watch(where: 'is_done = ?', whereArgs: [false]).listen((items) {
+    print('Pending tasks: ${items.length}');
   });
 
-  // 3. Save! Works 100% offline or online
-  await orbit.save(
-    entity: 'tasks',
-    data: {'title': 'Inspect warehouse', 'is_done': 0},
-  );
-
-  // 4. Read back offline anytime
-  final tasks = await orbit.restore('tasks');
-  print('Loaded tasks: $tasks');
+  // 5. Re-use handle anywhere in your BLoC/UI with 1 line:
+  final cachedTasks = orbit.table<Task>('tasks');
+  cachedTasks.watchById('task-101').listen((task) => print(task?.title));
 }
 ```
+
+---
+
+## 🛠️ Complete CRUD Recipe (Copy & Paste for Any Flutter App)
+
+Whether building a simple to-do list or an enterprise POS system, this single pattern covers the entire offline-first lifecycle:
+
+```dart
+// ==========================================
+// 1. CONFIGURE ONCE AT APP STARTUP
+// ==========================================
+final orders = orbit.collection<Order>(
+  name: 'orders',
+  endpoint: '/api/v1/orders',
+  fromJson: Order.fromJson,
+  toJson: (o) => o.toJson(),
+
+  // Optional: Custom REST Verbs & Endpoints
+  createMethod: HttpMethod.post,               // Default: POST
+  updateMethod: HttpMethod.patch,              // Default: PUT (or PATCH)
+  updateEndpoint: '/api/v1/orders/:id',        // Auto-interpolates :id
+  deleteMethod: HttpMethod.delete,             // Default: DELETE
+
+  // Pluggable Server ID Harvesting (Postgres integer, Mongo _id, ERP codes):
+  idExtractor: (json) => json['order_id'] ?? json['id'] ?? json['data']?['id'],
+
+  // High-performance B-tree Expression Indexes on JSON fields:
+  indexes: ['customer_id', 'status', 'created_at'],
+
+  // Custom entity headers:
+  headers: {'X-Client-Version': '2.1.0'},
+);
+
+// ==========================================
+// 2. DAY-TO-DAY CRUD OPERATIONS (0ms delay)
+// ==========================================
+
+// CREATE (Instant 0ms local save; zero fake IDs sent to server)
+final newId = await orders.save(Order(customer: 'Alice', total: 120.0));
+
+// UPDATE (Auto-coalesces in outbox if still offline)
+await orders.save(existingOrder.copyWith(total: 150.0));
+
+// DELETE (Instant local delete + queues REST DELETE)
+await orders.delete(orderId);
+
+// ONE-SHOT QUERY (Transparent JSON filtering & pagination)
+final pending = await orders.query(
+  where: 'status = ? AND total > ?',
+  whereArgs: ['PENDING', 50.0],
+  limit: 20,
+  orderBy: 'created_at DESC',
+);
+
+// REACTIVE STREAM (Direct UI binding to Flutter StreamBuilder)
+Stream<List<Order>> liveOrders = orders.watch(
+  where: 'status = ?',
+  whereArgs: ['ACTIVE'],
+  orderBy: 'created_at DESC',
+);
+```
+
+---
+
+## 📦 Pure JSON Document Store & Zero-Pollution Wire
+
+Orbit is engineered as a **Pure JSON Document Store on SQLite WAL** with zero metadata pollution over HTTP:
+
+1. **Zero Schema Migrations or Relational Bloat:** 
+   Local tables (`orders`, `invoices`) store rich nested objects directly into `data_json`. Orbit never runs slow dynamic `ALTER TABLE ADD COLUMN` queries.
+2. **Auto-Generated Internal Tracking IDs:**
+   When a user creates a new record offline with clean JSON (no `id`), Orbit automatically generates an internal tracking ID (UUIDv7), assigns it to local SQLite, and returns `internalId` to Flutter. Your outgoing HTTP payload remains 100% pure and untouched.
+3. **Zero URL Duplication:**
+   Configure your endpoint once at app startup (`orders = client.collection(name: 'orders', endpoint: '/api/v1/orders')`). Daily CRUD operations (`orders.save(data)`) automatically inherit the URL without repetitive boilerplate.
+4. **Pluggable `idExtractor` (Zero Backend Guessing):**
+   Compatible with any backend schema without framework magic. If your backend returns MongoDB `_id` or custom SAP `orderNumber`, declare it in 1 line:
+   ```dart
+   final orders = client.collection(
+     name: 'orders',
+     endpoint: '/api/v1/orders',
+     idExtractor: (json) => json['order_number'] ?? json['id'],
+   );
+   ```
+5. **Transparent JSON Querying & Pagination:**
+   Write standard Dart queries with optional limits. Orbit transparently translates field filters to SQLite `json_extract`:
+   ```dart
+   final active = await orders.query(
+     where: 'status = ?',
+     whereArgs: ['processing'],
+     limit: 20,
+     orderBy: 'created_at DESC',
+   );
+   ```
 
 ---
 
@@ -237,7 +359,7 @@ orbit_sync/
 │   └── orbit_sync/               👈 THE MAIN FLUTTER PACKAGE (Start here!)
 │       ├── lib/                  # OrbitClient & local sync engine
 │       ├── example/              # Complete runnable Flutter demo app
-│       └── test/                 # 152 automated unit, durability & chaos tests
+│       └── test/                 # 176 automated unit, durability, Dio & chaos tests
 │
 ├── scripts/
 │   └── run_airplane_e2e.sh       # Hardware & Emulator Airplane Mode E2E Test Runner
@@ -261,7 +383,7 @@ flutter run
 ## 🧪 Running Tests
 
 ```bash
-# Test the core sync engine (152 tests)
+# Test the core sync engine (176 tests)
 cd packages/orbit_sync && flutter test
 
 # Run analyzer
