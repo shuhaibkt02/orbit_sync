@@ -140,7 +140,9 @@ class SqliteSchema {
         '$entityName:data_json',
       ]);
     } catch (e) {
-      if (e is ClosedException) return;
+      if (db.closed || e.toString().toLowerCase().contains('closed')) {
+        return;
+      }
       rethrow;
     }
   }
