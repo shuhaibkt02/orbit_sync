@@ -27,7 +27,7 @@ class OrbitClientInitializer {
     }
     final base = appDir ?? baseDir;
     if (base == null || base.isEmpty) {
-      throw ArgumentError('Either databasePath or appDir/baseDir must be provided.');
+      return 'orbit.db';
     }
     final cleanBase = base.replaceAll(RegExp(r'[/\\]+$'), '');
     final cleanUser = userId?.trim();
