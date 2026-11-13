@@ -4,11 +4,11 @@
 
 Your Flutter app works 100% offline. Instant local saves (0ms delay). Zero loading spinners. When the device reconnects to Wi-Fi or cellular, Orbit quietly syncs all changes with your REST API in the background.
 
-Works with **any backend** (Node.js, Python, Go, Ruby, PHP, Java, Spring Boot, Django, Express, NestJS, FastAPI) — no proprietary databases or backend plugins required.
+Works with your existing REST API — no proprietary database or server configuration required.
 
-> [!NOTE]
-> **Community-Driven & Open to Feedback:**
-> Offline synchronization across diverse mobile networks and backend architectures can encounter unique edge cases. While Orbit is thoroughly verified with 346 automated tests, if you encounter any unexpected behavior or network edge cases, please report them on our [GitHub Issues](https://github.com/shuhaibkt/orbit_sync/issues). Your feedback directly helps improve Orbit for the entire Flutter community!
+> [!TIP]
+> **Found an edge case?**
+> Offline networking has many real-world quirks. If you run into any unexpected behavior, please report it on [GitHub Issues](https://github.com/shuhaibkt/orbit_sync/issues). Every report helps make Orbit even better for the Flutter community!
 
 ---
 
@@ -310,7 +310,7 @@ Here is the complete end-to-end flow from local user interaction to your cloud R
                                         ▼
  ┌─────────────────────────────────────────────────────────────────────────────┐
  │                          6. YOUR CLOUD REST API                             │
- │           (Node.js, Python, Django, Go, Java, Spring Boot, etc.)            │
+ │                        (Standard JSON Endpoints)                            │
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
