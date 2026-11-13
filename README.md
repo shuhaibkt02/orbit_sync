@@ -7,7 +7,7 @@ Instant local saves (0ms). Zero loading spinners. Automatic background cloud syn
 [![pub package](https://img.shields.io/badge/pub.dev-orbit__sync%20v1.0.0-blue.svg)](https://pub.dev/packages/orbit_sync)
 [![test suite](https://img.shields.io/badge/tests-346%20passed%20(100%25)-brightgreen.svg)](https://github.com/shuhaibkt/orbit_sync)
 [![license](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/shuhaibkt/orbit_sync/blob/main/LICENSE)
-[![platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Web%20%7C%20Linux%20%7C%20Windows-teal.svg)](https://flutter.dev)
+[![platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-teal.svg)](https://flutter.dev)
 
 ---
 
@@ -224,15 +224,79 @@ If Alice edits an order's title offline and Bob marks the order paid on the serv
 Creating an Invoice with 3 Invoice Items while offline?  
 Orbit assigns temporary local IDs so your local UI updates instantly. When reconnected, Orbit uploads the parent invoice first, receives the server's real ID (`inv_998`), updates the child items automatically, and then uploads them. **Zero foreign-key crashes.**
 
-### 3. Error Isolation (Dead-Letter Queue)
+### 3. Error Isolation & Dead-Letter Queue (DLQ)
 If one bad item fails server validation (e.g., an expired coupon code):
-- Orbit moves **only that single item** to an isolated queue (`status: 'dlq'`).
+- Orbit isolates **only that single item** (`status: 'validation_error'` with automatic optimistic rollback to its baseline snapshot; poison pills and retry exhaustions transition to `status: 'dlq'`).
 - All other pending orders continue syncing smoothly without getting stuck.
-- Your app can notify the user with the exact server error message.
+- Your app can notify the user with the exact server error message via `watchFailures()`.
 
 ### 4. Smart Battery & Network Protection
 - **Flap Guard:** When driving through tunnels or spotty cellular towers, Orbit pauses briefly to avoid draining the user's battery with rapid reconnect attempts.
 - **Canary Probe:** Detects hotel and airport Wi-Fi login screens before attempting to sync, preventing corrupted requests.
+
+---
+
+## 🚀 Enterprise-Grade Superpowers
+
+Orbit isn't just an outbox queue — it is an enterprise distributed consensus engine engineered directly into your local SQLite runtime. Here are the advanced architectural capabilities working under the hood:
+
+### 1. Instant Optimistic Rollback on Server Rejection
+When a server rejects an edit (HTTP 422 validation failure or 409 conflict), Orbit does not require a slow remote re-fetch. It automatically rolls back the local SQLite entity to its exact pre-mutation baseline snapshot (`base_snapshot_json`), instantly healing the local cache with zero ghost writes.
+
+### 2. Recursive Causal Horizon Guard (CTE Dependency Shield)
+If a parent mutation fails server validation or gets quarantined, what happens to dependent child actions? Orbit executes a recursive SQLite Common Table Expression (CTE) to traverse the entire dependency graph and automatically hold all downstream descendants in `status: 'held'`. **Zero orphaned records. Zero foreign-key crashes.**
+
+### 3. Emergency SLA Escalation Engine
+Transactions nearing their business deadline (<15 minutes before SLA breach) automatically leapfrog to the absolute front of the upload queue, overriding standard priority tiers. Your mission-critical payments, incident reports, and compliance audits will never miss their deadline—even under heavy outbox volume.
+
+### 4. Dynamic DAG Priority & Deadline Inheritance
+If a high-priority action (e.g. `Priority.critical` checkout) depends on a background task (e.g. `Priority.background` address update), Orbit dynamically promotes the parent task to `Priority.critical` and shortens its deadline to match the child's SLA. Prerequisite tasks never bottleneck urgent business flows.
+
+### 5. Metered & Cellular Bandwidth Protection
+Prevent surprise cellular data bills for your users. Configure `NetworkMeteredPolicy.wifiOnlyMedia` to hold large binary attachments and photos in queue while allowing lightweight JSON text mutations to sync seamlessly over cellular. The moment the device reaches Wi-Fi, media sync resumes automatically.
+
+### 6. Per-Item Reactive Telemetry (`watchRecords`)
+Need to display syncing spinners or warning badges next to individual rows in your list? Instead of managing custom UI state, bind to `watchRecords()`:
+
+```dart
+StreamBuilder<List<OrbitRecord<Task>>>(
+  stream: tasks.watchRecords(),
+  builder: (context, snapshot) {
+    final records = snapshot.data ?? [];
+    return ListView.builder(
+      itemCount: records.length,
+      itemBuilder: (ctx, i) {
+        final record = records[i];
+        return ListTile(
+          title: Text(record.data.title),
+          trailing: record.status == OrbitSyncStatus.inFlight
+              ? const CupertinoActivityIndicator()
+              : record.status == OrbitSyncStatus.pending
+                  ? const Icon(CupertinoIcons.clock, size: 16, color: Colors.orange)
+                  : const Icon(CupertinoIcons.checkmark_alt, size: 16, color: Colors.green),
+        );
+      },
+    );
+  },
+);
+```
+
+### 7. Cloud Backup & Time-Travel Defense
+When users upgrade phones and restore iCloud or Google Drive backups, stale offline mutations from weeks ago can accidentally replay against the server. Orbit binds a hardware-backed token to its SQLite schema; if an outdated backup restoration is detected on new hardware, Orbit safely freezes obsolete pending mutations to prevent catastrophic replay bugs.
+
+### 8. Multi-User Isolation & Guest Session Merging
+Support multiple user accounts on the same device with total isolation and frictionless guest onboarding:
+
+```dart
+// Switch user accounts cleanly — isolates each user into their own SQLite sandbox:
+await orbit.switchUser('user-987');
+
+// Frictionless guest onboarding: merge offline guest carts into the authenticated user:
+await OrbitClient.mergeGuestSession(
+  guestDatabasePath: guestDbPath,
+  targetDatabasePath: userDbPath,
+);
+```
 
 ---
 
@@ -301,7 +365,7 @@ Here is the complete picture showing both **how data is saved and pushed**, and 
  │    • Offline? ──► Reads stay instant; Outbox safely holds until connection returns  │
  │    • Online?  ──► Dispatches high-priority outbox queues & pulls remote changes     │
  │    • Smart Auto-Merge: Seamlessly merges server updates into local cache            │
- │    • Error Quarantine: Bad items (HTTP 422) isolate to DLQ without blocking queue   │
+ │    • Error Quarantine: Bad items (HTTP 422) isolate without blocking queue          │
  └───────────────────────────────────────▲─────────────────────────────────────────────┘
                                          │
                                          ▼

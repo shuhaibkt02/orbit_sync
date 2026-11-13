@@ -85,9 +85,68 @@ class AppleHeaderBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  StreamBuilder<SyncStatusSummary>(
-                    stream: orbit.watchSummary(),
-                    builder: (context, snapshot) => _buildCapsule(context, snapshot.data),
+                  StreamBuilder<bool>(
+                    stream: orbit.connectivity.onConnectivityChanged,
+                    initialData: orbit.isOnline,
+                    builder: (context, connSnapshot) {
+                      final isOnline = connSnapshot.data ?? orbit.isOnline;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ApplePressable(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              orbit.simulateOffline = !orbit.simulateOffline;
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: orbit.simulateOffline
+                                    ? AppleTheme.warning(context).withValues(alpha: 0.18)
+                                    : AppleTheme.secondaryBg(context),
+                                borderRadius: BorderRadius.circular(AppleTheme.radiusPill),
+                                border: Border.all(
+                                  color: orbit.simulateOffline
+                                      ? AppleTheme.warning(context).withValues(alpha: 0.5)
+                                      : AppleTheme.specularBorder(context),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    orbit.simulateOffline
+                                        ? CupertinoIcons.airplane
+                                        : CupertinoIcons.wifi,
+                                    size: 13,
+                                    color: orbit.simulateOffline
+                                        ? AppleTheme.warning(context)
+                                        : AppleTheme.success(context),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    orbit.simulateOffline ? 'Offline' : 'Online',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: orbit.simulateOffline
+                                          ? AppleTheme.warning(context)
+                                          : AppleTheme.label(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          StreamBuilder<SyncStatusSummary>(
+                            stream: orbit.watchSummary(),
+                            builder: (context, snapshot) => _buildCapsule(context, snapshot.data, isOnline),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -98,17 +157,23 @@ class AppleHeaderBar extends StatelessWidget {
     );
   }
 
-  Widget _buildCapsule(BuildContext context, SyncStatusSummary? summary) {
+  Widget _buildCapsule(BuildContext context, SyncStatusSummary? summary, bool isOnline) {
     final pending = summary?.pending ?? 0;
     final inFlight = summary?.inFlight ?? 0;
     final hasFailures = summary?.hasFailures == true;
+    final isOffline = orbit.simulateOffline || !isOnline;
 
     Color bg;
     Color fg;
     IconData icon;
     String label;
 
-    if (hasFailures) {
+    if (isOffline) {
+      bg = AppleTheme.warning(context).withValues(alpha: 0.18);
+      fg = AppleTheme.warning(context);
+      icon = CupertinoIcons.airplane;
+      label = pending > 0 ? '$pending Offline' : 'Offline';
+    } else if (hasFailures) {
       bg = AppleTheme.destructive(context);
       fg = Colors.white;
       icon = CupertinoIcons.exclamationmark_triangle_fill;

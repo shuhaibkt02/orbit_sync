@@ -299,6 +299,81 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                           ],
                         ),
                       ),
+                      const SizedBox(height: 14),
+
+                      // Offline Mode Toggle Card
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                          border: Border.all(
+                            color: widget.client.simulateOffline
+                                ? AppleTheme.warning(context).withValues(alpha: 0.5)
+                                : AppleTheme.specularBorder(context),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: widget.client.simulateOffline
+                                    ? AppleTheme.warning(context).withValues(alpha: 0.16)
+                                    : AppleTheme.success(context).withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(AppleTheme.radiusSmall),
+                              ),
+                              child: Icon(
+                                widget.client.simulateOffline
+                                    ? CupertinoIcons.airplane
+                                    : CupertinoIcons.wifi,
+                                size: 18,
+                                color: widget.client.simulateOffline
+                                    ? AppleTheme.warning(context)
+                                    : AppleTheme.success(context),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Simulate Offline',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppleTheme.label(context),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.client.simulateOffline
+                                        ? 'Network paused (Local 0ms saves only)'
+                                        : 'Online (Auto-sync enabled)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppleTheme.secondaryLabel(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            CupertinoSwitch(
+                              value: widget.client.simulateOffline,
+                              activeColor: AppleTheme.warning(context),
+                              onChanged: (val) {
+                                HapticFeedback.selectionClick();
+                                setState(() {
+                                  widget.client.simulateOffline = val;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
 
                       if (failed > 0) ...[
                         const SizedBox(height: 12),
