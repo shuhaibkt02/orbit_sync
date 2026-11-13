@@ -295,9 +295,12 @@ class RestEndpoints<T> {
 
   /// Default list unwrapper handling raw JSON array or `{"data": [...]}` envelope.
   static List<Map<String, dynamic>> defaultUnwrap(dynamic json) {
-    if (json is List) return json.cast<Map<String, dynamic>>();
-    if (json is Map && json['data'] is List)
+    if (json is List) {
+      return json.cast<Map<String, dynamic>>();
+    }
+    if (json is Map && json['data'] is List) {
       return (json['data'] as List).cast<Map<String, dynamic>>();
+    }
     return const [];
   }
 }

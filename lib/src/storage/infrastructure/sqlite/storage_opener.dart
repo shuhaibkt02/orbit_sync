@@ -43,8 +43,9 @@ class StorageOpener {
       await db.initialize();
       if (path != ':memory:' && File(path).existsSync()) {
         final check = await db.get('PRAGMA quick_check(1);');
-        if (check.values.first?.toString().toLowerCase() != 'ok')
+        if (check.values.first?.toString().toLowerCase() != 'ok') {
           deepCorrupt = true;
+        }
       }
     } catch (_) {
       deepCorrupt = true;

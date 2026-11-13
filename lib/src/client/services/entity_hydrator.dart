@@ -29,9 +29,10 @@ class EntityHydrator {
     final Map<String, String> reqHeaders = {'content-type': 'application/json'};
     if (getAuthToken != null) {
       final token = await getAuthToken();
-      if (token != null)
+      if (token != null) {
         reqHeaders['authorization'] =
             token.startsWith('Bearer ') ? token : 'Bearer $token';
+      }
     }
     if (headers != null) reqHeaders.addAll(headers);
 

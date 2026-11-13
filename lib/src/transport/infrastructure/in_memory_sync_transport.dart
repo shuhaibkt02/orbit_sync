@@ -45,10 +45,12 @@ class InMemorySyncTransport implements SyncTransport {
     required String idempotencyKey,
     String? chaos,
   }) async {
-    if (simulatedLatency > Duration.zero)
+    if (simulatedLatency > Duration.zero) {
       await Future<void>.delayed(simulatedLatency);
-    if (pushError != null)
+    }
+    if (pushError != null) {
       return TransportResponse(statusCode: 0, error: pushError);
+    }
 
     pushedBatches.add(mutations);
     return TransportResponse(
@@ -65,10 +67,12 @@ class InMemorySyncTransport implements SyncTransport {
     String? entityId,
     Map<String, String>? headers,
   }) async {
-    if (simulatedLatency > Duration.zero)
+    if (simulatedLatency > Duration.zero) {
       await Future<void>.delayed(simulatedLatency);
-    if (pushError != null)
+    }
+    if (pushError != null) {
       return TransportResponse(statusCode: 0, error: pushError);
+    }
 
     customPushes.add({
       'url': url,
@@ -96,10 +100,12 @@ class InMemorySyncTransport implements SyncTransport {
     Duration? timeout,
     void Function(int sent, int total)? onSendProgress,
   }) async {
-    if (simulatedLatency > Duration.zero)
+    if (simulatedLatency > Duration.zero) {
       await Future<void>.delayed(simulatedLatency);
-    if (pushError != null)
+    }
+    if (pushError != null) {
       return TransportResponse(statusCode: 0, error: pushError);
+    }
 
     multipartPushes.add({
       'uri': uri,
@@ -124,10 +130,12 @@ class InMemorySyncTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    if (simulatedLatency > Duration.zero)
+    if (simulatedLatency > Duration.zero) {
       await Future<void>.delayed(simulatedLatency);
-    if (pullError != null)
+    }
+    if (pullError != null) {
       return TransportResponse(statusCode: 0, error: pullError);
+    }
 
     final payload = {
       'changes': cannedPullChanges,

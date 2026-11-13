@@ -560,11 +560,12 @@ class OrbitClientImpl implements OrbitClient {
 
   Future<int> holdDescendants(String parentId) async {
     final h = await horizonGuard.holdDescendantMutations(parentId);
-    if (h > 0)
+    if (h > 0) {
       observer.publish(CascadeFailureEvent(
           timestamp: DateTime.now().toUtc(),
           parentMutationId: parentId,
           childMutationId: 'held-$h'));
+    }
     return h;
   }
 
@@ -617,9 +618,10 @@ class OrbitClientImpl implements OrbitClient {
   @override
   Future<int> pruneExpiredCache(String entity) async {
     final count = await storage.pruneExpiredCache(entity);
-    if (count > 0)
+    if (count > 0) {
       observer.publish(DatabasePrunedEvent(
           timestamp: DateTime.now().toUtc(), prunedCount: count));
+    }
     return count;
   }
 

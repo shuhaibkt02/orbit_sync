@@ -55,8 +55,9 @@ class SqliteTypeSanitizer {
       } catch (_) {}
     }
     for (final entry in row.entries) {
-      if (entry.key == 'data_json' || entry.key == '_base_snapshot_json')
+      if (entry.key == 'data_json' || entry.key == '_base_snapshot_json') {
         continue;
+      }
       final val = entry.value;
       if (val is String && val.isNotEmpty) {
         final first = val[0];

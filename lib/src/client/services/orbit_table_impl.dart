@@ -285,8 +285,9 @@ class OrbitTable<T> {
           caseSensitive: false),
       (match) {
         final col = match.group(1)!;
-        if (col.toUpperCase() == 'ASC' || col.toUpperCase() == 'DESC')
+        if (col.toUpperCase() == 'ASC' || col.toUpperCase() == 'DESC') {
           return col;
+        }
         if (_systemCols.contains(col.toLowerCase())) return col;
         return "json_extract(data_json, '\$.$col')";
       },
@@ -681,9 +682,10 @@ class OrbitTable<T> {
       final reqHeaders = <String, String>{'content-type': 'application/json'};
       if (getAuthToken != null) {
         final token = await getAuthToken!();
-        if (token != null)
+        if (token != null) {
           reqHeaders['authorization'] =
               token.startsWith('Bearer ') ? token : 'Bearer $token';
+        }
       }
       final resolvedHeaders = await endpointResolver.resolveHeaders(headers);
       if (resolvedHeaders != null) reqHeaders.addAll(resolvedHeaders);
