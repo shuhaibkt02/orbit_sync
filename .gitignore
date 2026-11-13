@@ -13,28 +13,18 @@ Thumbs.db
 pubspec.lock
 build/
 
-# Scratch & Spikes
-.scratch/
+# Temporary databases & logs
 *.db
 *.db-wal
 *.db-shm
-
-# Internal Specs, Research & Skills
-docs/
-issues/
-.agents/
-.arena/
+*.log
 
 # IDEs
 .idea/
 .vscode/
 *.iml
 
-# Python & Graphify
-__pycache__/
-*.pyc
-.venv/
-graphify-out/
-.mcp.json
-.claude/
-CLAUDE.md
+# Internal Specs & Blueprints
+blueprint/
+docs/
+
