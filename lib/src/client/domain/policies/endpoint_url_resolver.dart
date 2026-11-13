@@ -22,13 +22,17 @@ class EndpointUrlResolver {
     }
 
     String fullUrl;
-    if (resolvedPath.startsWith('http://') || resolvedPath.startsWith('https://')) {
+    if (resolvedPath.startsWith('http://') ||
+        resolvedPath.startsWith('https://')) {
       fullUrl = resolvedPath;
     } else if (baseUrl.isEmpty) {
       fullUrl = resolvedPath;
     } else {
-      final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-      final cleanPath = resolvedPath.startsWith('/') ? resolvedPath : '/$resolvedPath';
+      final cleanBase = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+      final cleanPath =
+          resolvedPath.startsWith('/') ? resolvedPath : '/$resolvedPath';
       fullUrl = '$cleanBase$cleanPath';
     }
 
@@ -66,7 +70,8 @@ class EndpointUrlResolver {
   }) {
     final path = endpoint.resolveUpdatePath(id);
     final effectiveQuery = endpoint.resolveQueryParams(queryParams);
-    return resolve(path, id: id, pathParams: pathParams, queryParams: effectiveQuery);
+    return resolve(path,
+        id: id, pathParams: pathParams, queryParams: effectiveQuery);
   }
 
   /// Resolves the complete URL for deleting a resource (DELETE) from [endpoint].
@@ -78,7 +83,8 @@ class EndpointUrlResolver {
   }) {
     final path = endpoint.resolveDeletePath(id);
     final effectiveQuery = endpoint.resolveQueryParams(queryParams);
-    return resolve(path, id: id, pathParams: pathParams, queryParams: effectiveQuery);
+    return resolve(path,
+        id: id, pathParams: pathParams, queryParams: effectiveQuery);
   }
 
   /// Resolves the complete URL for fetching a single resource detail (GET) from [endpoint].
@@ -90,7 +96,8 @@ class EndpointUrlResolver {
   }) {
     final path = endpoint.resolveDetailPath(id);
     final effectiveQuery = endpoint.resolveQueryParams(queryParams);
-    return resolve(path, id: id, pathParams: pathParams, queryParams: effectiveQuery);
+    return resolve(path,
+        id: id, pathParams: pathParams, queryParams: effectiveQuery);
   }
 
   /// Resolves the complete URL for listing/fetching collection resources (GET) from [endpoint].
@@ -147,18 +154,26 @@ class TableEndpointResolver<T> {
 
     if (isUpdate) {
       if (endpoints?.update == null) {
-        throw StateError('Cannot update: No updateEndpoint configured for "$entityName". Orbit refuses un-synced local edits.');
+        throw StateError(
+            'Cannot update: No updateEndpoint configured for "$entityName". Orbit refuses un-synced local edits.');
       }
       final req = endpoints!.update!(item);
-      final url = urlResolver.resolve(req.path, id: id, pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
+      final url = urlResolver.resolve(req.path,
+          id: id,
+          pathParams: pathParams,
+          queryParams: queryParams ?? req.queryParams);
       return (url: url, method: req.method.verb);
     }
 
     if (endpoints?.create == null) {
-      throw StateError('Cannot save: No createEndpoint configured for "$entityName". Orbit refuses un-synced local edits.');
+      throw StateError(
+          'Cannot save: No createEndpoint configured for "$entityName". Orbit refuses un-synced local edits.');
     }
     final req = endpoints!.create!(item);
-    final url = urlResolver.resolve(req.path, id: id, pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
+    final url = urlResolver.resolve(req.path,
+        id: id,
+        pathParams: pathParams,
+        queryParams: queryParams ?? req.queryParams);
     return (url: url, method: req.method.verb);
   }
 
@@ -178,10 +193,14 @@ class TableEndpointResolver<T> {
     }
 
     if (endpoints?.delete == null) {
-      throw StateError('Cannot delete: No deleteEndpoint configured for "$entityName". Orbit refuses un-synced local deletions.');
+      throw StateError(
+          'Cannot delete: No deleteEndpoint configured for "$entityName". Orbit refuses un-synced local deletions.');
     }
     final req = endpoints!.delete!(id);
-    final url = urlResolver.resolve(req.path, id: id, pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
+    final url = urlResolver.resolve(req.path,
+        id: id,
+        pathParams: pathParams,
+        queryParams: queryParams ?? req.queryParams);
     return (url: url, method: req.method.verb);
   }
 
@@ -201,10 +220,14 @@ class TableEndpointResolver<T> {
     }
 
     if (endpoints?.getById == null) {
-      throw StateError('Cannot fetch detail: No getById configured for "$entityName".');
+      throw StateError(
+          'Cannot fetch detail: No getById configured for "$entityName".');
     }
     final req = endpoints!.getById!(id);
-    final url = urlResolver.resolve(req.path, id: id, pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
+    final url = urlResolver.resolve(req.path,
+        id: id,
+        pathParams: pathParams,
+        queryParams: queryParams ?? req.queryParams);
     return (url: url, method: req.method.verb);
   }
 
@@ -222,14 +245,17 @@ class TableEndpointResolver<T> {
     }
 
     if (endpoints?.list == null) {
-      throw StateError('Cannot fetch list: No list endpoint configured for "$entityName".');
+      throw StateError(
+          'Cannot fetch list: No list endpoint configured for "$entityName".');
     }
     final req = endpoints!.list!(queryParams);
-    final url = urlResolver.resolve(req.path, pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
+    final url = urlResolver.resolve(req.path,
+        pathParams: pathParams, queryParams: queryParams ?? req.queryParams);
     return (url: url, method: req.method.verb);
   }
 
-  Future<Map<String, String>?> resolveHeaders([Map<String, String>? additionalHeaders]) async {
+  Future<Map<String, String>?> resolveHeaders(
+      [Map<String, String>? additionalHeaders]) async {
     if (restEndpoint != null) {
       final h = await restEndpoint!.resolveHeaders(additionalHeaders);
       return h.isNotEmpty ? h : null;

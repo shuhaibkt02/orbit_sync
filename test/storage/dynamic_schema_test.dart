@@ -25,7 +25,8 @@ void main() {
       final emissions = <int>[];
       final completer = Completer<void>();
 
-      final sub = storage.watch('SELECT * FROM tasks ORDER BY id;').listen((rs) {
+      final sub =
+          storage.watch('SELECT * FROM tasks ORDER BY id;').listen((rs) {
         emissions.add(rs.length);
         if (emissions.length == 3) {
           completer.complete();
@@ -52,14 +53,17 @@ void main() {
       expect(emissions, equals([0, 1, 2]));
     });
 
-    test('Test Case 5: Native SQLite Expression Indexes and JSON Queries on Document Columns', () async {
+    test(
+        'Test Case 5: Native SQLite Expression Indexes and JSON Queries on Document Columns',
+        () async {
       await storage.registerEntityTable('typed_tasks', {
         'title': 'TEXT',
         'total_count': 'INTEGER',
         'unit_price': 'REAL',
         'is_completed': 'INTEGER',
       });
-      await SqliteSchema.createExpressionIndex(storage.db, 'typed_tasks', 'total_count');
+      await SqliteSchema.createExpressionIndex(
+          storage.db, 'typed_tasks', 'total_count');
 
       await storage.save(
         entity: 'typed_tasks',
@@ -72,16 +76,21 @@ void main() {
         },
       );
 
-      final tableInfo = await storage.db.getAll('PRAGMA table_info(typed_tasks);');
+      final tableInfo =
+          await storage.db.getAll('PRAGMA table_info(typed_tasks);');
       final columnNames = tableInfo.map((r) => r['name'] as String).toSet();
-      expect(columnNames, equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}));
+      expect(columnNames,
+          equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}));
 
-      final gtResult = await storage.db.getAll("SELECT id FROM typed_tasks WHERE json_extract(data_json, '\$.total_count') > 40;");
+      final gtResult = await storage.db.getAll(
+          "SELECT id FROM typed_tasks WHERE json_extract(data_json, '\$.total_count') > 40;");
       expect(gtResult.length, 1);
       expect(gtResult.first['id'], 'task-types-1');
     });
 
-    test('Test Case 10: External Host Domain Model (End-to-End Serialization & Query Cycle)', () async {
+    test(
+        'Test Case 10: External Host Domain Model (End-to-End Serialization & Query Cycle)',
+        () async {
       await storage.registerEntityTable('orders', {
         'customer_id': 'TEXT',
         'total_amount': 'REAL',
@@ -133,7 +142,8 @@ void main() {
 
       expect(rows.length, 1);
 
-      final doc = jsonDecode(rows.first['data_json'] as String) as Map<String, dynamic>;
+      final doc =
+          jsonDecode(rows.first['data_json'] as String) as Map<String, dynamic>;
       final restored = MockExternalOrder.fromJson(doc);
 
       expect(restored.id, order1.id);
@@ -149,7 +159,8 @@ void main() {
         "SELECT payload_json FROM _sync_outbox WHERE entity_name = 'orders' AND entity_id = ?;",
         [order1.id],
       );
-      final outboxPayload = jsonDecode(outboxRow['payload_json'] as String) as Map<String, dynamic>;
+      final outboxPayload = jsonDecode(outboxRow['payload_json'] as String)
+          as Map<String, dynamic>;
 
       expect(outboxPayload['id'], order1.id);
       expect(outboxPayload['customer_id'], 'cust-alpha-99');
@@ -179,16 +190,21 @@ void main() {
         [updateMutId],
       );
 
-      final capturedBase = jsonDecode(updateOutbox['base_snapshot_json'] as String) as Map<String, dynamic>;
+      final capturedBase =
+          jsonDecode(updateOutbox['base_snapshot_json'] as String)
+              as Map<String, dynamic>;
       expect(capturedBase['total_amount'], 149.99);
       expect(capturedBase['item_count'], 3);
 
-      final newPayload = jsonDecode(updateOutbox['payload_json'] as String) as Map<String, dynamic>;
+      final newPayload = jsonDecode(updateOutbox['payload_json'] as String)
+          as Map<String, dynamic>;
       expect(newPayload['total_amount'], 299.99);
       expect(newPayload['item_count'], 5);
 
-      final domainRow = await storage.db.get("SELECT data_json FROM orders WHERE id = ?;", [updatedOrder1.id]);
-      final storedDataJson = jsonDecode(domainRow['data_json'] as String) as Map<String, dynamic>;
+      final domainRow = await storage.db.get(
+          "SELECT data_json FROM orders WHERE id = ?;", [updatedOrder1.id]);
+      final storedDataJson =
+          jsonDecode(domainRow['data_json'] as String) as Map<String, dynamic>;
       expect(storedDataJson['total_amount'], 299.99);
       expect(storedDataJson['customer_id'], 'cust-alpha-99');
     });

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 /// Test environment bundle for Layer 2 consensus test suites.
 class TestConsensusEnv {
@@ -29,13 +29,16 @@ class TestConsensusEnv {
       maxReaders: maxReaders,
     );
 
-    await storage.registerEntityTable('tasks', taskColumns ?? {
-      'title': 'TEXT',
-      'dept': 'TEXT',
-      'priority': 'TEXT',
-      'start_time': 'TEXT',
-      'end_time': 'TEXT',
-    });
+    await storage.registerEntityTable(
+        'tasks',
+        taskColumns ??
+            {
+              'title': 'TEXT',
+              'dept': 'TEXT',
+              'priority': 'TEXT',
+              'start_time': 'TEXT',
+              'end_time': 'TEXT',
+            });
 
     final worker = SyncWorker(
       storage: storage,

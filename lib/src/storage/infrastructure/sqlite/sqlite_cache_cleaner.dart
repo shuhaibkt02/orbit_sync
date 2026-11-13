@@ -33,10 +33,12 @@ class SqliteCacheCleaner {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     return await db.writeTransaction<int>((tx) async {
-      final tableExists = knownColumns.contains('$entity:id') || (await tx.getAll(
-        'SELECT 1 FROM sqlite_master WHERE type="table" AND name = ?',
-        [entity],
-      )).isNotEmpty;
+      final tableExists = knownColumns.contains('$entity:id') ||
+          (await tx.getAll(
+            'SELECT 1 FROM sqlite_master WHERE type="table" AND name = ?',
+            [entity],
+          ))
+              .isNotEmpty;
       if (!tableExists) return 0;
       knownColumns.add('$entity:id');
 

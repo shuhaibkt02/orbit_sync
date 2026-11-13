@@ -4,7 +4,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 import '../storage/storage_test_helpers.dart';
 
 class _HookableTransport implements SyncTransport {
-  final Future<void> Function(List<Map<String, dynamic>> mutations)? onPushBatch;
+  final Future<void> Function(List<Map<String, dynamic>> mutations)?
+      onPushBatch;
 
   _HookableTransport({this.onPushBatch});
 
@@ -57,7 +58,8 @@ class _HookableTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    return TransportResponse(statusCode: 200, body: '{"changes":[],"next_cursor":0}');
+    return TransportResponse(
+        statusCode: 200, body: '{"changes":[],"next_cursor":0}');
   }
 
   @override
@@ -68,7 +70,9 @@ class _HookableTransport implements SyncTransport {
 }
 
 void main() {
-  group('Ticket 10: Hybrid EDF Queue Claiming (Priority + SLA Emergency Escalation)', () {
+  group(
+      'Ticket 10: Hybrid EDF Queue Claiming (Priority + SLA Emergency Escalation)',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
@@ -118,7 +122,9 @@ void main() {
       return mutationId;
     }
 
-    test('Test SLA Emergency Escalation: Low-priority mutation (priority: 0) expiring in 5 mins jumps ahead of high-priority mutation (priority: 3) expiring in 24h', () async {
+    test(
+        'Test SLA Emergency Escalation: Low-priority mutation (priority: 0) expiring in 5 mins jumps ahead of high-priority mutation (priority: 3) expiring in 24h',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -157,13 +163,17 @@ void main() {
       expect(result.applied, equals(2));
 
       // Low priority urgent SLA must jump ahead of high priority safe SLA!
-      expect(claimedIds, equals([
-        'task-low-prio-urgent-sla',
-        'task-high-prio-safe-sla',
-      ]));
+      expect(
+          claimedIds,
+          equals([
+            'task-low-prio-urgent-sla',
+            'task-high-prio-safe-sla',
+          ]));
     });
 
-    test('Test Business Priority Tier: Non-emergency mutations order by priority DESC (tier 3 before tier 2 before tier 1 before tier 0)', () async {
+    test(
+        'Test Business Priority Tier: Non-emergency mutations order by priority DESC (tier 3 before tier 2 before tier 1 before tier 0)',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -210,15 +220,19 @@ void main() {
       expect(result.applied, equals(4));
 
       // Must strictly order by business priority tier: 3 > 2 > 1 > 0
-      expect(claimedIds, equals([
-        'task-tier-3',
-        'task-tier-2',
-        'task-tier-1',
-        'task-tier-0',
-      ]));
+      expect(
+          claimedIds,
+          equals([
+            'task-tier-3',
+            'task-tier-2',
+            'task-tier-1',
+            'task-tier-0',
+          ]));
     });
 
-    test('Test Earliest Deadline First within same tier: Two tier-2 mutations order by tighter SLA deadline first', () async {
+    test(
+        'Test Earliest Deadline First within same tier: Two tier-2 mutations order by tighter SLA deadline first',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -253,13 +267,17 @@ void main() {
       expect(result.applied, equals(2));
 
       // Within same priority 2, tighter SLA deadline dispatches first
-      expect(claimedIds, equals([
-        'task-tier-2-tight',
-        'task-tier-2-loose',
-      ]));
+      expect(
+          claimedIds,
+          equals([
+            'task-tier-2-tight',
+            'task-tier-2-loose',
+          ]));
     });
 
-    test('Test Sequence Fallback: Identical priority and SLA order by sequence_id ASC', () async {
+    test(
+        'Test Sequence Fallback: Identical priority and SLA order by sequence_id ASC',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -300,14 +318,18 @@ void main() {
       expect(result.applied, equals(3));
 
       // Strictly follows FIFO sequence_id ASC fallback
-      expect(claimedIds, equals([
-        'task-seq-first',
-        'task-seq-second',
-        'task-seq-third',
-      ]));
+      expect(
+          claimedIds,
+          equals([
+            'task-seq-first',
+            'task-seq-second',
+            'task-seq-third',
+          ]));
     });
 
-    test('Test Cooling Window Gating: Items where dispatch_after > now are strictly excluded from claiming', () async {
+    test(
+        'Test Cooling Window Gating: Items where dispatch_after > now are strictly excluded from claiming',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -356,7 +378,9 @@ void main() {
       expect(coolingRow['status'], equals('pending'));
     });
 
-    test('Test Backoff Retry Gating: Items where next_retry_at > now are strictly excluded from claiming', () async {
+    test(
+        'Test Backoff Retry Gating: Items where next_retry_at > now are strictly excluded from claiming',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -404,7 +428,9 @@ void main() {
       expect(backedOffRow['status'], equals('pending'));
     });
 
-    test('Test Force Claiming: force: true bypasses cooling window and backoff retry while preserving Hybrid EDF ordering', () async {
+    test(
+        'Test Force Claiming: force: true bypasses cooling window and backoff retry while preserving Hybrid EDF ordering',
+        () async {
       final simulatedNow = 1700000000000;
       final claimedIds = <String>[];
 
@@ -443,10 +469,12 @@ void main() {
       expect(result.applied, equals(2));
 
       // With force: true, both are claimed; urgent SLA still escalates over tier 3!
-      expect(claimedIds, equals([
-        'task-forced-urgent-cooling',
-        'task-forced-p3-backed-off',
-      ]));
+      expect(
+          claimedIds,
+          equals([
+            'task-forced-urgent-cooling',
+            'task-forced-p3-backed-off',
+          ]));
     });
   });
 }

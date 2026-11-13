@@ -21,7 +21,8 @@ export 'domain/policies/debounce_policy.dart';
 
 /// Clean Architecture coordinator facade for Layer 3 Connectivity Sensing Layer.
 class ConnectivityMonitor implements IConnectivityMonitor {
-  static const String fallbackProbeUrl = 'http://cp.cloudflare.com/generate_204';
+  static const String fallbackProbeUrl =
+      'http://cp.cloudflare.com/generate_204';
 
   final Duration timeout;
   final Duration heartbeatInterval;
@@ -29,7 +30,8 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   String? probeUrl;
   String? _defaultProbeUrl;
 
-  String? get defaultProbeUrl => _defaultProbeUrl ?? probeUrl ?? baseUrl ?? fallbackProbeUrl;
+  String? get defaultProbeUrl =>
+      _defaultProbeUrl ?? probeUrl ?? baseUrl ?? fallbackProbeUrl;
   set defaultProbeUrl(String? value) => _defaultProbeUrl = value;
 
   final Future<bool> Function()? reachabilityChecker;
@@ -65,13 +67,17 @@ class ConnectivityMonitor implements IConnectivityMonitor {
     DebouncePolicy debouncePolicy = DebouncePolicy.standard,
     http.Client? httpClient,
   })  : _defaultProbeUrl = defaultProbeUrl,
-        _probe = probe ?? HttpNetworkProbe(client: httpClient, defaultTimeout: timeout),
+        _probe = probe ??
+            HttpNetworkProbe(client: httpClient, defaultTimeout: timeout),
         _typeProvider = typeProvider ?? DefaultNetworkTypeProvider(),
         _stateMachine = DebouncedStateMachine(policy: debouncePolicy) {
     _typeSub = _typeProvider.onTypeChanged.listen((type) {
       if (_isDisposed) return;
       if (type.isDisconnected) {
-        _updatePhysicalState(isPhysicallyOnline: false, isCaptivePortal: false, bypassDebounce: true);
+        _updatePhysicalState(
+            isPhysicallyOnline: false,
+            isCaptivePortal: false,
+            bypassDebounce: true);
       } else {
         _publishState(isCaptivePortal: _currentState.isCaptivePortal);
         checkReachability(bypassDebounce: false);
@@ -102,37 +108,56 @@ class ConnectivityMonitor implements IConnectivityMonitor {
   Stream<bool> get onConnectivityChanged => _boolController.stream;
 
   @override
-  Future<bool> checkReachability({String? targetUrl, bool bypassDebounce = false}) async {
+  Future<bool> checkReachability(
+      {String? targetUrl, bool bypassDebounce = false}) async {
     if (_isDisposed || simulateOffline) return false;
 
     if (reachabilityChecker != null) {
       try {
         final ok = await reachabilityChecker!();
-        _updatePhysicalState(isPhysicallyOnline: ok, isCaptivePortal: false, bypassDebounce: bypassDebounce);
+        _updatePhysicalState(
+            isPhysicallyOnline: ok,
+            isCaptivePortal: false,
+            bypassDebounce: bypassDebounce);
         return ok;
       } catch (_) {
-        _updatePhysicalState(isPhysicallyOnline: false, isCaptivePortal: false, bypassDebounce: bypassDebounce);
+        _updatePhysicalState(
+            isPhysicallyOnline: false,
+            isCaptivePortal: false,
+            bypassDebounce: bypassDebounce);
         return false;
       }
     }
 
-    final rawUrl = targetUrl ?? probeUrl ?? _defaultProbeUrl ?? baseUrl ?? fallbackProbeUrl;
-    final targetUri = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
-        ? Uri.parse(rawUrl)
-        : Uri.parse('http://$rawUrl');
+    final rawUrl = targetUrl ??
+        probeUrl ??
+        _defaultProbeUrl ??
+        baseUrl ??
+        fallbackProbeUrl;
+    final targetUri =
+        (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+            ? Uri.parse(rawUrl)
+            : Uri.parse('http://$rawUrl');
 
     final result = await _probe.probe(targetUri, timeout: timeout);
     if (!result.isOnline) onProbeTimeout?.call(timeout, targetUri.toString());
-    _updatePhysicalState(isPhysicallyOnline: result.isOnline, isCaptivePortal: result.isCaptivePortal, bypassDebounce: bypassDebounce);
+    _updatePhysicalState(
+        isPhysicallyOnline: result.isOnline,
+        isCaptivePortal: result.isCaptivePortal,
+        bypassDebounce: bypassDebounce);
     return isOnline;
   }
 
-  void _updatePhysicalState({required bool isPhysicallyOnline, required bool isCaptivePortal, required bool bypassDebounce}) {
+  void _updatePhysicalState(
+      {required bool isPhysicallyOnline,
+      required bool isCaptivePortal,
+      required bool bypassDebounce}) {
     if (_isDisposed) return;
     _stateMachine.handleReachabilityUpdate(
       isPhysicallyOnline: isPhysicallyOnline,
       bypassDebounce: bypassDebounce,
-      onStateChanged: (online) => _publishState(isCaptivePortal: isCaptivePortal),
+      onStateChanged: (online) =>
+          _publishState(isCaptivePortal: isCaptivePortal),
     );
     if (_currentState.isCaptivePortal != isCaptivePortal) {
       _publishState(isCaptivePortal: isCaptivePortal);

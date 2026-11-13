@@ -9,7 +9,8 @@ class SqliteBaselineManager {
     String entity,
     String id,
   ) async {
-    final existingRows = await tx.getAll('SELECT version, data_json FROM "$entity" WHERE id = ?', [id]);
+    final existingRows = await tx
+        .getAll('SELECT version, data_json FROM "$entity" WHERE id = ?', [id]);
     if (existingRows.isEmpty) {
       return (snapshot: null, version: 1);
     }
@@ -83,7 +84,8 @@ class SqliteBaselineManager {
         );
       }
 
-      await tx.execute('DELETE FROM _sync_outbox WHERE mutation_id = ?', [mutationId]);
+      await tx.execute(
+          'DELETE FROM _sync_outbox WHERE mutation_id = ?', [mutationId]);
       return true;
     });
   }
@@ -96,7 +98,8 @@ class SqliteBaselineManager {
     SyncValidator.validateStatus(status);
 
     await db.writeTransaction((tx) async {
-      final rows = await tx.getAll('SELECT * FROM _sync_outbox WHERE mutation_id = ?', [mutationId]);
+      final rows = await tx.getAll(
+          'SELECT * FROM _sync_outbox WHERE mutation_id = ?', [mutationId]);
       if (rows.isEmpty) return;
 
       final outbox = rows.first;

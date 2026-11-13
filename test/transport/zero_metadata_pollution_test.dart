@@ -6,7 +6,9 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: Zero Metadata Pollution & Clean Body Rule', () {
-    test('pushCustom dispatches pure domain payload with zero _offline_meta in body', () async {
+    test(
+        'pushCustom dispatches pure domain payload with zero _offline_meta in body',
+        () async {
       String? capturedBody;
       Map<String, String>? capturedHeaders;
 
@@ -32,7 +34,8 @@ void main() {
         url: 'https://api.example.com/v1/tasks',
         method: 'POST',
         mutationId: 'mut-12345',
-        createdAtMs: DateTime.utc(2026, 10, 25, 12, 0, 0).millisecondsSinceEpoch,
+        createdAtMs:
+            DateTime.utc(2026, 10, 25, 12, 0, 0).millisecondsSinceEpoch,
         payload: domainPayload,
         entityId: 'temp-id-001',
         headers: {'X-Custom-Tenant': 'tenant-42'},
@@ -56,7 +59,10 @@ void main() {
 
       // 2. Zero Metadata Pollution: zero injected metadata in headers (vanilla REST)
       expect(capturedHeaders!['content-type'], equals('application/json'));
-      expect(capturedHeaders!['x-custom-tenant'] ?? capturedHeaders!['X-Custom-Tenant'], equals('tenant-42'));
+      expect(
+          capturedHeaders!['x-custom-tenant'] ??
+              capturedHeaders!['X-Custom-Tenant'],
+          equals('tenant-42'));
       expect(capturedHeaders!.containsKey('idempotency-key'), isFalse);
       expect(capturedHeaders!.containsKey('x-client-mutation-id'), isFalse);
       expect(capturedHeaders!.containsKey('x-offline-sync'), isFalse);
@@ -75,7 +81,9 @@ void main() {
       expect(explicitDecoded['id'], equals('explicit-id-123'));
     });
 
-    test('DELETE operations send zero body payload and format route ID properly', () async {
+    test(
+        'DELETE operations send zero body payload and format route ID properly',
+        () async {
       String? capturedMethod;
       String? capturedUrl;
       String? capturedBody;
@@ -107,7 +115,10 @@ void main() {
       expect(capturedMethod, equals('DELETE'));
       expect(capturedUrl, equals('https://api.example.com/v1/tasks/task-404'));
       expect(capturedBody, isEmpty);
-      expect(capturedHeaders!['x-audit-reason'] ?? capturedHeaders!['X-Audit-Reason'], equals('User request'));
+      expect(
+          capturedHeaders!['x-audit-reason'] ??
+              capturedHeaders!['X-Audit-Reason'],
+          equals('User request'));
       expect(capturedHeaders!.containsKey('idempotency-key'), isFalse);
       expect(capturedHeaders!.containsKey('x-client-mutation-id'), isFalse);
       expect(capturedHeaders!.containsKey('x-offline-sync'), isFalse);

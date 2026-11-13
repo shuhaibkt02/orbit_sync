@@ -28,7 +28,12 @@ class CountingTransport implements SyncTransport {
         statusCode: HttpStatus.ok,
         body: jsonEncode({
           'changes': [
-            {'entity': 'items', 'id': 'item-1', 'version': 1, 'data': {'title': 'First'}},
+            {
+              'entity': 'items',
+              'id': 'item-1',
+              'version': 1,
+              'data': {'title': 'First'}
+            },
           ],
           'next_cursor': 100,
           'has_more': true,
@@ -39,7 +44,12 @@ class CountingTransport implements SyncTransport {
         statusCode: HttpStatus.ok,
         body: jsonEncode({
           'changes': [
-            {'entity': 'items', 'id': 'item-2', 'version': 1, 'data': {'title': 'Second'}},
+            {
+              'entity': 'items',
+              'id': 'item-2',
+              'version': 1,
+              'data': {'title': 'Second'}
+            },
           ],
           'next_cursor': 200,
           'has_more': false,
@@ -54,7 +64,8 @@ class CountingTransport implements SyncTransport {
     required String idempotencyKey,
     String? chaos,
   }) async {
-    return TransportResponse(statusCode: HttpStatus.ok, body: '{"applied": ${mutations.length}}');
+    return TransportResponse(
+        statusCode: HttpStatus.ok, body: '{"applied": ${mutations.length}}');
   }
 
   @override
@@ -67,7 +78,8 @@ class CountingTransport implements SyncTransport {
     String? entityId,
     Map<String, String>? headers,
   }) async {
-    return const TransportResponse(statusCode: HttpStatus.ok, body: '{"success": true}');
+    return const TransportResponse(
+        statusCode: HttpStatus.ok, body: '{"success": true}');
   }
 
   @override
@@ -82,7 +94,8 @@ class CountingTransport implements SyncTransport {
     Map<String, String>? headers,
     Duration? timeout,
     void Function(int sent, int total)? onSendProgress,
-  }) async => const TransportResponse(statusCode: HttpStatus.ok);
+  }) async =>
+      const TransportResponse(statusCode: HttpStatus.ok);
 
   @override
   Stream<void>? get onRemoteChange => null;
@@ -105,14 +118,22 @@ void main() {
       }
     });
 
-    test('1. Hydration Quota Pruning executes within transaction without deadlock', () async {
-      final storage = await SyncStorage.open(path: '${tempDir.path}/quota_test.db');
+    test(
+        '1. Hydration Quota Pruning executes within transaction without deadlock',
+        () async {
+      final storage =
+          await SyncStorage.open(path: '${tempDir.path}/quota_test.db');
       await storage.registerEntityTable('cache_items', {});
 
       final hydrator = EntityHydrator(storage: storage);
       final items = List.generate(
         15,
-        (i) => {'id': 'item-$i', 'name': 'Item $i', 'expires_at': 9999999999, 'updated_at': 1000 + i},
+        (i) => {
+          'id': 'item-$i',
+          'name': 'Item $i',
+          'expires_at': 9999999999,
+          'updated_at': 1000 + i
+        },
       );
 
       // Hydrate 15 items with maxCacheRecords: 5.
@@ -124,20 +145,27 @@ void main() {
       );
 
       expect(count, equals(15));
-      final rows = await storage.db.getAll('SELECT COUNT(*) as cnt FROM "cache_items"');
+      final rows =
+          await storage.db.getAll('SELECT COUNT(*) as cnt FROM "cache_items"');
       expect(rows.first['cnt'], equals(5));
 
       await storage.close();
     });
 
-    test('2. pruneToQuotaTx gracefully returns 0 for non-existent table', () async {
-      final storage = await SyncStorage.open(path: '${tempDir.path}/nonexistent.db');
-      final deleted = await SqliteCacheCleaner.pruneToQuota(storage.db, 'does_not_exist', maxCacheRecords: 10);
+    test('2. pruneToQuotaTx gracefully returns 0 for non-existent table',
+        () async {
+      final storage =
+          await SyncStorage.open(path: '${tempDir.path}/nonexistent.db');
+      final deleted = await SqliteCacheCleaner.pruneToQuota(
+          storage.db, 'does_not_exist',
+          maxCacheRecords: 10);
       expect(deleted, equals(0));
       await storage.close();
     });
 
-    test('3. Guest Session Merge preserves full metadata and unpurged domain row', () async {
+    test(
+        '3. Guest Session Merge preserves full metadata and unpurged domain row',
+        () async {
       final guestPath = '${tempDir.path}/guest.db';
       final targetPath = '${tempDir.path}/user.db';
 
@@ -160,12 +188,14 @@ void main() {
       expect(merged, equals(1));
 
       final targetStorage = await SyncStorage.open(path: targetPath);
-      final outbox = await targetStorage.db.getAll('SELECT * FROM _sync_outbox WHERE entity_id = ?', ['note-guest-1']);
+      final outbox = await targetStorage.db.getAll(
+          'SELECT * FROM _sync_outbox WHERE entity_id = ?', ['note-guest-1']);
       expect(outbox.length, equals(1));
       expect(outbox.first['author_id'], equals('guest-anon'));
       expect(outbox.first['status'], equals('pending'));
 
-      final domainRows = await targetStorage.db.getAll('SELECT * FROM "notes" WHERE id = ?', ['note-guest-1']);
+      final domainRows = await targetStorage.db
+          .getAll('SELECT * FROM "notes" WHERE id = ?', ['note-guest-1']);
       expect(domainRows.length, equals(1));
       // Invariant: expires_at must be NULL (not 0/epoch 1970) so TTL cleaner does NOT delete it
       expect(domainRows.first['expires_at'], isNull);
@@ -173,8 +203,11 @@ void main() {
       await targetStorage.close();
     });
 
-    test('4. BatchPushOrchestrator safely partitions mixed custom REST and batch envelope mutations', () async {
-      final storage = await SyncStorage.open(path: '${tempDir.path}/mixed_batch.db');
+    test(
+        '4. BatchPushOrchestrator safely partitions mixed custom REST and batch envelope mutations',
+        () async {
+      final storage =
+          await SyncStorage.open(path: '${tempDir.path}/mixed_batch.db');
       final transport = CountingTransport();
       final orchestrator = BatchPushOrchestrator(
         storage: storage,
@@ -201,30 +234,37 @@ void main() {
       expect(result.status, equals(SyncPushStatus.success));
       expect(result.applied, equals(2));
 
-      final remaining = await storage.db.getAll("SELECT status FROM _sync_outbox WHERE status = 'pending'");
+      final remaining = await storage.db
+          .getAll("SELECT status FROM _sync_outbox WHERE status = 'pending'");
       expect(remaining, isEmpty);
 
       await storage.close();
     });
 
-    test('5. GenerationSwapManager paginates across multi-page snapshots on 410', () async {
+    test(
+        '5. GenerationSwapManager paginates across multi-page snapshots on 410',
+        () async {
       final storage = await SyncStorage.open(path: '${tempDir.path}/swap.db');
       final transport = CountingTransport();
-      final swapManager = GenerationSwapManager(storage: storage, transport: transport);
+      final swapManager =
+          GenerationSwapManager(storage: storage, transport: transport);
 
       final success = await swapManager.resyncGeneration(['items']);
       expect(success, isTrue);
       // Both page 1 (has_more: true) and page 2 (has_more: false) must be pulled
       expect(transport.pullCalls, equals(2));
 
-      final rows = await storage.db.getAll('SELECT COUNT(*) as cnt FROM "items"');
+      final rows =
+          await storage.db.getAll('SELECT COUNT(*) as cnt FROM "items"');
       expect(rows.first['cnt'], equals(2));
 
       await storage.close();
     });
 
-    test('6. Time-travel backup holds both pending and in_flight mutations', () async {
-      final storage = await SyncStorage.open(path: '${tempDir.path}/recovery.db');
+    test('6. Time-travel backup holds both pending and in_flight mutations',
+        () async {
+      final storage =
+          await SyncStorage.open(path: '${tempDir.path}/recovery.db');
 
       // Seed 1 pending and 1 in_flight mutation
       await storage.db.execute('''
@@ -236,7 +276,8 @@ void main() {
       ''');
 
       // Seed metadata installation ID
-      await storage.db.execute("INSERT INTO _sync_metadata (key, value) VALUES ('orbit_installation_id', 'old-id');");
+      await storage.db.execute(
+          "INSERT INTO _sync_metadata (key, value) VALUES ('orbit_installation_id', 'old-id');");
 
       // Verify integrity against empty secure storage (simulating restored device backup)
       await const SqliteRecovery().verifyInstallationIntegrity(
@@ -245,13 +286,16 @@ void main() {
         secureStorageWriter: (k, v) async {},
       );
 
-      final heldRows = await storage.db.getAll("SELECT mutation_id FROM _sync_outbox WHERE status = 'held'");
+      final heldRows = await storage.db
+          .getAll("SELECT mutation_id FROM _sync_outbox WHERE status = 'held'");
       expect(heldRows.length, equals(2));
 
       await storage.close();
     });
 
-    test('7. BatchEnvelopePusher generates deterministic sorted batch idempotency key', () {
+    test(
+        '7. BatchEnvelopePusher generates deterministic sorted batch idempotency key',
+        () {
       final key1 = 'batch-${(['mut-z', 'mut-a', 'mut-m']..sort()).join(':')}';
       final key2 = 'batch-${(['mut-a', 'mut-z', 'mut-m']..sort()).join(':')}';
       expect(key1, equals(key2));

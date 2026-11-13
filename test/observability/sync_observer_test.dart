@@ -5,7 +5,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 6 Observability: SyncObserver Unified & Typed Streams', () {
-    test('broadcasts unified stream and filters typed getters seamlessly', () async {
+    test('broadcasts unified stream and filters typed getters seamlessly',
+        () async {
       final observer = SyncObserver();
       final allEvents = <SyncEvent>[];
       final onlineEvents = <OnlineEvent>[];
@@ -76,7 +77,8 @@ void main() {
     });
 
     test('integrates with OrbitClient facade emitting live events', () async {
-      final tempDir = Directory.systemTemp.createTempSync('observer_facade_test_');
+      final tempDir =
+          Directory.systemTemp.createTempSync('observer_facade_test_');
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/app.db',
         transport: SyncTransport.inMemory(),

@@ -42,7 +42,8 @@ void main() {
   late OrbitTable<TaskItem> tasks;
 
   setUp(() async {
-    dbPath = '${Directory.systemTemp.path}/test_type_sanitized_${DateTime.now().microsecondsSinceEpoch}.db';
+    dbPath =
+        '${Directory.systemTemp.path}/test_type_sanitized_${DateTime.now().microsecondsSinceEpoch}.db';
     client = await OrbitClient.initialize(
       databasePath: dbPath,
       transport: SyncTransport.inMemory(),
@@ -94,11 +95,14 @@ void main() {
   });
 
   group('Level 2->3 Issue 1: SQLite Type Leakage in whereArgs', () {
-    test('1. tasks.query handles Dart booleans transparently (true & false)', () async {
+    test('1. tasks.query handles Dart booleans transparently (true & false)',
+        () async {
       // Dart boolean true passed directly in whereArgs
       final completed = await tasks.query(
         where: 'is_completed = ?',
-        whereArgs: [true], // Must NOT throw ArgumentError: Unsupported type for sqlite: true
+        whereArgs: [
+          true
+        ], // Must NOT throw ArgumentError: Unsupported type for sqlite: true
       );
 
       expect(completed.length, equals(1));
@@ -107,14 +111,18 @@ void main() {
       // Dart boolean false passed directly in whereArgs
       final pending = await tasks.query(
         where: 'is_completed = ?',
-        whereArgs: [false], // Must NOT throw ArgumentError: Unsupported type for sqlite: false
+        whereArgs: [
+          false
+        ], // Must NOT throw ArgumentError: Unsupported type for sqlite: false
       );
 
       expect(pending.length, equals(2));
       expect(pending.map((t) => t.id), containsAll(['task-2', 'task-3']));
     });
 
-    test('2. tasks.watch reactively filters using Dart booleans without stream error', () async {
+    test(
+        '2. tasks.watch reactively filters using Dart booleans without stream error',
+        () async {
       final stream = tasks.watch(
         where: 'is_completed = ?',
         whereArgs: [true],
@@ -126,7 +134,9 @@ void main() {
       expect(initialEmission.first.id, equals('task-1'));
     });
 
-    test('3. tasks.query handles DateTime objects transparently in comparison operators', () async {
+    test(
+        '3. tasks.query handles DateTime objects transparently in comparison operators',
+        () async {
       final cutoffDate = DateTime(2026, 10, 28);
 
       // Querying items due after cutoffDate using DateTime object directly
@@ -141,16 +151,19 @@ void main() {
       expect(upcomingTasks.last.id, equals('task-3'));
     });
 
-    test('4. tasks.query handles complex multi-type whereArgs (bool, DateTime, int, String, null)', () async {
+    test(
+        '4. tasks.query handles complex multi-type whereArgs (bool, DateTime, int, String, null)',
+        () async {
       final targetDate = DateTime(2026, 10, 30);
 
       final results = await tasks.query(
-        where: 'is_completed = ? AND due_at = ? AND priority = ? AND title LIKE ?',
+        where:
+            'is_completed = ? AND due_at = ? AND priority = ? AND title LIKE ?',
         whereArgs: [
-          false,                   // bool
-          targetDate,              // DateTime
-          2,                       // int
-          '%Team%',                // String
+          false, // bool
+          targetDate, // DateTime
+          2, // int
+          '%Team%', // String
         ],
       );
 
@@ -158,7 +171,8 @@ void main() {
       expect(results.first.id, equals('task-2'));
     });
 
-    test('5. Top-level orbit.query and orbit.watch sanitize raw SQL parameters', () async {
+    test('5. Top-level orbit.query and orbit.watch sanitize raw SQL parameters',
+        () async {
       // Calling orbit.query with boolean directly
       final rawRows = await client.query(
         "SELECT id FROM tasks WHERE json_extract(data_json, '\$.is_completed') = ?",
@@ -177,14 +191,18 @@ void main() {
       expect(watchResult.first['id'], equals('task-1'));
     });
 
-    test('6. Regression check: standard SQLite primitives remain untouched', () async {
-      final intResult = await tasks.query(where: 'priority = ?', whereArgs: [3]);
+    test('6. Regression check: standard SQLite primitives remain untouched',
+        () async {
+      final intResult =
+          await tasks.query(where: 'priority = ?', whereArgs: [3]);
       expect(intResult.length, equals(1));
 
-      final stringResult = await tasks.query(where: 'title = ?', whereArgs: ['Code Review PR']);
+      final stringResult =
+          await tasks.query(where: 'title = ?', whereArgs: ['Code Review PR']);
       expect(stringResult.length, equals(1));
 
-      final nullResult = await tasks.query(where: 'title IS NOT ?', whereArgs: [null]);
+      final nullResult =
+          await tasks.query(where: 'title IS NOT ?', whereArgs: [null]);
       expect(nullResult.length, equals(3));
     });
   });

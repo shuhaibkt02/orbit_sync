@@ -16,7 +16,8 @@ class SyncTelemetrySheet extends StatefulWidget {
     required this.onSeedDemo,
   });
 
-  static Future<void> show(BuildContext context, {
+  static Future<void> show(
+    BuildContext context, {
     required OrbitClient client,
     required Future<void> Function() onSeedDemo,
   }) {
@@ -35,7 +36,8 @@ class SyncTelemetrySheet extends StatefulWidget {
   State<SyncTelemetrySheet> createState() => _SyncTelemetrySheetState();
 }
 
-class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTickerProviderStateMixin {
+class _SyncTelemetrySheetState extends State<SyncTelemetrySheet>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _syncSpinController;
   bool _isSyncing = false;
 
@@ -111,7 +113,9 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                   width: 38,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF48484A) : const Color(0xFFD1D1D6),
+                    color: isDark
+                        ? const Color(0xFF48484A)
+                        : const Color(0xFFD1D1D6),
                     borderRadius: BorderRadius.circular(AppleTheme.radiusPill),
                   ),
                 ),
@@ -127,7 +131,10 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: isDark
-                            ? [AppleTheme.systemIndigoDark, AppleTheme.systemBlueDark]
+                            ? [
+                                AppleTheme.systemIndigoDark,
+                                AppleTheme.systemBlueDark
+                              ]
                             : [AppleTheme.systemIndigo, AppleTheme.systemBlue],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -237,11 +244,14 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                               context,
                               title: 'Failed (DLQ)',
                               value: '$failed',
-                              subtitle: failed > 0 ? 'Action required' : 'Zero failures',
+                              subtitle: failed > 0
+                                  ? 'Action required'
+                                  : 'Zero failures',
                               color: failed > 0
                                   ? AppleTheme.destructive(context)
                                   : AppleTheme.secondaryLabel(context),
-                              icon: CupertinoIcons.exclamationmark_triangle_fill,
+                              icon:
+                                  CupertinoIcons.exclamationmark_triangle_fill,
                               cardBg: cardBg,
                             ),
                           ),
@@ -254,7 +264,8 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: cardBg,
-                          borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppleTheme.radiusMedium),
                           border: Border.all(
                             color: AppleTheme.specularBorder(context),
                             width: 0.5,
@@ -276,9 +287,10 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                             _buildInfoRow(
                               context,
                               label: 'Outbox State',
-                              value: pending == 0 && inFlight == 0 && failed == 0
-                                  ? 'All records up to date'
-                                  : '$pending mutation(s) queued',
+                              value:
+                                  pending == 0 && inFlight == 0 && failed == 0
+                                      ? 'All records up to date'
+                                      : '$pending mutation(s) queued',
                               valueColor: pending == 0
                                   ? AppleTheme.success(context)
                                   : AppleTheme.warning(context),
@@ -303,13 +315,16 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
 
                       // Offline Mode Toggle Card
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: cardBg,
-                          borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppleTheme.radiusMedium),
                           border: Border.all(
                             color: widget.client.simulateOffline
-                                ? AppleTheme.warning(context).withValues(alpha: 0.5)
+                                ? AppleTheme.warning(context)
+                                    .withValues(alpha: 0.5)
                                 : AppleTheme.specularBorder(context),
                             width: 0.5,
                           ),
@@ -321,9 +336,12 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                               height: 36,
                               decoration: BoxDecoration(
                                 color: widget.client.simulateOffline
-                                    ? AppleTheme.warning(context).withValues(alpha: 0.16)
-                                    : AppleTheme.success(context).withValues(alpha: 0.16),
-                                borderRadius: BorderRadius.circular(AppleTheme.radiusSmall),
+                                    ? AppleTheme.warning(context)
+                                        .withValues(alpha: 0.16)
+                                    : AppleTheme.success(context)
+                                        .withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(
+                                    AppleTheme.radiusSmall),
                               ),
                               child: Icon(
                                 widget.client.simulateOffline
@@ -382,8 +400,10 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                           child: Container(
                             height: 44,
                             decoration: BoxDecoration(
-                              color: AppleTheme.destructive(context).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                              color: AppleTheme.destructive(context)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                  AppleTheme.radiusMedium),
                             ),
                             child: Center(
                               child: Text(
@@ -420,7 +440,8 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                         height: 50,
                         decoration: BoxDecoration(
                           color: AppleTheme.tertiaryBg(context),
-                          borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppleTheme.radiusMedium),
                         ),
                         child: Center(
                           child: Row(
@@ -454,10 +475,12 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet> with SingleTick
                         height: 50,
                         decoration: BoxDecoration(
                           color: AppleTheme.accent(context),
-                          borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppleTheme.radiusMedium),
                           boxShadow: [
                             BoxShadow(
-                              color: AppleTheme.accent(context).withValues(alpha: 0.3),
+                              color: AppleTheme.accent(context)
+                                  .withValues(alpha: 0.3),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),

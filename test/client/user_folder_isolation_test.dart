@@ -17,7 +17,9 @@ void main() {
   });
 
   group('Ticket 01: Multi-User Folder Isolation & Path Architecture', () {
-    test('1. Path resolver: routes user to orbit/users/<userId>/orbit.db and guest fallback', () {
+    test(
+        '1. Path resolver: routes user to orbit/users/<userId>/orbit.db and guest fallback',
+        () {
       const sessionManager = SessionManager();
 
       // Explicit userId
@@ -27,7 +29,8 @@ void main() {
       );
       expect(u1Path, equals('databases/orbit/users/usr_101/orbit.db'));
       expect(
-        sessionManager.resolveUserDatabasePath(appDir: 'databases', userId: 'usr_101'),
+        sessionManager.resolveUserDatabasePath(
+            appDir: 'databases', userId: 'usr_101'),
         equals('databases/orbit/users/usr_101/orbit.db'),
       );
 
@@ -48,7 +51,8 @@ void main() {
         appDir: '/data/user/app/',
         userId: 'usr_102',
       );
-      expect(cleanSlashPath, equals('/data/user/app/orbit/users/usr_102/orbit.db'));
+      expect(cleanSlashPath,
+          equals('/data/user/app/orbit/users/usr_102/orbit.db'));
 
       // Backwards compatibility: direct databasePath is honored regardless of userId
       final directPath = OrbitClient.resolveDatabasePath(
@@ -58,7 +62,8 @@ void main() {
       expect(directPath, equals('/custom/direct/storage.db'));
     });
 
-    test('2. Multi-user directory creation and folder isolation on disk', () async {
+    test('2. Multi-user directory creation and folder isolation on disk',
+        () async {
       final client1 = await OrbitClient.initialize(
         appDir: tempDir.path,
         userId: 'user_1',
@@ -78,8 +83,10 @@ void main() {
       final u2Dir = Directory('${tempDir.path}/orbit/users/user_2');
       expect(u1Dir.existsSync(), isTrue);
       expect(u2Dir.existsSync(), isTrue);
-      expect(File('${tempDir.path}/orbit/users/user_1/orbit.db').existsSync(), isTrue);
-      expect(File('${tempDir.path}/orbit/users/user_2/orbit.db').existsSync(), isTrue);
+      expect(File('${tempDir.path}/orbit/users/user_1/orbit.db').existsSync(),
+          isTrue);
+      expect(File('${tempDir.path}/orbit/users/user_2/orbit.db').existsSync(),
+          isTrue);
 
       // Verify data isolation: User 1 does not see User 2's records or outbox
       final u1Records = await client1.restore('orders');
@@ -101,7 +108,9 @@ void main() {
       await client2.close();
     });
 
-    test('3. switchUser cleanly re-opens target user database while preserving unpushed data', () async {
+    test(
+        '3. switchUser cleanly re-opens target user database while preserving unpushed data',
+        () async {
       final client = await OrbitClient.initialize(
         appDir: tempDir.path,
         userId: 'user_1',
@@ -112,8 +121,10 @@ void main() {
       await client.registerTable('orders', {'title': 'TEXT'});
 
       // User 1 stores unpushed offline orders
-      await client.store('orders', {'id': 'order_u1_1', 'title': 'User 1 First Draft'});
-      await client.store('orders', {'id': 'order_u1_2', 'title': 'User 1 Second Draft'});
+      await client
+          .store('orders', {'id': 'order_u1_1', 'title': 'User 1 First Draft'});
+      await client.store(
+          'orders', {'id': 'order_u1_2', 'title': 'User 1 Second Draft'});
 
       var summary = await client.getSummary();
       expect(summary.pending, equals(2));
@@ -133,7 +144,8 @@ void main() {
       expect(records, isEmpty);
 
       // User 2 creates their own unpushed offline order
-      await client.store('orders', {'id': 'order_u2_1', 'title': 'User 2 Solo Draft'});
+      await client
+          .store('orders', {'id': 'order_u2_1', 'title': 'User 2 Solo Draft'});
       summary = await client.getSummary();
       expect(summary.pending, equals(1));
       records = await client.restore('orders');
@@ -173,7 +185,8 @@ void main() {
       await client.close();
     });
 
-    test('4. switchUser preserves registered strongly-typed collection handles', () async {
+    test('4. switchUser preserves registered strongly-typed collection handles',
+        () async {
       final client = await OrbitClient.initialize(
         appDir: tempDir.path,
         userId: 'user_1',

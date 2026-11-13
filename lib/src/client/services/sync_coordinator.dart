@@ -74,7 +74,10 @@ class SyncCoordinator {
             if (res.status != SyncPushStatus.success) {
               totalFailed++;
               if (res.status == SyncPushStatus.conflict) {
-                onEvent?.call(ConflictDetectedEvent(timestamp: DateTime.now().toUtc(), entity: '', entityId: ''));
+                onEvent?.call(ConflictDetectedEvent(
+                    timestamp: DateTime.now().toUtc(),
+                    entity: '',
+                    entityId: ''));
               } else if (res.status == SyncPushStatus.poisonPill) {
                 onEvent?.call(PoisonPillQuarantinedEvent(
                   timestamp: DateTime.now().toUtc(),
@@ -84,22 +87,35 @@ class SyncCoordinator {
                   reason: res.errorMessage ?? 'Poison pill quarantined',
                 ));
               } else if (res.errorMessage?.contains('Rate limited') == true) {
-                onEvent?.call(RateLimitedEvent(timestamp: DateTime.now().toUtc()));
+                onEvent
+                    ?.call(RateLimitedEvent(timestamp: DateTime.now().toUtc()));
               } else if (res.status == SyncPushStatus.unauthorized) {
-                onEvent?.call(AuthExpiredEvent(timestamp: DateTime.now().toUtc()));
+                onEvent
+                    ?.call(AuthExpiredEvent(timestamp: DateTime.now().toUtc()));
               }
             }
             break;
           }
-          eventBus.emitProgress(syncId: syncId, percentage: 0.5, applied: totalApplied, total: totalApplied);
+          eventBus.emitProgress(
+              syncId: syncId,
+              percentage: 0.5,
+              applied: totalApplied,
+              total: totalApplied);
         }
 
-        final summary = SyncSummary(applied: totalApplied, failed: totalFailed, durationMs: sw.elapsedMilliseconds);
+        final summary = SyncSummary(
+            applied: totalApplied,
+            failed: totalFailed,
+            durationMs: sw.elapsedMilliseconds);
         eventBus.emitFinished(syncId: syncId, summary: summary);
         job.complete(summary);
       } catch (e) {
         eventBus.emitFailed(syncId: syncId, errorMessage: e.toString());
-        job.complete(SyncSummary(applied: totalApplied, failed: totalFailed + 1, errorMessage: e.toString(), durationMs: sw.elapsedMilliseconds));
+        job.complete(SyncSummary(
+            applied: totalApplied,
+            failed: totalFailed + 1,
+            errorMessage: e.toString(),
+            durationMs: sw.elapsedMilliseconds));
       } finally {
         _isSyncing = false;
         _currentSyncJob = null;

@@ -42,7 +42,8 @@ abstract class IOutboxRepository {
   Future<bool> undoDelete({String? entity, required String id});
 
   /// Rolls back an optimistic mutation using its stored base snapshot.
-  Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'});
+  Future<void> rollbackOptimistic(String mutationId,
+      {String status = 'conflict'});
 
   /// Prunes completed synced outbox records older than [retention].
   Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)});

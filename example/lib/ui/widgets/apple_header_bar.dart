@@ -59,10 +59,13 @@ class AppleHeaderBar extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppleTheme.systemIndigo.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(AppleTheme.radiusPill),
+                              color: AppleTheme.systemIndigo
+                                  .withValues(alpha: 0.15),
+                              borderRadius:
+                                  BorderRadius.circular(AppleTheme.radiusPill),
                             ),
                             child: const Text(
                               'Orbit',
@@ -99,15 +102,19 @@ class AppleHeaderBar extends StatelessWidget {
                               orbit.simulateOffline = !orbit.simulateOffline;
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 6),
                               decoration: BoxDecoration(
                                 color: orbit.simulateOffline
-                                    ? AppleTheme.warning(context).withValues(alpha: 0.18)
+                                    ? AppleTheme.warning(context)
+                                        .withValues(alpha: 0.18)
                                     : AppleTheme.secondaryBg(context),
-                                borderRadius: BorderRadius.circular(AppleTheme.radiusPill),
+                                borderRadius: BorderRadius.circular(
+                                    AppleTheme.radiusPill),
                                 border: Border.all(
                                   color: orbit.simulateOffline
-                                      ? AppleTheme.warning(context).withValues(alpha: 0.5)
+                                      ? AppleTheme.warning(context)
+                                          .withValues(alpha: 0.5)
                                       : AppleTheme.specularBorder(context),
                                   width: 0.5,
                                 ),
@@ -126,7 +133,9 @@ class AppleHeaderBar extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    orbit.simulateOffline ? 'Offline' : 'Online',
+                                    orbit.simulateOffline
+                                        ? 'Offline'
+                                        : 'Online',
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
@@ -142,7 +151,8 @@ class AppleHeaderBar extends StatelessWidget {
                           const SizedBox(width: 8),
                           StreamBuilder<SyncStatusSummary>(
                             stream: orbit.watchSummary(),
-                            builder: (context, snapshot) => _buildCapsule(context, snapshot.data, isOnline),
+                            builder: (context, snapshot) =>
+                                _buildCapsule(context, snapshot.data, isOnline),
                           ),
                         ],
                       );
@@ -157,7 +167,8 @@ class AppleHeaderBar extends StatelessWidget {
     );
   }
 
-  Widget _buildCapsule(BuildContext context, SyncStatusSummary? summary, bool isOnline) {
+  Widget _buildCapsule(
+      BuildContext context, SyncStatusSummary? summary, bool isOnline) {
     final pending = summary?.pending ?? 0;
     final inFlight = summary?.inFlight ?? 0;
     final hasFailures = summary?.hasFailures == true;
@@ -212,7 +223,9 @@ class AppleHeaderBar extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: fg),
             const SizedBox(width: 5),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
           ],
         ),
       ),

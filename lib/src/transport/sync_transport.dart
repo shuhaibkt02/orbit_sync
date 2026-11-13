@@ -117,7 +117,9 @@ abstract interface class SyncTransport {
           ),
         );
     final effectiveBase = baseUrl ??
-        (effectiveDio.options.baseUrl.isNotEmpty ? effectiveDio.options.baseUrl : '');
+        (effectiveDio.options.baseUrl.isNotEmpty
+            ? effectiveDio.options.baseUrl
+            : '');
     return HttpSyncTransport(
       baseUrl: effectiveBase,
       adapter: DioHttpAdapter(dio: effectiveDio),

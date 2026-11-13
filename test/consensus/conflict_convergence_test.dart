@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 void main() {
   late Directory tempDir;
@@ -23,11 +23,13 @@ void main() {
       'stock': 'INTEGER',
     };
 
-    storageA = await SyncStorage.open(path: '${tempDir.path}/client_a.db', maxReaders: 2);
+    storageA = await SyncStorage.open(
+        path: '${tempDir.path}/client_a.db', maxReaders: 2);
     await storageA.registerEntityTable('tasks', schema);
     workerA = SyncWorker(storage: storageA, baseUrl: server.baseUrl);
 
-    storageB = await SyncStorage.open(path: '${tempDir.path}/client_b.db', maxReaders: 2);
+    storageB = await SyncStorage.open(
+        path: '${tempDir.path}/client_b.db', maxReaders: 2);
     await storageB.registerEntityTable('tasks', schema);
     workerB = SyncWorker(storage: storageB, baseUrl: server.baseUrl);
   });
@@ -40,8 +42,13 @@ void main() {
   });
 
   group('Layer 2 Consensus: Conflict & Convergence', () {
-    test('Test Case 1: Non-Conflicting Field Merge & Convergence across Two Clients', () async {
-      server.records['tasks:t-1'] = {'title': 'Initial Title', 'priority': 'low'};
+    test(
+        'Test Case 1: Non-Conflicting Field Merge & Convergence across Two Clients',
+        () async {
+      server.records['tasks:t-1'] = {
+        'title': 'Initial Title',
+        'priority': 'low'
+      };
       server.cursor++;
       server.changelog.add({
         'cursor': server.cursor,
@@ -56,21 +63,30 @@ void main() {
       await workerA.pullAll();
       await workerB.pullAll();
 
-      await storageA.save(entity: 'tasks', id: 't-1', data: {'title': 'Updated by A', 'priority': 'low'});
-      await storageB.save(entity: 'tasks', id: 't-1', data: {'title': 'Initial Title', 'priority': 'high'});
+      await storageA.save(
+          entity: 'tasks',
+          id: 't-1',
+          data: {'title': 'Updated by A', 'priority': 'low'});
+      await storageB.save(
+          entity: 'tasks',
+          id: 't-1',
+          data: {'title': 'Initial Title', 'priority': 'high'});
 
       await workerA.pushBatch();
       await workerB.pullAll();
 
-      final bMerged = await storageB.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
+      final bMerged = await storageB.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
       expect(bMerged['title'], 'Updated by A');
       expect(bMerged['priority'], 'high');
 
       await workerB.pushBatch();
       await workerA.pullAll();
 
-      final aFinal = await storageA.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
-      final bFinal = await storageB.db.get("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
+      final aFinal = await storageA.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
+      final bFinal = await storageB.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.priority') as priority FROM tasks WHERE id = 't-1';");
       expect(aFinal['title'], 'Updated by A');
       expect(aFinal['priority'], 'high');
       expect(bFinal['title'], 'Updated by A');
@@ -78,7 +94,8 @@ void main() {
       expect(aFinal, equals(bFinal));
     });
 
-    test('Test Case 2: Co-Dependent Invariant Violation Rejects Auto-Merge', () async {
+    test('Test Case 2: Co-Dependent Invariant Violation Rejects Auto-Merge',
+        () async {
       workerB.validateInvariants = (entity, record) {
         if (entity == 'tasks') {
           final start = record['start_time'] as String?;
@@ -90,7 +107,11 @@ void main() {
         return null;
       };
 
-      server.records['tasks:event-1'] = {'title': 'Meeting', 'start_time': '09:00', 'end_time': '17:00'};
+      server.records['tasks:event-1'] = {
+        'title': 'Meeting',
+        'start_time': '09:00',
+        'end_time': '17:00'
+      };
       server.cursor++;
       server.changelog.add({
         'cursor': server.cursor,
@@ -98,7 +119,11 @@ void main() {
         'id': 'event-1',
         'op': 'upsert',
         '_deleted': false,
-        'data': {'title': 'Meeting', 'start_time': '09:00', 'end_time': '17:00'},
+        'data': {
+          'title': 'Meeting',
+          'start_time': '09:00',
+          'end_time': '17:00'
+        },
         'version': 1,
       });
 
@@ -124,16 +149,23 @@ void main() {
         [mutB],
       );
       expect(conflictOutbox['status'], 'conflict');
-      expect(conflictOutbox['error_details_json'], contains('must be strictly before'));
+      expect(conflictOutbox['error_details_json'],
+          contains('must be strictly before'));
 
-      final localRow = await storageB.db.get("SELECT json_extract(data_json, '\$.start_time') as start_time, json_extract(data_json, '\$.end_time') as end_time FROM tasks WHERE id = 'event-1';");
+      final localRow = await storageB.db.get(
+          "SELECT json_extract(data_json, '\$.start_time') as start_time, json_extract(data_json, '\$.end_time') as end_time FROM tasks WHERE id = 'event-1';");
       expect(localRow['start_time'], '09:00');
       expect(localRow['end_time'], '12:00');
     });
 
-    test('Test Case 3: Pluggable EntityConflictResolver converges non-scalar counters', () async {
+    test(
+        'Test Case 3: Pluggable EntityConflictResolver converges non-scalar counters',
+        () async {
       // Register semilattice counter resolver for tasks stock: base + deltaA + deltaB
-      workerB.registerConflictResolver('tasks', ({required baseSnapshot, required localRecord, required remoteRecord}) {
+      workerB.registerConflictResolver('tasks', (
+          {required baseSnapshot,
+          required localRecord,
+          required remoteRecord}) {
         final baseStock = (baseSnapshot?['stock'] as int?) ?? 10;
         final localStock = (localRecord['stock'] as int?) ?? baseStock;
         final remoteStock = (remoteRecord['stock'] as int?) ?? baseStock;
@@ -164,9 +196,11 @@ void main() {
       await workerB.pullAll();
 
       // Device A sells 2 units (stock: 8)
-      await storageA.save(entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 8});
+      await storageA.save(
+          entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 8});
       // Device B sells 3 units (stock: 7)
-      await storageB.save(entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 7});
+      await storageB.save(
+          entity: 'tasks', id: 'inv-1', data: {'title': 'Widget', 'stock': 7});
 
       // Device A pushes stock 8 to server
       await workerA.pushBatch();
@@ -174,7 +208,8 @@ void main() {
       // Device B pulls: resolver merges deltaLocal (-3) + deltaRemote (-2) = final stock 5!
       await workerB.pullAll();
 
-      final bResolved = await storageB.db.get("SELECT json_extract(data_json, '\$.stock') as stock FROM tasks WHERE id = 'inv-1';");
+      final bResolved = await storageB.db.get(
+          "SELECT json_extract(data_json, '\$.stock') as stock FROM tasks WHERE id = 'inv-1';");
       expect(bResolved['stock'], 5);
     });
   });

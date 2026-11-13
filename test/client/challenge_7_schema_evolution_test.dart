@@ -18,12 +18,17 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 7 Two-Tier Schema Evolution (Isolated Metadata)', () {
-    test('Schema version is stored in _sync_metadata and does NOT touch PRAGMA user_version', () async {
+  group(
+      'Layer 5 Facade: Challenge 7 Two-Tier Schema Evolution (Isolated Metadata)',
+      () {
+    test(
+        'Schema version is stored in _sync_metadata and does NOT touch PRAGMA user_version',
+        () async {
       // Simulate host app setting PRAGMA user_version to 42 (e.g. Drift / sqflite)
       await storage.db.execute('PRAGMA user_version = 42;');
 
-      final runner = SchemaMigrationRunner(storage: storage, targetSchemaVersion: 3);
+      final runner =
+          SchemaMigrationRunner(storage: storage, targetSchemaVersion: 3);
       await runner.setCurrentVersion(3);
 
       final pluginVersion = await runner.getCurrentVersion();
@@ -34,7 +39,8 @@ void main() {
       expect(hostPragma.first['user_version'], equals(42));
     });
 
-    test('SchemaMigrationRunner step-ladders mutation envelopes eagerly', () async {
+    test('SchemaMigrationRunner step-ladders mutation envelopes eagerly',
+        () async {
       // Seed outbox with v1 mutation
       await storage.save(
         entity: 'profiles',
@@ -61,9 +67,11 @@ void main() {
       expect(count, equals(1));
 
       // Verify payload was upgraded in place
-      final rows = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_name = 'profiles'");
+      final rows = await storage.db
+          .getAll("SELECT * FROM _sync_outbox WHERE entity_name = 'profiles'");
       expect(rows.first['schema_version'], equals(2));
-      final upgraded = jsonDecode(rows.first['payload_json'] as String) as Map<String, dynamic>;
+      final upgraded = jsonDecode(rows.first['payload_json'] as String)
+          as Map<String, dynamic>;
       expect(upgraded['full_name'], equals('John Doe'));
       expect(upgraded.containsKey('first_name'), isFalse);
     });

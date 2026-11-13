@@ -23,20 +23,25 @@ class EntityHydrator {
     Map<String, String>? headers,
     Future<String?> Function()? getAuthToken,
     http.Client? httpClient,
-    Future<String> Function(String url, Map<String, String>? headers)? customFetcher,
+    Future<String> Function(String url, Map<String, String>? headers)?
+        customFetcher,
   }) async {
     final Map<String, String> reqHeaders = {'content-type': 'application/json'};
     if (getAuthToken != null) {
       final token = await getAuthToken();
-      if (token != null) reqHeaders['authorization'] = token.startsWith('Bearer ') ? token : 'Bearer $token';
+      if (token != null)
+        reqHeaders['authorization'] =
+            token.startsWith('Bearer ') ? token : 'Bearer $token';
     }
     if (headers != null) reqHeaders.addAll(headers);
 
     if (customFetcher != null) {
       final body = await customFetcher(url, reqHeaders);
       final decoded = jsonDecode(body);
-      final List<dynamic> items = decoded is List ? decoded : (decoded['data'] as List? ?? []);
-      return await hydrateBatch(entity: entity, items: items.cast<Map<String, dynamic>>());
+      final List<dynamic> items =
+          decoded is List ? decoded : (decoded['data'] as List? ?? []);
+      return await hydrateBatch(
+          entity: entity, items: items.cast<Map<String, dynamic>>());
     }
 
     final req = http.Request('GET', Uri.parse(url));
@@ -47,11 +52,14 @@ class EntityHydrator {
       final streamed = await client.send(req);
       final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
-        throw HttpException('Failed to hydrate $entity: HTTP ${resp.statusCode}');
+        throw HttpException(
+            'Failed to hydrate $entity: HTTP ${resp.statusCode}');
       }
       final decoded = jsonDecode(resp.body);
-      final List<dynamic> items = decoded is List ? decoded : (decoded['data'] as List? ?? []);
-      return await hydrateBatch(entity: entity, items: items.cast<Map<String, dynamic>>());
+      final List<dynamic> items =
+          decoded is List ? decoded : (decoded['data'] as List? ?? []);
+      return await hydrateBatch(
+          entity: entity, items: items.cast<Map<String, dynamic>>());
     } finally {
       if (httpClient == null) client.close();
     }
@@ -96,9 +104,14 @@ class EntityHydrator {
           continue;
         }
 
-        final version = sanitized['version'] is int ? sanitized['version'] as int : 1;
-        final updatedAt = sanitized['updated_at'] is int ? sanitized['updated_at'] as int : now;
-        final expiresAt = sanitized['expires_at'] is int ? sanitized['expires_at'] as int : null;
+        final version =
+            sanitized['version'] is int ? sanitized['version'] as int : 1;
+        final updatedAt = sanitized['updated_at'] is int
+            ? sanitized['updated_at'] as int
+            : now;
+        final expiresAt = sanitized['expires_at'] is int
+            ? sanitized['expires_at'] as int
+            : null;
         final dataJson = jsonEncode(rawItem);
 
         await tx.execute('''
@@ -114,7 +127,8 @@ class EntityHydrator {
       }
 
       if (maxCacheRecords != null && maxCacheRecords > 0) {
-        await SqliteCacheCleaner.pruneToQuotaTx(tx, entity, maxCacheRecords: maxCacheRecords);
+        await SqliteCacheCleaner.pruneToQuotaTx(tx, entity,
+            maxCacheRecords: maxCacheRecords);
       }
 
       return insertedOrUpdated;

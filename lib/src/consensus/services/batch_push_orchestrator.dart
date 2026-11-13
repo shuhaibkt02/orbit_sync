@@ -58,9 +58,11 @@ class BatchPushOrchestrator {
     );
   }
 
-  int get _nowMs => nowMsProvider?.call() ?? DateTime.now().toUtc().millisecondsSinceEpoch;
+  int get _nowMs =>
+      nowMsProvider?.call() ?? DateTime.now().toUtc().millisecondsSinceEpoch;
 
-  void registerIdExtractor(String entity, String? Function(dynamic json) extractor) {
+  void registerIdExtractor(
+      String entity, String? Function(dynamic json) extractor) {
     _customPusher.registerIdExtractor(entity, extractor);
   }
 
@@ -157,7 +159,8 @@ class BatchPushOrchestrator {
 
       if (eligible.isEmpty) return const [];
 
-      final mutationIds = eligible.map((r) => r['mutation_id'] as String).toList();
+      final mutationIds =
+          eligible.map((r) => r['mutation_id'] as String).toList();
       final placeholders = List.filled(mutationIds.length, '?').join(', ');
       await tx.execute(
         "UPDATE _sync_outbox SET status = 'in_flight', updated_at = ? WHERE mutation_id IN ($placeholders) AND status = 'pending'",
@@ -174,15 +177,18 @@ class BatchPushOrchestrator {
     final mutationIds = pending.map((r) => r['mutation_id'] as String).toList();
     final placeholders = List.filled(mutationIds.length, '?').join(', ');
 
-    final customPending = pending.where((r) => r['endpoint_url'] != null).toList();
-    final batchPending = pending.where((r) => r['endpoint_url'] == null).toList();
+    final customPending =
+        pending.where((r) => r['endpoint_url'] != null).toList();
+    final batchPending =
+        pending.where((r) => r['endpoint_url'] == null).toList();
 
     SyncPushResult? customResult;
     SyncPushResult? batchResult;
 
     try {
       if (customPending.isNotEmpty) {
-        final cIds = customPending.map((r) => r['mutation_id'] as String).toList();
+        final cIds =
+            customPending.map((r) => r['mutation_id'] as String).toList();
         final cPh = List.filled(cIds.length, '?').join(', ');
         customResult = await _customPusher.pushCustomEndpoints(
           pending: customPending,
@@ -193,8 +199,11 @@ class BatchPushOrchestrator {
         );
       }
 
-      if (batchPending.isNotEmpty && (customResult == null || customResult.status != SyncPushStatus.unauthorized)) {
-        final bIds = batchPending.map((r) => r['mutation_id'] as String).toList();
+      if (batchPending.isNotEmpty &&
+          (customResult == null ||
+              customResult.status != SyncPushStatus.unauthorized)) {
+        final bIds =
+            batchPending.map((r) => r['mutation_id'] as String).toList();
         final bPh = List.filled(bIds.length, '?').join(', ');
         batchResult = await _batchPusher.pushBatchEnvelope(
           pending: batchPending,
@@ -211,14 +220,18 @@ class BatchPushOrchestrator {
       );
     }
 
-    final totalApplied = (customResult?.applied ?? 0) + (batchResult?.applied ?? 0);
+    final totalApplied =
+        (customResult?.applied ?? 0) + (batchResult?.applied ?? 0);
     final errorResult = [customResult, batchResult].firstWhere(
       (r) => r != null && r.status != SyncPushStatus.success,
       orElse: () => null,
     );
 
     final result = errorResult != null
-        ? SyncPushResult(status: errorResult.status, applied: totalApplied, errorMessage: errorResult.errorMessage)
+        ? SyncPushResult(
+            status: errorResult.status,
+            applied: totalApplied,
+            errorMessage: errorResult.errorMessage)
         : SyncPushResult(status: SyncPushStatus.success, applied: totalApplied);
 
     if (result.status == SyncPushStatus.success && result.applied > 0) {

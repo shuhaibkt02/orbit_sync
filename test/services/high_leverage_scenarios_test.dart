@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 import '../shared/harness/transport/fault.dart';
 import '../shared/harness/transport/fault_injection_http_client.dart';
 
@@ -19,7 +19,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test 1: Concurrent sync() safety & atomic in-flight claiming (Zero double-push)', () async {
+    test(
+        'Test 1: Concurrent sync() safety & atomic in-flight claiming (Zero double-push)',
+        () async {
       int serverPushes = 0;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
@@ -34,7 +36,8 @@ void main() {
         }
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/orders';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/concurrent_sync.db',
       );
@@ -52,7 +55,9 @@ void main() {
       ]);
 
       // Assert: Exactly ONE push reached the server despite 5 concurrent calls
-      expect(serverPushes, equals(1), reason: '_isSyncing guard & atomic in-flight claim prevent double-push');
+      expect(serverPushes, equals(1),
+          reason:
+              '_isSyncing guard & atomic in-flight claim prevent double-push');
 
       final rows = await client.query('SELECT status FROM _sync_outbox');
       expect(rows.first['status'], equals('synced'));
@@ -61,7 +66,8 @@ void main() {
       await server.close();
     });
 
-    test('Test 2: Idempotency key stability across 5 consecutive retries', () async {
+    test('Test 2: Idempotency key stability across 5 consecutive retries',
+        () async {
       final faultClient = FaultInjectionHttpClient(
         script: [
           const DropSocketBeforeRequest(),
@@ -78,21 +84,26 @@ void main() {
         httpClient: faultClient,
         backoffPolicy: BackoffPolicy(maxRetries: 10),
       );
-      await client.registerEntity('orders', url: 'https://example.com/api/orders');
+      await client.registerEntity('orders',
+          url: 'https://example.com/api/orders');
 
-      final orderId = await client.store('orders', {'item': 'Monitor', 'price': 300});
+      final orderId =
+          await client.store('orders', {'item': 'Monitor', 'price': 300});
 
       // Retries 1 through 5 fail with injected faults
       for (var attempt = 1; attempt <= 5; attempt++) {
         await client.sync(force: true);
-        final rows = await client.query('SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+        final rows = await client.query(
+            'SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?',
+            [orderId]);
         expect(rows.first['status'], equals('pending'));
         expect(rows.first['retry_count'], equals(attempt));
       }
 
       // Attempt 6 succeeds
       await client.sync(force: true);
-      final rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+      final rows = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
       expect(rows.first['status'], equals('synced'));
 
       // Assert invariant: All 6 HTTP requests carried clean bodies without forced metadata headers
@@ -111,9 +122,11 @@ void main() {
       faultClient.close();
     });
 
-    test('Test 3: Deep 3-level DAG cascade (Parent -> Child -> Grandchild)', () async {
+    test('Test 3: Deep 3-level DAG cascade (Parent -> Child -> Grandchild)',
+        () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
-      final storage = await SyncStorage.open(path: '${tempDir.path}/dag_cascade.db');
+      final storage =
+          await SyncStorage.open(path: '${tempDir.path}/dag_cascade.db');
       final worker = SyncWorker(
         storage: storage,
         baseUrl: fakeServer.baseUrl,
@@ -121,8 +134,10 @@ void main() {
       );
 
       await storage.registerEntityTable('projects', {'name': 'TEXT'});
-      await storage.registerEntityTable('tasks', {'title': 'TEXT', 'project_id': 'TEXT'});
-      await storage.registerEntityTable('subtasks', {'desc': 'TEXT', 'task_id': 'TEXT'});
+      await storage.registerEntityTable(
+          'tasks', {'title': 'TEXT', 'project_id': 'TEXT'});
+      await storage
+          .registerEntityTable('subtasks', {'desc': 'TEXT', 'task_id': 'TEXT'});
 
       // Level 1: Parent Project
       final parentId = await storage.save(
@@ -152,45 +167,57 @@ void main() {
       expect(push1.status, SyncPushStatus.poisonPill);
 
       // Verify Parent in DLQ
-      final parentRow = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentId]);
+      final parentRow = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentId]);
       expect(parentRow['status'], equals('dlq'));
 
       // 2. Child evaluation sees Parent is in DLQ -> Child held
       await worker.pushBatch(batchSize: 1);
-      final childRow = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childId]);
+      final childRow = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childId]);
       expect(childRow['status'], equals('held'));
 
       // 3. Grandchild evaluation sees Child is held -> Grandchild held
       await worker.pushBatch(batchSize: 1);
-      final grandChildRow = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [grandChildId]);
+      final grandChildRow = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+          [grandChildId]);
       expect(grandChildRow['status'], equals('held'));
 
       // 4. Operator repairs Parent (e.g. un-DLQs it to pending)
-      await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?", [parentId]);
+      await storage.db.execute(
+          "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id = ?",
+          [parentId]);
 
       // Push Parent -> syncs!
       final pushParent = await worker.pushBatch(batchSize: 1);
       expect(pushParent.status, SyncPushStatus.success);
-      final parentAfter = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentId]);
+      final parentAfter = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?', [parentId]);
       expect(parentAfter['status'], equals('synced'));
 
       // Next push: Child is automatically unblocked and syncs!
       final pushChild = await worker.pushBatch(batchSize: 1);
       expect(pushChild.status, SyncPushStatus.success);
-      final childAfter = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childId]);
+      final childAfter = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childId]);
       expect(childAfter['status'], equals('synced'));
 
       // Next push: Grandchild is automatically unblocked and syncs!
       final pushGrandChild = await worker.pushBatch(batchSize: 1);
       expect(pushGrandChild.status, SyncPushStatus.success);
-      final grandChildAfter = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [grandChildId]);
+      final grandChildAfter = await storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+          [grandChildId]);
       expect(grandChildAfter['status'], equals('synced'));
 
       await storage.close();
       await fakeServer.stop();
     });
 
-    test('Test 4: Delta sync pagination mid-transfer resume without duplicate downloads', () async {
+    test(
+        'Test 4: Delta sync pagination mid-transfer resume without duplicate downloads',
+        () async {
       int pullRequestsCount = 0;
       final requestedSinceCursors = <int>[];
 
@@ -199,18 +226,21 @@ void main() {
       server.listen((HttpRequest req) async {
         if (req.uri.path == '/sync/pull') {
           pullRequestsCount++;
-          final since = int.tryParse(req.uri.queryParameters['since'] ?? '0') ?? 0;
+          final since =
+              int.tryParse(req.uri.queryParameters['since'] ?? '0') ?? 0;
           requestedSinceCursors.add(since);
 
           if (since == 0) {
             // Page 1: 50 records, next_cursor = 50
-            final changes = List.generate(50, (i) => {
-              'cursor': i + 1,
-              'entity': 'items',
-              'id': 'item-${i + 1}',
-              'data': {'title': 'Item ${i + 1}'},
-              'version': 1,
-            });
+            final changes = List.generate(
+                50,
+                (i) => {
+                      'cursor': i + 1,
+                      'entity': 'items',
+                      'id': 'item-${i + 1}',
+                      'data': {'title': 'Item ${i + 1}'},
+                      'version': 1,
+                    });
             req.response.statusCode = HttpStatus.ok;
             req.response.headers.contentType = ContentType.json;
             req.response.write(jsonEncode({
@@ -225,13 +255,15 @@ void main() {
             socket.destroy();
           } else if (since == 50) {
             // Page 2 recovered: 50 records, next_cursor = 100
-            final changes = List.generate(50, (i) => {
-              'cursor': 51 + i,
-              'entity': 'items',
-              'id': 'item-${51 + i}',
-              'data': {'title': 'Item ${51 + i}'},
-              'version': 1,
-            });
+            final changes = List.generate(
+                50,
+                (i) => {
+                      'cursor': 51 + i,
+                      'entity': 'items',
+                      'id': 'item-${51 + i}',
+                      'data': {'title': 'Item ${51 + i}'},
+                      'version': 1,
+                    });
             req.response.statusCode = HttpStatus.ok;
             req.response.headers.contentType = ContentType.json;
             req.response.write(jsonEncode({
@@ -242,13 +274,15 @@ void main() {
             await req.response.close();
           } else if (since == 100) {
             // Page 3: 50 records, next_cursor = 150, has_more = false
-            final changes = List.generate(50, (i) => {
-              'cursor': 101 + i,
-              'entity': 'items',
-              'id': 'item-${101 + i}',
-              'data': {'title': 'Item ${101 + i}'},
-              'version': 1,
-            });
+            final changes = List.generate(
+                50,
+                (i) => {
+                      'cursor': 101 + i,
+                      'entity': 'items',
+                      'id': 'item-${101 + i}',
+                      'data': {'title': 'Item ${101 + i}'},
+                      'version': 1,
+                    });
             req.response.statusCode = HttpStatus.ok;
             req.response.headers.contentType = ContentType.json;
             req.response.write(jsonEncode({
@@ -294,8 +328,10 @@ void main() {
       // Complete pullAll -> resumes strictly from cursor 50 without redownloading page 1
       await client.worker.pullAll();
 
-      final totalItems = await client.query('SELECT COUNT(*) as cnt FROM items');
-      expect(totalItems.first['cnt'], equals(150), reason: 'All 150 items saved with zero duplicate rows');
+      final totalItems =
+          await client.query('SELECT COUNT(*) as cnt FROM items');
+      expect(totalItems.first['cnt'], equals(150),
+          reason: 'All 150 items saved with zero duplicate rows');
 
       final finalCursor = await client.worker.getLastSyncedCursor();
       expect(finalCursor, equals(150));
@@ -307,7 +343,9 @@ void main() {
       await server.close();
     });
 
-    test('Test 5: Mid-batch token expiry (401 on item 2 of 3 refreshes token and resumes without dropping item 1)', () async {
+    test(
+        'Test 5: Mid-batch token expiry (401 on item 2 of 3 refreshes token and resumes without dropping item 1)',
+        () async {
       String currentToken = 'token_expired';
       int refreshCount = 0;
       final serverTokensReceived = <String, String>{};
@@ -334,7 +372,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/orders';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/mid_batch_auth.db',
         getAuthToken: () async => currentToken,
@@ -346,9 +385,12 @@ void main() {
       await client.registerEntity('orders', url: targetUrl);
 
       // Store 3 items
-      final id1 = await client.store('orders', {'item': 'Item 1'}, id: 'item-1');
-      final id2 = await client.store('orders', {'item': 'Item 2'}, id: 'item-2');
-      final id3 = await client.store('orders', {'item': 'Item 3'}, id: 'item-3');
+      final id1 =
+          await client.store('orders', {'item': 'Item 1'}, id: 'item-1');
+      final id2 =
+          await client.store('orders', {'item': 'Item 2'}, id: 'item-2');
+      final id3 =
+          await client.store('orders', {'item': 'Item 3'}, id: 'item-3');
 
       // Sync 1: Item 1 succeeds (200), Item 2 fails (401), trigger refresh, pause queue
       await client.sync(force: true);
@@ -357,13 +399,18 @@ void main() {
       expect(currentToken, equals('token_refreshed_v2'));
 
       // Verify item 1 is synced, items 2 and 3 remain pending
-      final rows1 = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id1]);
-      final rows2 = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id2]);
-      final rows3 = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id3]);
+      final rows1 = await client
+          .query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id1]);
+      final rows2 = await client
+          .query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id2]);
+      final rows3 = await client
+          .query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [id3]);
 
       expect(rows1.first['status'], equals('synced'));
-      expect(rows2.first['status'], equals('pending'), reason: 'Item 2 reset to pending after 401');
-      expect(rows3.first['status'], equals('pending'), reason: 'Item 3 preserved pending');
+      expect(rows2.first['status'], equals('pending'),
+          reason: 'Item 2 reset to pending after 401');
+      expect(rows3.first['status'], equals('pending'),
+          reason: 'Item 3 preserved pending');
 
       // Sync 2: Items 2 and 3 resume with refreshed token
       await client.sync(force: true);
@@ -373,8 +420,10 @@ void main() {
 
       // Verify authorization tokens received by server
       expect(serverTokensReceived['item-1'], equals('Bearer token_expired'));
-      expect(serverTokensReceived['item-2'], equals('Bearer token_refreshed_v2'));
-      expect(serverTokensReceived['item-3'], equals('Bearer token_refreshed_v2'));
+      expect(
+          serverTokensReceived['item-2'], equals('Bearer token_refreshed_v2'));
+      expect(
+          serverTokensReceived['item-3'], equals('Bearer token_refreshed_v2'));
 
       await client.close();
       await server.close();

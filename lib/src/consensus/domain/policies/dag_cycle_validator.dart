@@ -46,7 +46,9 @@ class DagCycleValidator {
   }) {
     return (
       priority: parentPriority > childPriority ? parentPriority : childPriority,
-      slaSeconds: parentSlaSeconds < childSlaSeconds ? parentSlaSeconds : childSlaSeconds,
+      slaSeconds: parentSlaSeconds < childSlaSeconds
+          ? parentSlaSeconds
+          : childSlaSeconds,
     );
   }
 }

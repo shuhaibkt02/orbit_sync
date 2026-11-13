@@ -18,10 +18,12 @@ void main() {
       expect(nextRetry, equals(nowMs + 45000));
     });
 
-    test('Exact HTTP-date parsing with jitter disabled returns exact epoch', () {
+    test('Exact HTTP-date parsing with jitter disabled returns exact epoch',
+        () {
       final parser = RetryAfterParser();
       const nowMs = 1700000000000;
-      final targetDate = DateTime.fromMillisecondsSinceEpoch(nowMs + 90000, isUtc: true);
+      final targetDate =
+          DateTime.fromMillisecondsSinceEpoch(nowMs + 90000, isUtc: true);
       final dateHeader = HttpDate.format(targetDate);
 
       final nextRetry = parser.parseNextRetryAt(
@@ -34,7 +36,9 @@ void main() {
       expect(nextRetry, equals(nowMs + 90000));
     });
 
-    test('Jitter distribution strictly bounds between 80% and 120% of base delay', () {
+    test(
+        'Jitter distribution strictly bounds between 80% and 120% of base delay',
+        () {
       final parser = RetryAfterParser(random: Random(42));
       const baseDelayMs = 10000;
 
@@ -45,21 +49,25 @@ void main() {
       }
     });
 
-    test('Null, empty, or garbage headers safely default to fallback delay', () {
+    test('Null, empty, or garbage headers safely default to fallback delay',
+        () {
       final parser = RetryAfterParser();
       const nowMs = 1700000000000;
       const fallback = Duration(seconds: 15);
 
       expect(
-        parser.parseNextRetryAt(null, nowMs, fallbackDelay: fallback, withJitter: false),
+        parser.parseNextRetryAt(null, nowMs,
+            fallbackDelay: fallback, withJitter: false),
         equals(nowMs + 15000),
       );
       expect(
-        parser.parseNextRetryAt('   ', nowMs, fallbackDelay: fallback, withJitter: false),
+        parser.parseNextRetryAt('   ', nowMs,
+            fallbackDelay: fallback, withJitter: false),
         equals(nowMs + 15000),
       );
       expect(
-        parser.parseNextRetryAt('invalid-header-string', nowMs, fallbackDelay: fallback, withJitter: false),
+        parser.parseNextRetryAt('invalid-header-string', nowMs,
+            fallbackDelay: fallback, withJitter: false),
         equals(nowMs + 15000),
       );
     });

@@ -4,7 +4,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
-  group('Ticket 04: Refined _sync_outbox Schema & 4 Specialized B-Tree Indexes', () {
+  group('Ticket 04: Refined _sync_outbox Schema & 4 Specialized B-Tree Indexes',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
@@ -20,7 +21,8 @@ void main() {
     });
 
     test('1. Verify all required columns in _sync_outbox schema', () async {
-      final tableInfo = await storage.db.getAll('PRAGMA table_info(_sync_outbox);');
+      final tableInfo =
+          await storage.db.getAll('PRAGMA table_info(_sync_outbox);');
       final columnNames = tableInfo.map((row) => row['name'] as String).toSet();
 
       final expectedColumns = {
@@ -57,12 +59,14 @@ void main() {
       expect(columnNames.length, equals(27));
 
       // Verify sequence_id is primary key
-      final seqCol = tableInfo.firstWhere((row) => row['name'] == 'sequence_id');
+      final seqCol =
+          tableInfo.firstWhere((row) => row['name'] == 'sequence_id');
       expect(seqCol['pk'], equals(1));
       expect(seqCol['type'], equals('INTEGER'));
 
       // Verify mutation_id is not null
-      final mutCol = tableInfo.firstWhere((row) => row['name'] == 'mutation_id');
+      final mutCol =
+          tableInfo.firstWhere((row) => row['name'] == 'mutation_id');
       expect(mutCol['notnull'], equals(1));
       expect(mutCol['type'], equals('TEXT'));
 
@@ -73,7 +77,9 @@ void main() {
       }
     });
 
-    test('2. Verify the 4 specialized B-Tree indexes exist and are query-plannable', () async {
+    test(
+        '2. Verify the 4 specialized B-Tree indexes exist and are query-plannable',
+        () async {
       final indexes = await storage.db.getAll(
         "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = '_sync_outbox';",
       );
@@ -109,11 +115,14 @@ void main() {
       final qpEntity = await storage.db.getAll(
         "EXPLAIN QUERY PLAN SELECT * FROM _sync_outbox WHERE entity_name = 'tasks' AND entity_id = 't1' AND status = 'pending';",
       );
-      final detailEntity = qpEntity.map((r) => r['detail'].toString()).join(' ');
+      final detailEntity =
+          qpEntity.map((r) => r['detail'].toString()).join(' ');
       expect(detailEntity, contains('idx_sync_outbox_entity'));
     });
 
-    test('3. Verify SQLite CHECK constraints on priority (0..3), status, base_version, and SLA', () async {
+    test(
+        '3. Verify SQLite CHECK constraints on priority (0..3), status, base_version, and SLA',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Priority 0, 1, 2, 3 should all succeed
@@ -176,18 +185,23 @@ void main() {
       );
     });
 
-    test('4. SyncValidator enforces priority 0..3 and throws on out-of-range', () {
+    test('4. SyncValidator enforces priority 0..3 and throws on out-of-range',
+        () {
       // 0..3 valid
       for (int i = 0; i <= 3; i++) {
         expect(() => SyncValidator.validatePriority(i), returnsNormally);
       }
 
       // -1 and 4 invalid
-      expect(() => SyncValidator.validatePriority(-1), throwsA(isA<ArgumentError>()));
-      expect(() => SyncValidator.validatePriority(4), throwsA(isA<ArgumentError>()));
+      expect(() => SyncValidator.validatePriority(-1),
+          throwsA(isA<ArgumentError>()));
+      expect(() => SyncValidator.validatePriority(4),
+          throwsA(isA<ArgumentError>()));
     });
 
-    test('5. SqliteOutboxWriter records author_id, user_id, media_path, priority, and sla_seconds', () async {
+    test(
+        '5. SqliteOutboxWriter records author_id, user_id, media_path, priority, and sla_seconds',
+        () async {
       final mutId = await storage.save(
         entity: 'tasks',
         id: 'task-enterprise-1',
@@ -201,9 +215,13 @@ void main() {
 
       // Verify UUIDv7 format (36 chars, 8-4-4-4-12 hex with hyphens)
       expect(mutId, hasLength(36));
-      expect(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$').hasMatch(mutId), isTrue);
+      expect(
+          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+              .hasMatch(mutId),
+          isTrue);
 
-      final row = await storage.db.get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      final row = await storage.db
+          .get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
       expect(row, isNotNull);
       expect(row['mutation_id'], equals(mutId));
       expect(row['author_id'], equals('auth_usr_99'));
@@ -229,7 +247,9 @@ void main() {
       expect(mapped['priority'], equals(3));
     });
 
-    test('6. SqliteOutboxWriter extracts metadata from data payload if parameters omitted', () async {
+    test(
+        '6. SqliteOutboxWriter extracts metadata from data payload if parameters omitted',
+        () async {
       final mutId = await storage.save(
         entity: 'tasks',
         id: 'task-payload-metadata',
@@ -243,7 +263,8 @@ void main() {
         },
       );
 
-      final row = await storage.db.get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      final row = await storage.db
+          .get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
       expect(row, isNotNull);
       expect(row['author_id'], equals('payload_author'));
       expect(row['user_id'], equals('payload_user'));
@@ -252,7 +273,8 @@ void main() {
       expect(row['sla_seconds'], equals(3600));
     });
 
-    test('7. Grace window coalescing preserves and updates refined metadata', () async {
+    test('7. Grace window coalescing preserves and updates refined metadata',
+        () async {
       final holdWindow = const Duration(seconds: 10);
 
       // Initial draft save
@@ -283,7 +305,8 @@ void main() {
 
       expect(mutId2, equals(mutId1));
 
-      final row = await storage.db.get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId1]);
+      final row = await storage.db
+          .get('SELECT * FROM _sync_outbox WHERE mutation_id = ?;', [mutId1]);
       expect(row['media_path'], equals('/tmp/revised.png'));
       expect(row['priority'], equals(2));
       expect(row['sla_seconds'], equals(2700)); // 45m = 2700s

@@ -19,7 +19,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 18: Clean Architecture & SOLID Dependency Inversion (Pluggable Repositories)', () async {
+    test(
+        'Test Case 18: Clean Architecture & SOLID Dependency Inversion (Pluggable Repositories)',
+        () async {
       final mockOutbox = MockOutboxRepo();
       final mockIdMap = MockIdMapRepo();
 

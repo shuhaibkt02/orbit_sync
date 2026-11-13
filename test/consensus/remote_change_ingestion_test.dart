@@ -5,16 +5,19 @@ import 'package:orbit_sync/orbit_sync.dart';
 import 'package:orbit_sync/src/consensus/services/pull_change_applier.dart';
 import 'package:orbit_sync/src/consensus/services/generation_swap_manager.dart';
 import 'package:orbit_sync/src/consensus/services/conflict_reconciler.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 void main() {
-  group('Ticket 14: Universal 5-Column Remote Change Ingestion & Generation Swap', () {
+  group(
+      'Ticket 14: Universal 5-Column Remote Change Ingestion & Generation Swap',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
     setUp(() async {
       tempDir = Directory.systemTemp.createTempSync('remote_ingest_test_');
-      storage = await SyncStorage.open(path: '${tempDir.path}/test.db', maxReaders: 2);
+      storage = await SyncStorage.open(
+          path: '${tempDir.path}/test.db', maxReaders: 2);
     });
 
     tearDown(() async {
@@ -24,11 +27,14 @@ void main() {
       }
     });
 
-    test('1. Remote Pull Change Ingestion writes clean nested JSON to data_json without dynamic DDL', () async {
+    test(
+        '1. Remote Pull Change Ingestion writes clean nested JSON to data_json without dynamic DDL',
+        () async {
       await storage.registerEntityTable('orders', {});
 
       // Verify clean 5-column table exists initially
-      final initialCols = await storage.db.getAll('PRAGMA table_info("orders");');
+      final initialCols =
+          await storage.db.getAll('PRAGMA table_info("orders");');
       expect(
         initialCols.map((c) => c['name'] as String).toSet(),
         equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}),
@@ -88,14 +94,16 @@ void main() {
       expect(colNames.contains('metadata'), isFalse);
 
       // 2. Verify row content in universal 5-column table
-      final row = await storage.db.get('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
+      final row = await storage.db
+          .get('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
       expect(row['id'], equals('ord-101'));
       expect(row['version'], equals(3));
       expect(row['expires_at'], equals(expiresAt));
       expect(row['updated_at'], isNotNull);
 
       // 3. Verify nested JSON content parsed from data_json
-      final dataMap = jsonDecode(row['data_json'] as String) as Map<String, dynamic>;
+      final dataMap =
+          jsonDecode(row['data_json'] as String) as Map<String, dynamic>;
       expect(dataMap['order_number'], equals('ORD-2026-99'));
       expect(dataMap['customer']['name'], equals('Jane Doe'));
       expect(dataMap['customer']['address']['city'], equals('San Francisco'));
@@ -115,9 +123,11 @@ void main() {
         });
       });
 
-      final updatedRow = await storage.db.get('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
+      final updatedRow = await storage.db
+          .get('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
       expect(updatedRow['version'], equals(4));
-      final updatedData = jsonDecode(updatedRow['data_json'] as String) as Map<String, dynamic>;
+      final updatedData =
+          jsonDecode(updatedRow['data_json'] as String) as Map<String, dynamic>;
       expect(updatedData['customer']['name'], equals('Jane Smith'));
 
       // 5. Delete tombstone removes row
@@ -129,11 +139,14 @@ void main() {
         });
       });
 
-      final deletedRow = await storage.db.getOptional('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
+      final deletedRow = await storage.db
+          .getOptional('SELECT * FROM orders WHERE id = ?;', ['ord-101']);
       expect(deletedRow, isNull);
     });
 
-    test('2. Generation Swap (HTTP 410) creates 5-column staging table, swaps atomically, and reapplies unpushed outbox mutations', () async {
+    test(
+        '2. Generation Swap (HTTP 410) creates 5-column staging table, swaps atomically, and reapplies unpushed outbox mutations',
+        () async {
       final server = await FakeSyncServer.start(port: 0);
       try {
         await storage.registerEntityTable('products', {});
@@ -146,7 +159,8 @@ void main() {
             data: {'name': 'Old Product $i', 'price': i * 10},
           );
         }
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'synced' WHERE entity_name = 'products';");
+        await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'synced' WHERE entity_name = 'products';");
 
         // Add a local unpushed mutation (dirty draft)
         final unpushedMutId = await storage.save(
@@ -160,7 +174,10 @@ void main() {
         );
 
         // Configure server with fresh generation snapshot (e.g. prod-1 updated, prod-2 deleted, prod-fresh added)
-        server.records['products:prod-1'] = {'name': 'Server Product 1 (Gen 2)', 'price': 15};
+        server.records['products:prod-1'] = {
+          'name': 'Server Product 1 (Gen 2)',
+          'price': 15
+        };
         server.records['products:prod-fresh'] = {
           'name': 'New Remote Product',
           'price': 250,
@@ -169,14 +186,16 @@ void main() {
         server.cursor = 200;
 
         final transport = SyncTransport.http(baseUrl: server.baseUrl);
-        final swapManager = GenerationSwapManager(storage: storage, transport: transport);
+        final swapManager =
+            GenerationSwapManager(storage: storage, transport: transport);
 
         // Execute generation swap
         final swapOk = await swapManager.resyncGeneration(['products']);
         expect(swapOk, isTrue);
 
         // 1. Verify PRAGMA table_info on swapped active table has strictly 5 columns
-        final tableInfo = await storage.db.getAll('PRAGMA table_info("products");');
+        final tableInfo =
+            await storage.db.getAll('PRAGMA table_info("products");');
         expect(
           tableInfo.map((c) => c['name'] as String).toSet(),
           equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}),
@@ -197,20 +216,25 @@ void main() {
         expect(indexNames, contains('idx_products_expires'));
 
         // 4. Verify remote fresh records are present
-        final freshRow = await storage.db.getOptional("SELECT * FROM products WHERE id = 'prod-fresh';");
+        final freshRow = await storage.db
+            .getOptional("SELECT * FROM products WHERE id = 'prod-fresh';");
         expect(freshRow, isNotNull);
-        final freshData = jsonDecode(freshRow!['data_json'] as String) as Map<String, dynamic>;
+        final freshData = jsonDecode(freshRow!['data_json'] as String)
+            as Map<String, dynamic>;
         expect(freshData['name'], equals('New Remote Product'));
         expect(freshData['category']['dept'], equals('Hardware'));
 
         // Stale record prod-2 should be gone
-        final staleRow = await storage.db.getOptional("SELECT * FROM products WHERE id = 'prod-2';");
+        final staleRow = await storage.db
+            .getOptional("SELECT * FROM products WHERE id = 'prod-2';");
         expect(staleRow, isNull);
 
         // 5. Verify unpushed local dirty mutation prod-offline-draft was cleanly reapplied on top of swapped table
-        final offlineRow = await storage.db.getOptional("SELECT * FROM products WHERE id = 'prod-offline-draft';");
+        final offlineRow = await storage.db.getOptional(
+            "SELECT * FROM products WHERE id = 'prod-offline-draft';");
         expect(offlineRow, isNotNull);
-        final offlineData = jsonDecode(offlineRow!['data_json'] as String) as Map<String, dynamic>;
+        final offlineData = jsonDecode(offlineRow!['data_json'] as String)
+            as Map<String, dynamic>;
         expect(offlineData['name'], equals('Offline Created Product'));
         expect(offlineData['price'], equals(999));
         expect(offlineData['details']['specs'], equals('Waterproof'));
@@ -234,7 +258,9 @@ void main() {
       }
     });
 
-    test('3. 3-Way Merge Conflict Resolution on 5-Column Nested Records using DeepCollectionEquality', () async {
+    test(
+        '3. 3-Way Merge Conflict Resolution on 5-Column Nested Records using DeepCollectionEquality',
+        () async {
       await storage.registerEntityTable('documents', {});
 
       final reconciler = ConflictReconciler();
@@ -268,12 +294,12 @@ void main() {
       // 2. User locally modifies tags and adds notes (local change)
       final localData = {
         'title': 'Original Architecture Doc', // unchanged locally
-        'content': 'Section 1 content',      // unchanged locally
+        'content': 'Section 1 content', // unchanged locally
         'metadata': {
           'tags': ['offline', 'sync', 'crdt'], // modified locally
           'author': {'name': 'Alice', 'role': 'Lead'},
         },
-        'local_notes': 'Verified on iPad',   // added locally
+        'local_notes': 'Verified on iPad', // added locally
       };
 
       final mutId = await storage.save(
@@ -286,9 +312,9 @@ void main() {
       // 3. Concurrently, remote server modified title and content (remote change), but left metadata unchanged
       final remoteData = {
         'title': 'Universal Architecture Specification', // changed remotely
-        'content': 'Updated Section 1 with diagrams',   // changed remotely
+        'content': 'Updated Section 1 with diagrams', // changed remotely
         'metadata': {
-          'tags': ['offline', 'sync'],                 // unchanged on server
+          'tags': ['offline', 'sync'], // unchanged on server
           'author': {'name': 'Alice', 'role': 'Lead'},
         },
       };
@@ -305,16 +331,20 @@ void main() {
       });
 
       // 5. Verify 3-way merge result in domain table data_json
-      final mergedRow = await storage.db.get('SELECT * FROM documents WHERE id = ?;', ['doc-1']);
+      final mergedRow = await storage.db
+          .get('SELECT * FROM documents WHERE id = ?;', ['doc-1']);
       expect(mergedRow['version'], equals(2));
-      final mergedJson = jsonDecode(mergedRow['data_json'] as String) as Map<String, dynamic>;
+      final mergedJson =
+          jsonDecode(mergedRow['data_json'] as String) as Map<String, dynamic>;
 
       // Remote changes accepted:
-      expect(mergedJson['title'], equals('Universal Architecture Specification'));
+      expect(
+          mergedJson['title'], equals('Universal Architecture Specification'));
       expect(mergedJson['content'], equals('Updated Section 1 with diagrams'));
 
       // Local changes preserved via DeepCollectionEquality:
-      expect(mergedJson['metadata']['tags'], equals(['offline', 'sync', 'crdt']));
+      expect(
+          mergedJson['metadata']['tags'], equals(['offline', 'sync', 'crdt']));
       expect(mergedJson['local_notes'], equals('Verified on iPad'));
 
       // 6. Verify _sync_outbox was updated with merged payload ready to re-push
@@ -325,13 +355,19 @@ void main() {
       expect(updatedOutbox['status'], equals('pending'));
       expect(updatedOutbox['base_version'], equals(2));
 
-      final outboxPayload = jsonDecode(updatedOutbox['payload_json'] as String) as Map<String, dynamic>;
-      expect(outboxPayload['title'], equals('Universal Architecture Specification'));
-      expect(outboxPayload['metadata']['tags'], equals(['offline', 'sync', 'crdt']));
+      final outboxPayload = jsonDecode(updatedOutbox['payload_json'] as String)
+          as Map<String, dynamic>;
+      expect(outboxPayload['title'],
+          equals('Universal Architecture Specification'));
+      expect(outboxPayload['metadata']['tags'],
+          equals(['offline', 'sync', 'crdt']));
       expect(outboxPayload['local_notes'], equals('Verified on iPad'));
 
-      final outboxBase = jsonDecode(updatedOutbox['base_snapshot_json'] as String) as Map<String, dynamic>;
-      expect(outboxBase['title'], equals('Universal Architecture Specification'));
+      final outboxBase =
+          jsonDecode(updatedOutbox['base_snapshot_json'] as String)
+              as Map<String, dynamic>;
+      expect(
+          outboxBase['title'], equals('Universal Architecture Specification'));
     });
   });
 }

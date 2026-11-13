@@ -37,26 +37,28 @@ class MockExternalOrder {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'customer_id': customerId,
-    'total_amount': totalAmount,
-    'item_count': itemCount,
-    'is_tax_exempt': isTaxExempt,
-    'metadata': metadata,
-    'created_at_iso': createdAt.toIso8601String(),
-  };
+        'id': id,
+        'customer_id': customerId,
+        'total_amount': totalAmount,
+        'item_count': itemCount,
+        'is_tax_exempt': isTaxExempt,
+        'metadata': metadata,
+        'created_at_iso': createdAt.toIso8601String(),
+      };
 
-  factory MockExternalOrder.fromJson(Map<String, dynamic> json) => MockExternalOrder(
-    id: json['id'] as String,
-    customerId: json['customer_id'] as String,
-    totalAmount: (json['total_amount'] as num).toDouble(),
-    itemCount: json['item_count'] as int,
-    isTaxExempt: json['is_tax_exempt'] == 1 || json['is_tax_exempt'] == true,
-    metadata: json['metadata'] is String
-        ? jsonDecode(json['metadata'] as String) as Map<String, dynamic>
-        : json['metadata'] as Map<String, dynamic>,
-    createdAt: DateTime.parse(json['created_at_iso'] as String),
-  );
+  factory MockExternalOrder.fromJson(Map<String, dynamic> json) =>
+      MockExternalOrder(
+        id: json['id'] as String,
+        customerId: json['customer_id'] as String,
+        totalAmount: (json['total_amount'] as num).toDouble(),
+        itemCount: json['item_count'] as int,
+        isTaxExempt:
+            json['is_tax_exempt'] == 1 || json['is_tax_exempt'] == true,
+        metadata: json['metadata'] is String
+            ? jsonDecode(json['metadata'] as String) as Map<String, dynamic>
+            : json['metadata'] as Map<String, dynamic>,
+        createdAt: DateTime.parse(json['created_at_iso'] as String),
+      );
 }
 
 class MockOutboxRepo implements IOutboxRepository {
@@ -99,25 +101,33 @@ class MockOutboxRepo implements IOutboxRepository {
     Map<String, String>? headers,
     String? authorId,
     String? userId,
-  }) async => null;
+  }) async =>
+      null;
 
   @override
   Future<bool> undoDelete({String? entity, required String id}) async => true;
 
   @override
-  Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) async {}
+  Future<void> rollbackOptimistic(String mutationId,
+      {String status = 'conflict'}) async {}
 
   @override
-  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) async => 0;
+  Future<int> pruneSyncedOutbox(
+          {Duration retention = const Duration(days: 7)}) async =>
+      0;
 
   @override
-  Future<int> pruneSynced({Duration olderThan = const Duration(days: 7)}) async => 0;
+  Future<int> pruneSynced(
+          {Duration olderThan = const Duration(days: 7)}) async =>
+      0;
 
   @override
   Future<int> pruneExpiredCache(String entity) async => 0;
 
   @override
-  Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) async => 0;
+  Future<int> pruneToQuota(String entity,
+          {required int maxCacheRecords}) async =>
+      0;
 
   @override
   Future<void> registerEntityTable(
@@ -127,11 +137,13 @@ class MockOutboxRepo implements IOutboxRepository {
   }) async {}
 
   @override
-  Future<ResultSet> query(String query, [List<dynamic> parameters = const []]) async =>
+  Future<ResultSet> query(String query,
+          [List<dynamic> parameters = const []]) async =>
       throw UnimplementedError();
 
   @override
-  Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []}) =>
+  Stream<ResultSet> watch(String query,
+          {List<dynamic> parameters = const []}) =>
       const Stream.empty();
 
   @override
@@ -157,11 +169,13 @@ class MockIdMapRepo implements IIdMapRepository {
   Future<String?> getCanonicalServerId({
     required String entity,
     required String localTempId,
-  }) async => 'mock-canonical-id';
+  }) async =>
+      'mock-canonical-id';
 
   @override
   Future<String?> getLocalTempId({
     required String entity,
     required String canonicalServerId,
-  }) async => 'mock-temp-id';
+  }) async =>
+      'mock-temp-id';
 }

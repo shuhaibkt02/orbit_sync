@@ -21,7 +21,9 @@ void main() {
   });
 
   group('Layer 5 Facade: Challenge 2 Ephemeral UI Events & Scoped SyncJob', () {
-    test('sync() returns a SyncJob that can be directly awaited as Future<SyncSummary>', () async {
+    test(
+        'sync() returns a SyncJob that can be directly awaited as Future<SyncSummary>',
+        () async {
       final job = client.sync();
       expect(job, isA<Future<SyncSummary>>());
       expect(job.syncId, isNotEmpty);
@@ -31,7 +33,9 @@ void main() {
       expect(summary.hasErrors, isFalse);
     });
 
-    test('syncEvents stream emits correlated SyncStarted and SyncFinished events', () async {
+    test(
+        'syncEvents stream emits correlated SyncStarted and SyncFinished events',
+        () async {
       final events = <OrbitSyncEvent>[];
       final sub = client.syncEvents.listen(events.add);
 

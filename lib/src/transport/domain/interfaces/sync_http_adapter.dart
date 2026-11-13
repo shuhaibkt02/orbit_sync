@@ -20,7 +20,8 @@ abstract interface class SyncHttpAdapter {
     Duration? timeout,
     void Function(int sent, int total)? onSendProgress,
   }) {
-    throw UnsupportedError('pushMultipart is not supported by $runtimeType. Use DioHttpAdapter.');
+    throw UnsupportedError(
+        'pushMultipart is not supported by $runtimeType. Use DioHttpAdapter.');
   }
 
   /// Releases underlying connection pools or resources.

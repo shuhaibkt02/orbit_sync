@@ -14,7 +14,8 @@ void main() {
   });
 
   group('Layer 2 Consensus: SyncWorker Push Operations', () {
-    test('Test Case 1: In-Flight Drop & Deduplication (Two Generals Problem)', () async {
+    test('Test Case 1: In-Flight Drop & Deduplication (Two Generals Problem)',
+        () async {
       final mutId = await env.storage.save(
         entity: 'tasks',
         id: 't-drop-1',
@@ -27,7 +28,8 @@ void main() {
       );
       expect(outboxBefore['status'], 'pending');
 
-      final pushDrop = await env.worker.pushBatch(chaos: 'drop_before_response');
+      final pushDrop =
+          await env.worker.pushBatch(chaos: 'drop_before_response');
       expect(pushDrop.status, SyncPushStatus.networkError);
 
       final outboxAfterDrop = await env.storage.db.get(
@@ -45,11 +47,13 @@ void main() {
       );
       expect(outboxFinal['status'], 'synced');
 
-      final serverCount = env.server.records.keys.where((k) => k == 'tasks:t-drop-1').length;
+      final serverCount =
+          env.server.records.keys.where((k) => k == 'tasks:t-drop-1').length;
       expect(serverCount, 1);
     });
 
-    test('Test Case 2: Poison Pill DLQ & HoL Prevention (Challenge 8 & 9)', () async {
+    test('Test Case 2: Poison Pill DLQ & HoL Prevention (Challenge 8 & 9)',
+        () async {
       final poisonId = await env.storage.save(
         entity: 'tasks',
         id: 'poison-pill',
@@ -89,8 +93,11 @@ void main() {
       }
     });
 
-    test('Test Case 3: Auth Refresh Pausing without Burning Retry Budget (Challenge 9)', () async {
-      await env.storage.save(entity: 'tasks', id: 'auth-task', data: {'title': 'Auth Task'});
+    test(
+        'Test Case 3: Auth Refresh Pausing without Burning Retry Budget (Challenge 9)',
+        () async {
+      await env.storage
+          .save(entity: 'tasks', id: 'auth-task', data: {'title': 'Auth Task'});
 
       bool authExpiredCalled = false;
       String currentToken = 'expired';
@@ -120,7 +127,9 @@ void main() {
       expect(syncedRow['status'], 'synced');
     });
 
-    test('Test Case 4: Grace Window (holdFor / dispatch_after) suppresses push until window elapses', () async {
+    test(
+        'Test Case 4: Grace Window (holdFor / dispatch_after) suppresses push until window elapses',
+        () async {
       final baseNow = DateTime.now().millisecondsSinceEpoch;
       int simulatedNow = baseNow;
       final timeGatedWorker = SyncWorker(
@@ -140,9 +149,11 @@ void main() {
       // Push while within hold window (simulatedNow < dispatch_after)
       final pushEarly = await timeGatedWorker.pushBatch();
       expect(pushEarly.status, SyncPushStatus.success);
-      expect(pushEarly.applied, 0, reason: 'Must skip mutations whose dispatch_after is in future');
+      expect(pushEarly.applied, 0,
+          reason: 'Must skip mutations whose dispatch_after is in future');
 
-      final rowEarly = await env.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      final rowEarly = await env.storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
       expect(rowEarly['status'], 'pending');
 
       // Advance simulated clock past 5 minutes
@@ -152,7 +163,8 @@ void main() {
       expect(pushDue.status, SyncPushStatus.success);
       expect(pushDue.applied, 1);
 
-      final rowSynced = await env.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
+      final rowSynced = await env.storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?;', [mutId]);
       expect(rowSynced['status'], 'synced');
 
       timeGatedWorker.dispose();

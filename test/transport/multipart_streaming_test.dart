@@ -19,7 +19,8 @@ void main() {
     });
 
     group('1. Multipart Payload Assembly & Field Inclusion', () {
-      test('assembles FormData with binary file and non-binary extraFields', () async {
+      test('assembles FormData with binary file and non-binary extraFields',
+          () async {
         final filePath = '${tempDir.path}/delivery_receipt.jpg';
         final file = File(filePath);
         final dummyBytes = utf8.encode('image-binary-content-simulation-12345');
@@ -93,7 +94,9 @@ void main() {
         adapter.dispose();
       });
 
-      test('sanitizes extraFields removing internal sync & offline flags (zero metadata pollution)', () async {
+      test(
+          'sanitizes extraFields removing internal sync & offline flags (zero metadata pollution)',
+          () async {
         final filePath = '${tempDir.path}/signature.png';
         final file = File(filePath);
         await file.writeAsString('fake-signature-data');
@@ -154,7 +157,9 @@ void main() {
     });
 
     group('2. Streaming Directly from Disk (Zero RAM Blowup)', () {
-      test('streams binary file via chunked openRead stream without loading full byte array into RAM', () async {
+      test(
+          'streams binary file via chunked openRead stream without loading full byte array into RAM',
+          () async {
         // Create a 512 KB test file with predictable byte pattern
         final filePath = '${tempDir.path}/large_document.pdf';
         final file = File(filePath);
@@ -218,7 +223,8 @@ void main() {
         adapter.dispose();
       });
 
-      test('infers fileName from filePath basename when fileName is omitted', () async {
+      test('infers fileName from filePath basename when fileName is omitted',
+          () async {
         final filePath = '${tempDir.path}/auto_named_photo.jpg';
         await File(filePath).writeAsString('photo-data');
 
@@ -253,7 +259,8 @@ void main() {
     });
 
     group('3. Dedicated Transfer Timeout (60 Seconds)', () {
-      test('enforces dedicated 60-second transfer timeout by default', () async {
+      test('enforces dedicated 60-second transfer timeout by default',
+          () async {
         final filePath = '${tempDir.path}/small.txt';
         await File(filePath).writeAsString('sample');
 
@@ -322,7 +329,9 @@ void main() {
         adapter.dispose();
       });
 
-      test('maps sendTimeout DioException to TransportResponse with isNetworkError', () async {
+      test(
+          'maps sendTimeout DioException to TransportResponse with isNetworkError',
+          () async {
         final filePath = '${tempDir.path}/small.txt';
         await File(filePath).writeAsString('sample');
 
@@ -359,7 +368,9 @@ void main() {
     });
 
     group('4. Headers, Content-Type, & Error Handling', () {
-      test('custom headers and auth token preserved while application/json is stripped for multipart boundary', () async {
+      test(
+          'custom headers and auth token preserved while application/json is stripped for multipart boundary',
+          () async {
         final filePath = '${tempDir.path}/note.txt';
         await File(filePath).writeAsString('note content');
 
@@ -385,7 +396,8 @@ void main() {
           filePath: filePath,
           headers: {
             'Authorization': 'Bearer token-xyz',
-            'Content-Type': 'application/json', // Should be stripped to allow multipart boundary
+            'Content-Type':
+                'application/json', // Should be stripped to allow multipart boundary
             'X-Trace-Id': 'trace-404',
           },
         );
@@ -394,12 +406,14 @@ void main() {
         expect(capturedHeaders!['authorization'], equals('Bearer token-xyz'));
         expect(capturedHeaders!['x-trace-id'], equals('trace-404'));
         // Verify application/json was removed
-        expect(capturedHeaders!['content-type'], isNot(equals('application/json')));
+        expect(capturedHeaders!['content-type'],
+            isNot(equals('application/json')));
 
         adapter.dispose();
       });
 
-      test('captures HTTP 401/409/500 errors into TransportResponse cleanly', () async {
+      test('captures HTTP 401/409/500 errors into TransportResponse cleanly',
+          () async {
         final filePath = '${tempDir.path}/test.txt';
         await File(filePath).writeAsString('test');
 
@@ -414,7 +428,9 @@ void main() {
                     requestOptions: options,
                     statusCode: 409,
                     data: '{"error":"Duplicate file fingerprint"}',
-                    headers: Headers.fromMap({'x-retry': ['false']}),
+                    headers: Headers.fromMap({
+                      'x-retry': ['false']
+                    }),
                   ),
                   type: DioExceptionType.badResponse,
                 ),
@@ -440,7 +456,9 @@ void main() {
         adapter.dispose();
       });
 
-      test('returns error in TransportResponse when file does not exist on disk', () async {
+      test(
+          'returns error in TransportResponse when file does not exist on disk',
+          () async {
         final adapter = DioHttpAdapter();
 
         final response = await adapter.pushMultipart(
@@ -458,8 +476,11 @@ void main() {
       });
     });
 
-    group('5. Transport Integration (SyncTransport.dio & InMemorySyncTransport)', () {
-      test('SyncTransport.dio injects auth token and resolves relative URI', () async {
+    group(
+        '5. Transport Integration (SyncTransport.dio & InMemorySyncTransport)',
+        () {
+      test('SyncTransport.dio injects auth token and resolves relative URI',
+          () async {
         final filePath = '${tempDir.path}/upload.pdf';
         await File(filePath).writeAsString('pdf data');
 
@@ -497,13 +518,16 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        expect(capturedUri, equals('https://enterprise.example.com/api/v1/photos'));
+        expect(capturedUri,
+            equals('https://enterprise.example.com/api/v1/photos'));
         expect(capturedAuth, equals('Bearer auth-jwt-token-77'));
 
         transport.dispose();
       });
 
-      test('InMemorySyncTransport records pushMultipart calls and resets correctly', () async {
+      test(
+          'InMemorySyncTransport records pushMultipart calls and resets correctly',
+          () async {
         final transport = SyncTransport.inMemory(
           pushStatusCode: 201,
           pushResponseBody: '{"id":"mem-1"}',
@@ -536,7 +560,8 @@ void main() {
         transport.dispose();
       });
 
-      test('DefaultHttpAdapter returns TransportResponse with UnsupportedError', () async {
+      test('DefaultHttpAdapter returns TransportResponse with UnsupportedError',
+          () async {
         final transport = SyncTransport.http(
           baseUrl: 'https://api.example.com',
         );

@@ -7,7 +7,8 @@ import '../../consensus/domain/models/sync_failure.dart';
 /// Helper handling zero-SQL outbox queries, summaries, failures, and manual retries.
 class DashboardQueryHelper {
   final SyncStorage storage;
-  final Stream<ResultSet> Function(String query, {List<dynamic> parameters}) watchFn;
+  final Stream<ResultSet> Function(String query, {List<dynamic> parameters})
+      watchFn;
 
   const DashboardQueryHelper({
     required this.storage,
@@ -40,7 +41,8 @@ class DashboardQueryHelper {
     ).map((rs) => rs.map(SyncFailure.fromRow).toList());
   }
 
-  Future<List<OutboxRecord>> getRecords({String? status, int limit = 100}) async {
+  Future<List<OutboxRecord>> getRecords(
+      {String? status, int limit = 100}) async {
     var sql = 'SELECT * FROM _sync_outbox';
     final params = <dynamic>[];
     if (status != null) {
@@ -62,11 +64,13 @@ class DashboardQueryHelper {
     }
     sql += ' ORDER BY created_at DESC LIMIT ?';
     params.add(limit);
-    return watchFn(sql, parameters: params).map((rs) => rs.map(OutboxRecord.fromRow).toList());
+    return watchFn(sql, parameters: params)
+        .map((rs) => rs.map(OutboxRecord.fromRow).toList());
   }
 
   Future<List<OutboxRecord>> getStaleRecords({required Duration maxAge}) async {
-    final cutoff = DateTime.now().millisecondsSinceEpoch - maxAge.inMilliseconds;
+    final cutoff =
+        DateTime.now().millisecondsSinceEpoch - maxAge.inMilliseconds;
     final rows = await storage.db.getAll(
       "SELECT * FROM _sync_outbox WHERE status NOT IN ('synced') AND created_at <= ? ORDER BY created_at ASC",
       [cutoff],
@@ -77,7 +81,8 @@ class DashboardQueryHelper {
   Stream<List<OutboxRecord>> watchStaleRecords({required Duration maxAge}) {
     return watchFn(
       "SELECT * FROM _sync_outbox WHERE status NOT IN ('synced') ORDER BY created_at ASC",
-    ).map((rs) => rs.map(OutboxRecord.fromRow).where((r) => r.isStale(maxAge)).toList());
+    ).map((rs) =>
+        rs.map(OutboxRecord.fromRow).where((r) => r.isStale(maxAge)).toList());
   }
 
   Future<void> retryMutation(String mutationId) async {
@@ -94,7 +99,8 @@ class DashboardQueryHelper {
   }
 
   Future<void> cancelMutation(String mutationId) async {
-    await storage.db.execute("DELETE FROM _sync_outbox WHERE mutation_id = ?", [mutationId]);
+    await storage.db.execute(
+        "DELETE FROM _sync_outbox WHERE mutation_id = ?", [mutationId]);
   }
 
   Future<void> markSynced(String mutationId) async {
@@ -117,14 +123,19 @@ class DashboardQueryHelper {
       if (status == 'pending' || status == 'in_flight' || status == 'held') {
         if (status == 'pending' || status == 'held') pending += count;
         if (status == 'in_flight') inFlight += count;
-        if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
+        if (oldest != null &&
+            (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
           oldestPendingEpoch = oldest;
         }
       } else if (status == 'synced') {
         synced += count;
-      } else if (status == 'failed' || status == 'dlq' || status == 'validation_error' || status == 'conflict') {
+      } else if (status == 'failed' ||
+          status == 'dlq' ||
+          status == 'validation_error' ||
+          status == 'conflict') {
         failed += count;
-        if (oldest != null && (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
+        if (oldest != null &&
+            (oldestPendingEpoch == null || oldest < oldestPendingEpoch)) {
           oldestPendingEpoch = oldest;
         }
       }
@@ -136,7 +147,9 @@ class DashboardQueryHelper {
       synced: synced,
       failed: failed,
       total: total,
-      oldestPendingAt: oldestPendingEpoch != null ? DateTime.fromMillisecondsSinceEpoch(oldestPendingEpoch) : null,
+      oldestPendingAt: oldestPendingEpoch != null
+          ? DateTime.fromMillisecondsSinceEpoch(oldestPendingEpoch)
+          : null,
     );
   }
 }

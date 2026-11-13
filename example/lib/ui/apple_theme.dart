@@ -71,16 +71,24 @@ class AppleTheme {
 
   // Dynamic Semantics
   static Color accent(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? systemBlueDark : systemBlue;
+      Theme.of(context).brightness == Brightness.dark
+          ? systemBlueDark
+          : systemBlue;
 
   static Color success(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? systemGreenDark : systemGreen;
+      Theme.of(context).brightness == Brightness.dark
+          ? systemGreenDark
+          : systemGreen;
 
   static Color warning(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? systemOrangeDark : systemOrange;
+      Theme.of(context).brightness == Brightness.dark
+          ? systemOrangeDark
+          : systemOrange;
 
   static Color destructive(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? systemRedDark : systemRed;
+      Theme.of(context).brightness == Brightness.dark
+          ? systemRedDark
+          : systemRed;
 
   // Frosted Glass Material
   static Color glass(BuildContext context, {double opacity = 0.82}) {

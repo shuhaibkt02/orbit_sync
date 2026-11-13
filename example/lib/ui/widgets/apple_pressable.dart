@@ -31,7 +31,8 @@ class ApplePressable extends StatefulWidget {
   State<ApplePressable> createState() => _ApplePressableState();
 }
 
-class _ApplePressableState extends State<ApplePressable> with SingleTickerProviderStateMixin {
+class _ApplePressableState extends State<ApplePressable>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scaleAnimation;
   late final Animation<double> _opacityAnimation;

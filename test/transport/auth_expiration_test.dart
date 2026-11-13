@@ -5,9 +5,12 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: HTTP 401 Auth Expiration & Forwarding', () {
-    test('401 response from server returns cleanly without internal throws or retries', () async {
+    test(
+        '401 response from server returns cleanly without internal throws or retries',
+        () async {
       final mockClient = MockClient((request) async {
-        return http.Response('{"error": "jwt_expired"}', 401, headers: {'www-authenticate': 'Bearer'});
+        return http.Response('{"error": "jwt_expired"}', 401,
+            headers: {'www-authenticate': 'Bearer'});
       });
 
       final transport = SyncTransport.http(
@@ -30,7 +33,9 @@ void main() {
       expect(resp.headers['www-authenticate'], equals('Bearer'));
     });
 
-    test('Transport dynamically retrieves fresh auth token on subsequent requests', () async {
+    test(
+        'Transport dynamically retrieves fresh auth token on subsequent requests',
+        () async {
       String currentToken = 'token-alpha';
       String? sentAuthHeader;
 

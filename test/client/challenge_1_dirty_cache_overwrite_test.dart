@@ -13,7 +13,8 @@ void main() {
     tempDir = Directory.systemTemp.createTempSync('layer5_challenge1_');
     storage = await SyncStorage.open(path: '${tempDir.path}/test.db');
     hydrator = EntityHydrator(storage: storage);
-    await storage.registerEntityTable('orders', {'total': 'REAL', 'status': 'TEXT'});
+    await storage
+        .registerEntityTable('orders', {'total': 'REAL', 'status': 'TEXT'});
   });
 
   tearDown(() async {
@@ -21,8 +22,11 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 1 Dirty Cache Overwrite & Shadow Baseline Re-basing', () {
-    test('Hydration does NOT overwrite pending offline edits in domain table', () async {
+  group(
+      'Layer 5 Facade: Challenge 1 Dirty Cache Overwrite & Shadow Baseline Re-basing',
+      () {
+    test('Hydration does NOT overwrite pending offline edits in domain table',
+        () async {
       // 1. User creates or updates an order offline
       await storage.save(
         entity: 'orders',
@@ -31,8 +35,10 @@ void main() {
       );
 
       // Verify offline state
-      final localBefore = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
-      final decodedBefore = jsonDecode(localBefore.first['data_json'] as String);
+      final localBefore = await storage.db
+          .getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
+      final decodedBefore =
+          jsonDecode(localBefore.first['data_json'] as String);
       expect(decodedBefore['total'], equals(250.0));
       expect(decodedBefore['status'], equals('draft'));
 
@@ -45,21 +51,26 @@ void main() {
         ],
       );
 
-      expect(count, equals(1)); // Only ord-102 was inserted, ord-101 was shielded
+      expect(
+          count, equals(1)); // Only ord-102 was inserted, ord-101 was shielded
 
       // 3. Assert local dirty order was NOT clobbered!
-      final localAfter = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
+      final localAfter = await storage.db
+          .getAll('SELECT * FROM orders WHERE id = ?', ['ord-101']);
       final decodedAfter = jsonDecode(localAfter.first['data_json'] as String);
       expect(decodedAfter['total'], equals(250.0));
       expect(decodedAfter['status'], equals('draft'));
 
       // 4. Assert clean order (ord-102) was successfully stored
-      final ord102 = await storage.db.getAll('SELECT * FROM orders WHERE id = ?', ['ord-102']);
+      final ord102 = await storage.db
+          .getAll('SELECT * FROM orders WHERE id = ?', ['ord-102']);
       final decoded102 = jsonDecode(ord102.first['data_json'] as String);
       expect(decoded102['total'], equals(500.0));
     });
 
-    test('Shadow Baseline Re-basing updates base_snapshot_json for dirty mutations', () async {
+    test(
+        'Shadow Baseline Re-basing updates base_snapshot_json for dirty mutations',
+        () async {
       await storage.save(
         entity: 'orders',
         id: 'ord-200',
@@ -79,7 +90,8 @@ void main() {
         "SELECT base_snapshot_json FROM _sync_outbox WHERE entity_id = 'ord-200'",
       );
       expect(outbox.first['base_snapshot_json'], isNotNull);
-      final base = jsonDecode(outbox.first['base_snapshot_json'] as String) as Map<String, dynamic>;
+      final base = jsonDecode(outbox.first['base_snapshot_json'] as String)
+          as Map<String, dynamic>;
       expect(base['server_rev'], equals(4));
     });
   });

@@ -13,7 +13,8 @@ class SlaMonitor {
 
   final Set<String> _warned = {};
   final Set<String> _breached = {};
-  final StreamController<SyncEvent> _controller = StreamController<SyncEvent>.broadcast();
+  final StreamController<SyncEvent> _controller =
+      StreamController<SyncEvent>.broadcast();
   Timer? _timer;
   bool _isEvaluating = false;
 
@@ -40,7 +41,9 @@ class SlaMonitor {
     if (_isEvaluating) return const [];
     _isEvaluating = true;
     try {
-      final now = nowMs ?? nowMsProvider?.call() ?? DateTime.now().toUtc().millisecondsSinceEpoch;
+      final now = nowMs ??
+          nowMsProvider?.call() ??
+          DateTime.now().toUtc().millisecondsSinceEpoch;
       final rows = await storage.db.getAll('''
         SELECT mutation_id, entity_name, entity_id, created_at, sla_seconds
         FROM _sync_outbox

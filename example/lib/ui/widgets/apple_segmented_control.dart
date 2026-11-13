@@ -48,10 +48,12 @@ class AppleSegmentedControl<T> extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF636366) : Colors.white,
-                    borderRadius: BorderRadius.circular(AppleTheme.radiusMedium - 3),
+                    borderRadius:
+                        BorderRadius.circular(AppleTheme.radiusMedium - 3),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                        color: Colors.black
+                            .withValues(alpha: isDark ? 0.35 : 0.08),
                         blurRadius: 4,
                         offset: const Offset(0, 1.5),
                       ),
@@ -83,7 +85,9 @@ class AppleSegmentedControl<T> extends StatelessWidget {
                               title,
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
                                 letterSpacing: -0.2,
                                 color: isSelected
                                     ? (isDark ? Colors.white : Colors.black)
@@ -93,10 +97,12 @@ class AppleSegmentedControl<T> extends StatelessWidget {
                             if (count != null && count > 0) ...[
                               const SizedBox(width: 5),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppleTheme.accent(context).withValues(alpha: 0.18)
+                                      ? AppleTheme.accent(context)
+                                          .withValues(alpha: 0.18)
                                       : AppleTheme.quaternaryBg(context),
                                   borderRadius: BorderRadius.circular(10),
                                 ),

@@ -21,14 +21,19 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 6 Causal Horizon Guard & Soft Rejection', () {
-    test('CausalHorizonGuard detects newer pending edits and protects domain state', () async {
+  group('Layer 5 Facade: Challenge 6 Causal Horizon Guard & Soft Rejection',
+      () {
+    test(
+        'CausalHorizonGuard detects newer pending edits and protects domain state',
+        () async {
       final t1 = DateTime.now().millisecondsSinceEpoch - 10000;
 
       // Old mutation at t1
-      await storage.save(entity: 'forms', id: 'form-1', data: {'notes': 'Old draft'});
+      await storage
+          .save(entity: 'forms', id: 'form-1', data: {'notes': 'Old draft'});
       // Newer mutation
-      await storage.save(entity: 'forms', id: 'form-1', data: {'notes': 'Newer draft'});
+      await storage
+          .save(entity: 'forms', id: 'form-1', data: {'notes': 'Newer draft'});
 
       final hasNewer = await guard.hasNewerPendingMutations(
         entity: 'forms',
@@ -38,8 +43,12 @@ void main() {
       expect(hasNewer, isTrue);
     });
 
-    test('Soft rejection preserves user form data instead of hard deleting', () async {
-      await storage.save(entity: 'forms', id: 'form-99', data: {'notes': 'Important field data'});
+    test('Soft rejection preserves user form data instead of hard deleting',
+        () async {
+      await storage.save(
+          entity: 'forms',
+          id: 'form-99',
+          data: {'notes': 'Important field data'});
 
       // Soft reject on HTTP 422
       await guard.softRejectRecord(
@@ -48,7 +57,8 @@ void main() {
         errorMessage: 'Invalid postal code',
       );
 
-      final row = await storage.db.getAll('SELECT * FROM forms WHERE id = ?', ['form-99']);
+      final row = await storage.db
+          .getAll('SELECT * FROM forms WHERE id = ?', ['form-99']);
       expect(row.length, equals(1));
       final decoded = jsonDecode(row.first['data_json'] as String);
       expect(decoded['notes'], equals('Important field data'));
@@ -56,11 +66,13 @@ void main() {
       expect(row.first['_sync_error'], equals('Invalid postal code'));
     });
 
-    test('Recursive CTE holds descendant mutations when parent is rejected', () async {
+    test('Recursive CTE holds descendant mutations when parent is rejected',
+        () async {
       await storage.registerEntityTable('orders', {'title': 'TEXT'});
       await storage.registerEntityTable('order_items', {'order_id': 'TEXT'});
 
-      final parentMutId = await storage.save(entity: 'orders', id: 'ord-1', data: {'title': 'Order 1'});
+      final parentMutId = await storage
+          .save(entity: 'orders', id: 'ord-1', data: {'title': 'Order 1'});
       final childMutId = await storage.save(
         entity: 'order_items',
         id: 'item-1',

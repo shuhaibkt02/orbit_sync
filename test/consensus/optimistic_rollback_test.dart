@@ -30,7 +30,8 @@ void main() {
   });
 
   group('Layer 2 Consensus: Optimistic Rollback & Resync', () {
-    test('Test Case 1: Optimistic Rollback on Server 422 Unprocessable Entity', () async {
+    test('Test Case 1: Optimistic Rollback on Server 422 Unprocessable Entity',
+        () async {
       await env.storage.save(
         entity: 'tasks',
         id: 'task-422',
@@ -38,7 +39,8 @@ void main() {
       );
       await env.worker.pushBatch();
 
-      final beforeEdit = await env.storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
+      final beforeEdit = await env.storage.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
       expect(beforeEdit['title'], 'Original Title');
 
       final editMut = await env.storage.save(
@@ -47,13 +49,15 @@ void main() {
         data: {'title': '', 'priority': 'low'},
       );
 
-      final optimisticRow = await env.storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
+      final optimisticRow = await env.storage.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
       expect(optimisticRow['title'], '');
 
       final pushRes = await env.worker.pushBatch(chaos: 'validation_error');
       expect(pushRes.status, SyncPushStatus.validationError);
 
-      final restoredRow = await env.storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
+      final restoredRow = await env.storage.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 'task-422';");
       expect(restoredRow['title'], 'Original Title');
 
       final outboxDraft = await env.storage.db.get(
@@ -82,7 +86,8 @@ void main() {
 
       await env.worker.pullAll();
 
-      final countBefore = await env.storage.db.get('SELECT COUNT(*) as cnt FROM tasks;');
+      final countBefore =
+          await env.storage.db.get('SELECT COUNT(*) as cnt FROM tasks;');
       expect(countBefore['cnt'], 10);
 
       await env.storage.save(
@@ -95,7 +100,9 @@ void main() {
       expect(pullRes.status, SyncPullStatus.expiredCursor);
 
       env.server.records.remove('tasks:t-10');
-      env.server.records['tasks:t-11'] = {'title': 'Task 11 (Fresh Generation)'};
+      env.server.records['tasks:t-11'] = {
+        'title': 'Task 11 (Fresh Generation)'
+      };
       env.server.cursor = 100;
 
       final resyncOk = await env.worker.resyncGeneration(['tasks']);
@@ -112,20 +119,25 @@ void main() {
       );
       expect(draftOutbox['status'], 'pending');
 
-      final newRow = await env.storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-11';");
+      final newRow = await env.storage.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-11';");
       expect(newRow['title'], 'Task 11 (Fresh Generation)');
-      final deletedRow = await env.storage.db.getOptional("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-10';");
+      final deletedRow = await env.storage.db.getOptional(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-10';");
       expect(deletedRow, isNull);
 
       final newCursor = await env.worker.getLastSyncedCursor();
       expect(newCursor, 100);
     });
 
-    test('Test Case 3: HTTP 422 rejected draft streamed via watchRecords() with isRejected=true and errorMessage', () async {
+    test(
+        'Test Case 3: HTTP 422 rejected draft streamed via watchRecords() with isRejected=true and errorMessage',
+        () async {
       final faultClient = FaultInjectionHttpClient(
         script: [
           // 1. Initial creation succeeds
-          const ReturnStatus(200, body: '{"id": "t-watch-1", "title": "Original Task"}'),
+          const ReturnStatus(200,
+              body: '{"id": "t-watch-1", "title": "Original Task"}'),
           // 2. Offline edit fails with 422 Unprocessable Entity
           const ReturnStatus(422, body: '{"error": "Title must not be blank"}'),
         ],
@@ -151,7 +163,8 @@ void main() {
       expect(raw?.title, equals('Original Task'));
 
       // Edit offline to an invalid state that server rejects
-      await table.save(TaskModel(id: 't-watch-1', title: 'Invalid Blank Title'));
+      await table
+          .save(TaskModel(id: 't-watch-1', title: 'Invalid Blank Title'));
 
       // Trigger sync which encounters 422
       await client.sync();
@@ -170,21 +183,30 @@ void main() {
       expect(record.previousData?.title, equals('Original Task'));
 
       // Verify draft in _sync_outbox was preserved with status = 'validation_error' and zero records deleted
-      final outboxRows = await client.query("SELECT status, payload_json, error_details_json FROM _sync_outbox WHERE entity_id = 't-watch-1'");
-      expect(outboxRows.length, equals(2)); // Synced baseline mutation + rejected edit mutation preserved
-      final validationRows = outboxRows.where((r) => r['status'] == 'validation_error').toList();
+      final outboxRows = await client.query(
+          "SELECT status, payload_json, error_details_json FROM _sync_outbox WHERE entity_id = 't-watch-1'");
+      expect(
+          outboxRows.length,
+          equals(
+              2)); // Synced baseline mutation + rejected edit mutation preserved
+      final validationRows =
+          outboxRows.where((r) => r['status'] == 'validation_error').toList();
       expect(validationRows.length, equals(1));
       expect(validationRows.first['status'], equals('validation_error'));
-      expect(validationRows.first['error_details_json'], contains('Title must not be blank'));
+      expect(validationRows.first['error_details_json'],
+          contains('Title must not be blank'));
 
       await client.close();
       faultClient.close();
     });
 
-    test('Test Case 4: HTTP 422 on CustomRestPusher preserves outbox draft and rolls back optimistic cache', () async {
+    test(
+        'Test Case 4: HTTP 422 on CustomRestPusher preserves outbox draft and rolls back optimistic cache',
+        () async {
       final faultClient = FaultInjectionHttpClient(
         script: [
-          const ReturnStatus(422, body: '{"error": "Validation failed on entity"}'),
+          const ReturnStatus(422,
+              body: '{"error": "Validation failed on entity"}'),
         ],
       );
 
@@ -192,11 +214,13 @@ void main() {
         databasePath: '${env.tempDir.path}/custom_pusher_422.db',
         httpClient: faultClient,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Bad Item'});
       // Before sync, raw table has optimistic item
-      final rawBefore = await client.query('SELECT * FROM items WHERE id = ?', [itemId]);
+      final rawBefore =
+          await client.query('SELECT * FROM items WHERE id = ?', [itemId]);
       expect(rawBefore, isNotEmpty);
 
       // Trigger sync
@@ -204,14 +228,18 @@ void main() {
       expect(result.failed, equals(1));
 
       // Domain table has rolled back (empty because it was a new record)
-      final rawAfter = await client.query('SELECT * FROM items WHERE id = ?', [itemId]);
+      final rawAfter =
+          await client.query('SELECT * FROM items WHERE id = ?', [itemId]);
       expect(rawAfter, isEmpty);
 
       // Outbox preserves the draft with status = 'validation_error' and error_details_json
-      final outboxRows = await client.query('SELECT status, error_details_json, payload_json FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      final outboxRows = await client.query(
+          'SELECT status, error_details_json, payload_json FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(outboxRows, isNotEmpty);
       expect(outboxRows.first['status'], equals('validation_error'));
-      expect(outboxRows.first['error_details_json'], contains('Validation failed on entity'));
+      expect(outboxRows.first['error_details_json'],
+          contains('Validation failed on entity'));
 
       await client.close();
       faultClient.close();

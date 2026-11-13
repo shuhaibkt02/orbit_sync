@@ -72,7 +72,8 @@ class _CustomTestTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    return const TransportResponse(statusCode: 200, body: '{"changes":[],"next_cursor":0}');
+    return const TransportResponse(
+        statusCode: 200, body: '{"changes":[],"next_cursor":0}');
   }
 
   @override
@@ -87,7 +88,8 @@ void main() {
   late SyncStorage storage;
 
   setUp(() async {
-    tempDir = Directory.systemTemp.createTempSync('multi_lane_concurrency_test_');
+    tempDir =
+        Directory.systemTemp.createTempSync('multi_lane_concurrency_test_');
     storage = await SyncStorage.open(path: '${tempDir.path}/test.db');
   });
 
@@ -98,8 +100,12 @@ void main() {
     }
   });
 
-  group('Ticket 11: Multi-Lane Dispatch Concurrency (Intra-Entity FIFO & Cross-Entity Parallelism)', () {
-    test('Test Intra-Entity FIFO: Multiple mutations for orders dispatch strictly sequentially', () async {
+  group(
+      'Ticket 11: Multi-Lane Dispatch Concurrency (Intra-Entity FIFO & Cross-Entity Parallelism)',
+      () {
+    test(
+        'Test Intra-Entity FIFO: Multiple mutations for orders dispatch strictly sequentially',
+        () async {
       final dispatchLog = <Map<String, dynamic>>[];
 
       final transport = _CustomTestTransport(
@@ -122,7 +128,8 @@ void main() {
             'end': end,
           });
 
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -140,15 +147,42 @@ void main() {
       // Seed 3 mutations for 'orders' with increasing sequence_id
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-1', 'orders', 'ord-1', 'create', 'https://api.example.com/orders', jsonEncode({'total': 100}), now, 10],
+        [
+          'ord-mut-1',
+          'orders',
+          'ord-1',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 100}),
+          now,
+          10
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-2', 'orders', 'ord-2', 'create', 'https://api.example.com/orders', jsonEncode({'total': 200}), now, 20],
+        [
+          'ord-mut-2',
+          'orders',
+          'ord-2',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 200}),
+          now,
+          20
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-3', 'orders', 'ord-3', 'create', 'https://api.example.com/orders', jsonEncode({'total': 300}), now, 30],
+        [
+          'ord-mut-3',
+          'orders',
+          'ord-3',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 300}),
+          now,
+          30
+        ],
       );
 
       final result = await orchestrator.pushBatch(batchSize: 10);
@@ -162,18 +196,23 @@ void main() {
       expect(dispatchLog[2]['mutationId'], equals('ord-mut-3'));
 
       // Verify strict sequential execution: each request started only after previous request finished
-      expect(dispatchLog[1]['start'] as int, greaterThanOrEqualTo(dispatchLog[0]['end'] as int));
-      expect(dispatchLog[2]['start'] as int, greaterThanOrEqualTo(dispatchLog[1]['end'] as int));
+      expect(dispatchLog[1]['start'] as int,
+          greaterThanOrEqualTo(dispatchLog[0]['end'] as int));
+      expect(dispatchLog[2]['start'] as int,
+          greaterThanOrEqualTo(dispatchLog[1]['end'] as int));
 
       // Verify all 3 mutations are marked synced in SQLite
-      final rows = await db.getAll("SELECT mutation_id, status FROM _sync_outbox ORDER BY sequence_id ASC");
+      final rows = await db.getAll(
+          "SELECT mutation_id, status FROM _sync_outbox ORDER BY sequence_id ASC");
       expect(rows.length, equals(3));
       for (final r in rows) {
         expect(r['status'], equals('synced'));
       }
     });
 
-    test('Test Cross-Entity Parallelism: Mutations for orders and payments dispatch concurrently in overlapping windows', () async {
+    test(
+        'Test Cross-Entity Parallelism: Mutations for orders and payments dispatch concurrently in overlapping windows',
+        () async {
       final dispatchLog = <Map<String, dynamic>>[];
 
       final transport = _CustomTestTransport(
@@ -197,7 +236,8 @@ void main() {
             'end': end,
           });
 
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -215,11 +255,29 @@ void main() {
       // Seed 1 order mutation and 1 payment mutation
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-1', 'orders', 'ord-1', 'create', 'https://api.example.com/orders', jsonEncode({'total': 150}), now, 1],
+        [
+          'ord-mut-1',
+          'orders',
+          'ord-1',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 150}),
+          now,
+          1
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['pay-mut-1', 'payments', 'pay-1', 'create', 'https://api.example.com/payments', jsonEncode({'amount': 150}), now, 2],
+        [
+          'pay-mut-1',
+          'payments',
+          'pay-1',
+          'create',
+          'https://api.example.com/payments',
+          jsonEncode({'amount': 150}),
+          now,
+          2
+        ],
       );
 
       final totalStart = DateTime.now().millisecondsSinceEpoch;
@@ -230,8 +288,10 @@ void main() {
       expect(result.applied, equals(2));
 
       expect(dispatchLog.length, equals(2));
-      final ordEntry = dispatchLog.firstWhere((e) => e['mutationId'] == 'ord-mut-1');
-      final payEntry = dispatchLog.firstWhere((e) => e['mutationId'] == 'pay-mut-1');
+      final ordEntry =
+          dispatchLog.firstWhere((e) => e['mutationId'] == 'ord-mut-1');
+      final payEntry =
+          dispatchLog.firstWhere((e) => e['mutationId'] == 'pay-mut-1');
 
       // Verify overlapping windows (concurrency):
       // Pay started before Order ended, AND Order started before Pay ended
@@ -241,20 +301,26 @@ void main() {
       final payEnd = payEntry['end'] as int;
 
       final overlaps = (payStart < ordEnd) && (ordStart < payEnd);
-      expect(overlaps, isTrue, reason: 'Lanes must execute concurrently with overlapping windows');
+      expect(overlaps, isTrue,
+          reason: 'Lanes must execute concurrently with overlapping windows');
 
       // Total elapsed should be well below 110ms (if serial, it would be >= 120ms)
-      expect(totalElapsed, lessThan(115), reason: 'Parallel execution must take less time than serial sum of delays');
+      expect(totalElapsed, lessThan(115),
+          reason:
+              'Parallel execution must take less time than serial sum of delays');
 
       // Verify both synced
-      final rows = await db.getAll("SELECT mutation_id, status FROM _sync_outbox");
+      final rows =
+          await db.getAll("SELECT mutation_id, status FROM _sync_outbox");
       expect(rows.length, equals(2));
       for (final r in rows) {
         expect(r['status'], equals('synced'));
       }
     });
 
-    test('Test Lane Isolation: A failure in orders lane does not block payments lane from dispatching and completing', () async {
+    test(
+        'Test Lane Isolation: A failure in orders lane does not block payments lane from dispatching and completing',
+        () async {
       final dispatchedIds = <String>[];
 
       final transport = _CustomTestTransport(
@@ -271,13 +337,16 @@ void main() {
 
           if (mutationId == 'ord-mut-1') {
             // Fail order 1 with server 500
-            return const TransportResponse(statusCode: 500, body: '{"error":"Internal Server Error"}');
+            return const TransportResponse(
+                statusCode: 500, body: '{"error":"Internal Server Error"}');
           }
           if (mutationId == 'pay-mut-1') {
             // Payments succeeds
-            return const TransportResponse(statusCode: 200, body: '{"success":true}');
+            return const TransportResponse(
+                statusCode: 200, body: '{"success":true}');
           }
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -295,15 +364,42 @@ void main() {
       // Seed 2 mutations in orders lane and 1 in payments lane
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-1', 'orders', 'ord-1', 'create', 'https://api.example.com/orders', jsonEncode({'total': 100}), now, 1],
+        [
+          'ord-mut-1',
+          'orders',
+          'ord-1',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 100}),
+          now,
+          1
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-2', 'orders', 'ord-2', 'create', 'https://api.example.com/orders', jsonEncode({'total': 200}), now, 2],
+        [
+          'ord-mut-2',
+          'orders',
+          'ord-2',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 200}),
+          now,
+          2
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['pay-mut-1', 'payments', 'pay-1', 'create', 'https://api.example.com/payments', jsonEncode({'amount': 100}), now, 3],
+        [
+          'pay-mut-1',
+          'payments',
+          'pay-1',
+          'create',
+          'https://api.example.com/payments',
+          jsonEncode({'amount': 100}),
+          now,
+          3
+        ],
       );
 
       final result = await orchestrator.pushBatch(batchSize: 10);
@@ -320,21 +416,29 @@ void main() {
 
       // Verify SQLite state:
       // pay-mut-1 is 'synced'
-      final payRow = (await db.getAll("SELECT status FROM _sync_outbox WHERE mutation_id = 'pay-mut-1'")).first;
+      final payRow = (await db.getAll(
+              "SELECT status FROM _sync_outbox WHERE mutation_id = 'pay-mut-1'"))
+          .first;
       expect(payRow['status'], equals('synced'));
 
       // ord-mut-1 recorded failure (status is pending with next_retry_at or dlq)
-      final ord1Row = (await db.getAll("SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE mutation_id = 'ord-mut-1'")).first;
+      final ord1Row = (await db.getAll(
+              "SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE mutation_id = 'ord-mut-1'"))
+          .first;
       expect(ord1Row['status'], equals('pending'));
       expect(ord1Row['retry_count'], equals(1));
       expect(ord1Row['next_retry_at'], isNotNull);
 
       // ord-mut-2 was reset to 'pending' safely for retry in future cycles
-      final ord2Row = (await db.getAll("SELECT status FROM _sync_outbox WHERE mutation_id = 'ord-mut-2'")).first;
+      final ord2Row = (await db.getAll(
+              "SELECT status FROM _sync_outbox WHERE mutation_id = 'ord-mut-2'"))
+          .first;
       expect(ord2Row['status'], equals('pending'));
     });
 
-    test('Test Lane Isolation with Delay: Slow orders lane does not block fast payments lane', () async {
+    test(
+        'Test Lane Isolation with Delay: Slow orders lane does not block fast payments lane',
+        () async {
       final completionOrder = <String>[];
 
       final transport = _CustomTestTransport(
@@ -353,7 +457,8 @@ void main() {
             await Future.delayed(const Duration(milliseconds: 10));
           }
           completionOrder.add(mutationId);
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -371,11 +476,29 @@ void main() {
       // Seed slow order and fast payment
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['ord-mut-slow', 'orders', 'ord-1', 'create', 'https://api.example.com/orders', jsonEncode({'total': 100}), now, 1],
+        [
+          'ord-mut-slow',
+          'orders',
+          'ord-1',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 100}),
+          now,
+          1
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-        ['pay-mut-fast', 'payments', 'pay-1', 'create', 'https://api.example.com/payments', jsonEncode({'amount': 50}), now, 2],
+        [
+          'pay-mut-fast',
+          'payments',
+          'pay-1',
+          'create',
+          'https://api.example.com/payments',
+          jsonEncode({'amount': 50}),
+          now,
+          2
+        ],
       );
 
       final result = await orchestrator.pushBatch(batchSize: 10);
@@ -386,7 +509,9 @@ void main() {
       expect(completionOrder, equals(['pay-mut-fast', 'ord-mut-slow']));
     });
 
-    test('Test Pool Concurrency Limiting: Respects maxConcurrentLanes across multiple entity lanes', () async {
+    test(
+        'Test Pool Concurrency Limiting: Respects maxConcurrentLanes across multiple entity lanes',
+        () async {
       int activeConcurrentLanes = 0;
       int maxObservedConcurrentLanes = 0;
 
@@ -408,7 +533,8 @@ void main() {
           await Future.delayed(const Duration(milliseconds: 40));
 
           activeConcurrentLanes--;
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -425,12 +551,28 @@ void main() {
       final db = storage.db;
 
       // Seed 6 distinct entities
-      final entities = ['orders', 'payments', 'notes', 'attachments', 'customers', 'invoices'];
+      final entities = [
+        'orders',
+        'payments',
+        'notes',
+        'attachments',
+        'customers',
+        'invoices'
+      ];
       for (int i = 0; i < entities.length; i++) {
         final ent = entities[i];
         await db.execute(
           "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-          ['mut-$ent', ent, 'id-$i', 'create', 'https://api.example.com/$ent', jsonEncode({'val': i}), now, i + 1],
+          [
+            'mut-$ent',
+            ent,
+            'id-$i',
+            'create',
+            'https://api.example.com/$ent',
+            jsonEncode({'val': i}),
+            now,
+            i + 1
+          ],
         );
       }
 
@@ -443,7 +585,9 @@ void main() {
       expect(maxObservedConcurrentLanes, greaterThanOrEqualTo(2));
     });
 
-    test('Test Dependent Child Unlocking: Enterprise mutation success unlocks held dependents', () async {
+    test(
+        'Test Dependent Child Unlocking: Enterprise mutation success unlocks held dependents',
+        () async {
       final transport = _CustomTestTransport(
         onPushCustom: ({
           required String url,
@@ -454,7 +598,8 @@ void main() {
           String? entityId,
           Map<String, String>? headers,
         }) async {
-          return const TransportResponse(statusCode: 200, body: '{"success":true}');
+          return const TransportResponse(
+              statusCode: 200, body: '{"success":true}');
         },
       );
 
@@ -472,14 +617,35 @@ void main() {
       // Seed parent order (in_flight) and dependent item (held)
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'in_flight', ?, ?)",
-        ['parent-mut', 'orders', 'ord-100', 'create', 'https://api.example.com/orders', jsonEncode({'total': 100}), now, 1],
+        [
+          'parent-mut',
+          'orders',
+          'ord-100',
+          'create',
+          'https://api.example.com/orders',
+          jsonEncode({'total': 100}),
+          now,
+          1
+        ],
       );
       await db.execute(
         "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, endpoint_url, payload_json, status, depends_on_mutation_id, created_at, sequence_id) VALUES (?, ?, ?, ?, ?, ?, 'held', ?, ?, ?)",
-        ['child-mut', 'order_items', 'item-1', 'create', 'https://api.example.com/items', jsonEncode({'name': 'Widget'}), 'parent-mut', now, 2],
+        [
+          'child-mut',
+          'order_items',
+          'item-1',
+          'create',
+          'https://api.example.com/items',
+          jsonEncode({'name': 'Widget'}),
+          'parent-mut',
+          now,
+          2
+        ],
       );
 
-      final parentRow = (await db.getAll("SELECT * FROM _sync_outbox WHERE mutation_id = 'parent-mut'")).first;
+      final parentRow = (await db.getAll(
+              "SELECT * FROM _sync_outbox WHERE mutation_id = 'parent-mut'"))
+          .first;
 
       final result = await pusher.pushCustomEndpoints(
         pending: [parentRow],
@@ -492,11 +658,15 @@ void main() {
       expect(result.applied, equals(1));
 
       // Parent is synced
-      final parentStatus = (await db.getAll("SELECT status FROM _sync_outbox WHERE mutation_id = 'parent-mut'")).first['status'];
+      final parentStatus = (await db.getAll(
+              "SELECT status FROM _sync_outbox WHERE mutation_id = 'parent-mut'"))
+          .first['status'];
       expect(parentStatus, equals('synced'));
 
       // Child is unlocked from held to pending
-      final childStatus = (await db.getAll("SELECT status FROM _sync_outbox WHERE mutation_id = 'child-mut'")).first['status'];
+      final childStatus = (await db.getAll(
+              "SELECT status FROM _sync_outbox WHERE mutation_id = 'child-mut'"))
+          .first['status'];
       expect(childStatus, equals('pending'));
     });
   });

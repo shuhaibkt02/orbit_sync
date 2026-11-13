@@ -40,23 +40,35 @@ class SqliteOutboxWriter {
     SyncValidator.validateHttpMethod(httpMethod);
 
     final cleanPayloadJson = SyncValidator.encodePayload(data);
-    final effectiveAuthorId = authorId ?? (data['author_id'] as String?) ?? (data['authorId'] as String?);
-    final effectiveUserId = userId ?? (data['user_id'] as String?) ?? (data['userId'] as String?);
-    final effectiveMediaPath = mediaPath ?? (data['media_path'] as String?) ?? (data['mediaPath'] as String?);
-    final effectiveDependsOn = dependsOnMutationId ?? (data['depends_on_mutation_id'] as String?);
-    final effectivePriority = (data['priority'] is int && (data['priority'] as int) >= 0 && (data['priority'] as int) <= 3)
+    final effectiveAuthorId = authorId ??
+        (data['author_id'] as String?) ??
+        (data['authorId'] as String?);
+    final effectiveUserId =
+        userId ?? (data['user_id'] as String?) ?? (data['userId'] as String?);
+    final effectiveMediaPath = mediaPath ??
+        (data['media_path'] as String?) ??
+        (data['mediaPath'] as String?);
+    final effectiveDependsOn =
+        dependsOnMutationId ?? (data['depends_on_mutation_id'] as String?);
+    final effectivePriority = (data['priority'] is int &&
+            (data['priority'] as int) >= 0 &&
+            (data['priority'] as int) <= 3)
         ? (data['priority'] as int)
         : priority;
 
     return await db.writeTransaction<String>((tx) async {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final dispatchAfter = effectiveHoldFor != null ? now + effectiveHoldFor.inMilliseconds : null;
-      final slaSeconds = sla?.inSeconds ?? ((data['sla_seconds'] is int) ? (data['sla_seconds'] as int) : 86400);
+      final dispatchAfter = effectiveHoldFor != null
+          ? now + effectiveHoldFor.inMilliseconds
+          : null;
+      final slaSeconds = sla?.inSeconds ??
+          ((data['sla_seconds'] is int) ? (data['sla_seconds'] as int) : 86400);
       final expiresAt = ttl != null ? now + ttl.inMilliseconds : null;
 
       await SqliteSchema.ensureEntityTableExists(tx, knownColumns, entity);
 
-      final baseline = await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
+      final baseline =
+          await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
       final baseSnapshotJson = baseline.snapshot;
       final baseVersion = baseline.version;
 

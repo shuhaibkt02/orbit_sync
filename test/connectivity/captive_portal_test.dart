@@ -5,7 +5,9 @@ import 'package:orbit_sync/src/connectivity/infrastructure/http_network_probe.da
 
 void main() {
   group('Layer 3 Connectivity: Captive Portal & Probe Rules', () {
-    test('302 redirect to external captive portal flags isCaptivePortal: true and isOnline: false', () async {
+    test(
+        '302 redirect to external captive portal flags isCaptivePortal: true and isOnline: false',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '',
@@ -23,10 +25,12 @@ void main() {
       expect(result.isOnline, isFalse);
       expect(result.isCaptivePortal, isTrue);
       expect(result.statusCode, equals(302));
-      expect(result.redirectUrl, equals(Uri.parse('https://wifi-portal.hotel.com/login')));
+      expect(result.redirectUrl,
+          equals(Uri.parse('https://wifi-portal.hotel.com/login')));
     });
 
-    test('Relative 302 redirect on generate_204 flags captive portal', () async {
+    test('Relative 302 redirect on generate_204 flags captive portal',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '',
@@ -47,7 +51,9 @@ void main() {
       expect(result.redirectUrl, equals(Uri.parse('/guest/s/default/')));
     });
 
-    test('HTTP 204 No Content confirms true reachability without captive portal', () async {
+    test(
+        'HTTP 204 No Content confirms true reachability without captive portal',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response('', 204, request: request);
       });
@@ -62,7 +68,9 @@ void main() {
       expect(result.statusCode, equals(204));
     });
 
-    test('Gateway 401/403/404 Reachability Rule: Direct API errors prove DNS & TLS reachability', () async {
+    test(
+        'Gateway 401/403/404 Reachability Rule: Direct API errors prove DNS & TLS reachability',
+        () async {
       final probeUrl = Uri.parse('https://api.mycompany.com/v1/health');
 
       for (final code in [401, 403, 404]) {
@@ -73,7 +81,8 @@ void main() {
         final probe = HttpNetworkProbe(client: mockClient);
         final result = await probe.probe(probeUrl);
 
-        expect(result.isOnline, isTrue, reason: 'Status code $code directly proves gateway reachability');
+        expect(result.isOnline, isTrue,
+            reason: 'Status code $code directly proves gateway reachability');
         expect(result.isCaptivePortal, isFalse);
         expect(result.statusCode, equals(code));
       }

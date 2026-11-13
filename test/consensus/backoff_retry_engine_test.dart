@@ -18,7 +18,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test 1: Failed mutation suppressed within window; retried after window', () async {
+    test(
+        'Test 1: Failed mutation suppressed within window; retried after window',
+        () async {
       final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
       final policy = BackoffPolicy(
         base: const Duration(seconds: 10),
@@ -39,15 +41,19 @@ void main() {
         backoffPolicy: policy,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Widget A'});
       await client.sync();
 
-      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      var rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('pending'));
       expect(rows.first['retry_count'], equals(1));
-      expect(rows.first['next_retry_at'], equals(clock.millisecondsSinceEpoch + 10000));
+      expect(rows.first['next_retry_at'],
+          equals(clock.millisecondsSinceEpoch + 10000));
 
       clock.advance(const Duration(seconds: 5));
       await client.sync();
@@ -57,7 +63,9 @@ void main() {
       await client.sync();
       expect(faultClient.captured.length, equals(2));
 
-      rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      rows = await client.query(
+          'SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('synced'));
       expect(rows.first['next_retry_at'], isNull);
 
@@ -65,7 +73,9 @@ void main() {
       faultClient.close();
     });
 
-    test('Test 2: Exceeding maxRetries transitions status to dlq with zero further retries', () async {
+    test(
+        'Test 2: Exceeding maxRetries transitions status to dlq with zero further retries',
+        () async {
       final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
       final policy = BackoffPolicy(
         base: const Duration(seconds: 1),
@@ -88,7 +98,8 @@ void main() {
         backoffPolicy: policy,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Poison'});
 
@@ -100,7 +111,9 @@ void main() {
 
       await client.sync();
 
-      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      var rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('dlq'));
       expect(rows.first['retry_count'], equals(3));
       expect(rows.first['next_retry_at'], isNull);
@@ -117,7 +130,9 @@ void main() {
     test('Test 3: Non-transient 4xx (422) is not backed off', () async {
       final faultClient = FaultInjectionHttpClient(
         script: [
-          ReturnStatus(422, body: jsonEncode({'error': 'name violates minLength constraint'})),
+          ReturnStatus(422,
+              body:
+                  jsonEncode({'error': 'name violates minLength constraint'})),
         ],
       );
 
@@ -125,15 +140,19 @@ void main() {
         databasePath: '${tempDir.path}/validation_error.db',
         httpClient: faultClient,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'X'});
       await client.sync();
 
-      final rows = await client.query('SELECT status, next_retry_at, error_details_json FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      final rows = await client.query(
+          'SELECT status, next_retry_at, error_details_json FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('validation_error'));
       expect(rows.first['next_retry_at'], isNull);
-      expect(rows.first['error_details_json'], contains('minLength constraint'));
+      expect(
+          rows.first['error_details_json'], contains('minLength constraint'));
 
       final active = await client.restoreById('items', itemId);
       expect(active, isNull);
@@ -142,13 +161,17 @@ void main() {
       faultClient.close();
     });
 
-    test('Test 4: HTTP 429 Retry-After in RFC 7231 HTTP-date format correctly parses and sets next_retry_at', () async {
+    test(
+        'Test 4: HTTP 429 Retry-After in RFC 7231 HTTP-date format correctly parses and sets next_retry_at',
+        () async {
       final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
-      final httpDateHeader = HttpDate.format(DateTime.utc(2026, 10, 17, 12, 1, 0));
+      final httpDateHeader =
+          HttpDate.format(DateTime.utc(2026, 10, 17, 12, 1, 0));
 
       final faultClient = FaultInjectionHttpClient(
         script: [
-          ReturnStatus(429, headers: {'retry-after': httpDateHeader}, body: 'Rate limited'),
+          ReturnStatus(429,
+              headers: {'retry-after': httpDateHeader}, body: 'Rate limited'),
           const ReturnStatus(200, body: '{"status":"ok"}'),
         ],
       );
@@ -158,12 +181,15 @@ void main() {
         httpClient: faultClient,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Date Test'});
       await client.sync();
 
-      final rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      final rows = await client.query(
+          'SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('pending'));
       final baseTargetMs = clock.millisecondsSinceEpoch;
       final retryAt = rows.first['next_retry_at'] as int;
@@ -175,12 +201,15 @@ void main() {
       faultClient.close();
     });
 
-    test('Test 5: HTTP 429 Retry-After with integer seconds parses and sets next_retry_at', () async {
+    test(
+        'Test 5: HTTP 429 Retry-After with integer seconds parses and sets next_retry_at',
+        () async {
       final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
 
       final faultClient = FaultInjectionHttpClient(
         script: [
-          const ReturnStatus(429, headers: {'retry-after': '30'}, body: 'Too Many Requests'),
+          const ReturnStatus(429,
+              headers: {'retry-after': '30'}, body: 'Too Many Requests'),
           const ReturnStatus(200, body: '{"status":"ok"}'),
         ],
       );
@@ -190,14 +219,18 @@ void main() {
         httpClient: faultClient,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Seconds Test'});
       await client.sync();
 
-      final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      final rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('pending'));
-      expect(rows.first['retry_count'], equals(0)); // Rate limit does not burn retry count
+      expect(rows.first['retry_count'],
+          equals(0)); // Rate limit does not burn retry count
       final baseTargetMs = clock.millisecondsSinceEpoch;
       final retryAt = rows.first['next_retry_at'] as int;
       // 30 seconds ± 20% jitter = 24s .. 36s
@@ -208,7 +241,9 @@ void main() {
       faultClient.close();
     });
 
-    test('Test 6: HTTP 401 Unauthorized releases lease to pending and triggers onAuthExpired', () async {
+    test(
+        'Test 6: HTTP 401 Unauthorized releases lease to pending and triggers onAuthExpired',
+        () async {
       var authExpiredCalled = false;
 
       final faultClient = FaultInjectionHttpClient(
@@ -224,23 +259,29 @@ void main() {
           authExpiredCalled = true;
         },
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': 'Auth Test Item'});
       await client.sync();
 
       expect(authExpiredCalled, isTrue);
 
-      final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+      final rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [itemId]);
       expect(rows.first['status'], equals('pending'));
-      expect(rows.first['retry_count'], equals(0)); // Auth expiration does not burn retry attempts
+      expect(rows.first['retry_count'],
+          equals(0)); // Auth expiration does not burn retry attempts
       expect(rows.first['next_retry_at'], isNull);
 
       await client.close();
       faultClient.close();
     });
 
-    test('Test 7: HTTP 5xx with default BackoffPolicy applies 5 retries then transitions to dlq', () async {
+    test(
+        'Test 7: HTTP 5xx with default BackoffPolicy applies 5 retries then transitions to dlq',
+        () async {
       final clock = ControllableClock(DateTime.utc(2026, 10, 17, 12, 0, 0));
       final policy = BackoffPolicy(
         base: const Duration(seconds: 1),
@@ -264,13 +305,16 @@ void main() {
         backoffPolicy: policy,
         nowMsProvider: () => clock.millisecondsSinceEpoch,
       );
-      await client.registerEntity('items', url: 'https://example.com/api/items');
+      await client.registerEntity('items',
+          url: 'https://example.com/api/items');
 
       final itemId = await client.store('items', {'name': '5xx DLQ Item'});
 
       for (var i = 1; i <= 5; i++) {
         await client.sync();
-        final rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [itemId]);
+        final rows = await client.query(
+            'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+            [itemId]);
         expect(rows.first['retry_count'], equals(i));
         if (i < 5) {
           expect(rows.first['status'], equals('pending'));

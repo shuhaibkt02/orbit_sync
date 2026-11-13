@@ -18,7 +18,8 @@ abstract class IStorageRecovery {
   Future<void> verifyInstallationIntegrity(
     SqliteDatabase db, {
     required Future<String?> Function(String key) secureStorageReader,
-    required Future<void> Function(String key, String value) secureStorageWriter,
+    required Future<void> Function(String key, String value)
+        secureStorageWriter,
     void Function(String sqliteId, String secureId)? onTimeTravelBackupDetected,
   });
 }

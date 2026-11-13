@@ -13,7 +13,8 @@ class Accept extends BatchItemOutcome {
 class Reject extends BatchItemOutcome {
   final int status;
   final String reason;
-  const Reject(String itemId, {this.status = 422, this.reason = 'Rejected'}) : super(itemId);
+  const Reject(String itemId, {this.status = 422, this.reason = 'Rejected'})
+      : super(itemId);
 }
 
 /// Helper that runs an in-memory HTTP server scripted for item-by-item batch outcomes.
@@ -32,7 +33,8 @@ class ScriptedBatchServer {
     return instance;
   }
 
-  String get url => 'http://${_server.address.address}:${_server.port}/api/work_orders';
+  String get url =>
+      'http://${_server.address.address}:${_server.port}/api/work_orders';
 
   void scriptItem(BatchItemOutcome outcome) {
     _outcomes[outcome.itemId] = outcome;
@@ -46,8 +48,13 @@ class ScriptedBatchServer {
 
   Future<void> _handleRequest(HttpRequest request) async {
     final bodyStr = await utf8.decoder.bind(request).join();
-    final body = bodyStr.isNotEmpty ? (jsonDecode(bodyStr) as Map<String, dynamic>) : <String, dynamic>{};
-    final id = (body['id'] as String?) ?? request.headers.value('x-entity-id') ?? request.headers.value('X-Entity-ID') ?? request.uri.pathSegments.last;
+    final body = bodyStr.isNotEmpty
+        ? (jsonDecode(bodyStr) as Map<String, dynamic>)
+        : <String, dynamic>{};
+    final id = (body['id'] as String?) ??
+        request.headers.value('x-entity-id') ??
+        request.headers.value('X-Entity-ID') ??
+        request.uri.pathSegments.last;
     receivedItemIds.add(id);
 
     final outcome = _outcomes[id];

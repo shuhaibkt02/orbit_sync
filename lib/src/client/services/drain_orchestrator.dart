@@ -63,7 +63,8 @@ class DrainOrchestrator {
       }
 
       // Step 4: Close active reactive streams and sever SQLite reader/writer pool
-      for (final controller in List<StreamController<dynamic>>.from(activeWatchControllers)) {
+      for (final controller
+          in List<StreamController<dynamic>>.from(activeWatchControllers)) {
         if (!controller.isClosed) {
           await controller.close();
         }

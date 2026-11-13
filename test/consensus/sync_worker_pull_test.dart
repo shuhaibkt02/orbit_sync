@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 void main() {
   late Directory tempDir;
@@ -13,9 +13,12 @@ void main() {
     tempDir = Directory.systemTemp.createTempSync('sync_pull_test_');
     server = await FakeSyncServer.start(port: 0);
 
-    storage = await SyncStorage.open(path: '${tempDir.path}/client.db', maxReaders: 4);
-    await storage.registerEntityTable('tasks', {'title': 'TEXT', 'dept': 'TEXT'});
-    worker = SyncWorker(storage: storage, baseUrl: server.baseUrl, pullPageLimit: 50);
+    storage = await SyncStorage.open(
+        path: '${tempDir.path}/client.db', maxReaders: 4);
+    await storage
+        .registerEntityTable('tasks', {'title': 'TEXT', 'dept': 'TEXT'});
+    worker = SyncWorker(
+        storage: storage, baseUrl: server.baseUrl, pullPageLimit: 50);
   });
 
   tearDown(() async {
@@ -25,7 +28,8 @@ void main() {
   });
 
   group('Layer 2 Consensus: SyncWorker Pull Operations', () {
-    test('Test Case 1: Checkpointed Pull & Mid-Sync Termination (Challenge 4)', () async {
+    test('Test Case 1: Checkpointed Pull & Mid-Sync Termination (Challenge 4)',
+        () async {
       for (var i = 1; i <= 250; i++) {
         server.records['tasks:seed-$i'] = {'title': 'Seed Task $i'};
         server.cursor++;
@@ -51,7 +55,8 @@ void main() {
       final checkpointCursor = await worker.getLastSyncedCursor();
       expect(checkpointCursor, 100);
 
-      final countMidway = await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
+      final countMidway =
+          await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
       expect(countMidway['count'], 100);
 
       await storage.close();
@@ -71,7 +76,8 @@ void main() {
 
       await newWorker.pullAll();
 
-      final finalCount = await reopenedStorage.db.get('SELECT COUNT(*) as count FROM tasks;');
+      final finalCount =
+          await reopenedStorage.db.get('SELECT COUNT(*) as count FROM tasks;');
       expect(finalCount['count'], 250);
 
       await reopenedStorage.close();
@@ -104,7 +110,8 @@ void main() {
 
       await worker.pullAll();
 
-      final scopedRow = await storage.db.get("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
+      final scopedRow = await storage.db.get(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
       expect(scopedRow['title'], 'Dept Eng');
 
       server.cursor++;
@@ -120,7 +127,8 @@ void main() {
 
       await worker.pullAll();
 
-      final evictedRow = await storage.db.getOptional("SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
+      final evictedRow = await storage.db.getOptional(
+          "SELECT json_extract(data_json, '\$.title') as title FROM tasks WHERE id = 't-scoped';");
       expect(evictedRow, isNull);
     });
   });

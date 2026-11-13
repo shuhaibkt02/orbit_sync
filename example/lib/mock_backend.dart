@@ -49,7 +49,8 @@ class MockBackend {
           } catch (_) {}
         }
         req.response.statusCode = HttpStatus.ok;
-        req.response.write(jsonEncode({'status': 'ok', 'applied': _storage.length}));
+        req.response
+            .write(jsonEncode({'status': 'ok', 'applied': _storage.length}));
       } else if (req.method == 'GET' && path.endsWith('/sync/pull')) {
         req.response.statusCode = HttpStatus.ok;
         req.response.write(jsonEncode({
@@ -59,7 +60,8 @@ class MockBackend {
         }));
       } else if (path.endsWith('/tasks') || path.endsWith('/health')) {
         req.response.statusCode = HttpStatus.ok;
-        req.response.write(jsonEncode({'status': 'ok', 'items': _storage.values.toList()}));
+        req.response.write(
+            jsonEncode({'status': 'ok', 'items': _storage.values.toList()}));
       } else {
         req.response.statusCode = HttpStatus.ok;
         req.response.write(jsonEncode({'status': 'ok'}));

@@ -25,7 +25,9 @@ class MockOfflineMonitor implements ConnectivityMonitor {
   void attachExternalConnectivity(Stream<bool> rawStream) {}
 
   @override
-  Future<bool> checkReachability({String? targetUrl, bool bypassDebounce = false}) async => _online;
+  Future<bool> checkReachability(
+          {String? targetUrl, bool bypassDebounce = false}) async =>
+      _online;
 
   @override
   Future<void> dispose() async => await _controller.close();
@@ -71,7 +73,8 @@ void main() {
   late OrbitTable<TestItem> table;
 
   setUp(() async {
-    tempDir = Directory.systemTemp.createTempSync('orbit_pagination_cache_test_');
+    tempDir =
+        Directory.systemTemp.createTempSync('orbit_pagination_cache_test_');
     storage = await SyncStorage.open(path: '${tempDir.path}/test.db');
 
     table = OrbitTable<TestItem>(
@@ -93,12 +96,15 @@ void main() {
   });
 
   group('Ticket 03: Native Pagination & Non-Destructive Offline Cache', () {
-    test('1. Native pagination: limit and offset correctly slice results ordered by updated_at DESC', () async {
+    test(
+        '1. Native pagination: limit and offset correctly slice results ordered by updated_at DESC',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Seed 6 items with sequential updated_at timestamps
       for (var i = 1; i <= 6; i++) {
-        final itemJson = jsonEncode({'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
+        final itemJson = jsonEncode(
+            {'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
         await storage.db.execute('''
           INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
           VALUES (?, 1, ?, null, ?)
@@ -128,12 +134,15 @@ void main() {
       expect(page4, isEmpty);
     });
 
-    test('2. Dart predicate filtering evaluates lazily and respects limit and offset', () async {
+    test(
+        '2. Dart predicate filtering evaluates lazily and respects limit and offset',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Seed 10 items (even amounts 20, 40, 60, 80, 100)
       for (var i = 1; i <= 10; i++) {
-        final itemJson = jsonEncode({'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
+        final itemJson = jsonEncode(
+            {'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
         await storage.db.execute('''
           INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
           VALUES (?, 1, ?, null, ?)
@@ -154,12 +163,15 @@ void main() {
       expect(filtered[2].id, equals('item-6'));
     });
 
-    test('3. watch() emits paginated slices reactively as records are added or updated', () async {
+    test(
+        '3. watch() emits paginated slices reactively as records are added or updated',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Seed 2 initial items
       for (var i = 1; i <= 2; i++) {
-        final itemJson = jsonEncode({'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
+        final itemJson = jsonEncode(
+            {'id': 'item-$i', 'title': 'Item $i', 'amount': i * 10.0});
         await storage.db.execute('''
           INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
           VALUES (?, 1, ?, null, ?)
@@ -181,7 +193,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Insert item-3 with higher updated_at (should replace item-1 in the top-2 window)
-      final newItemJson = jsonEncode({'id': 'item-3', 'title': 'Item 3', 'amount': 30.0});
+      final newItemJson =
+          jsonEncode({'id': 'item-3', 'title': 'Item 3', 'amount': 30.0});
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('item-3', 1, ?, null, ?)
@@ -192,12 +205,16 @@ void main() {
 
       expect(emittedSlices.length, greaterThanOrEqualTo(2));
       // First emission: item-2, item-1
-      expect(emittedSlices.first.map((i) => i.id).toList(), equals(['item-2', 'item-1']));
+      expect(emittedSlices.first.map((i) => i.id).toList(),
+          equals(['item-2', 'item-1']));
       // Latest emission after insert: item-3, item-2
-      expect(emittedSlices.last.map((i) => i.id).toList(), equals(['item-3', 'item-2']));
+      expect(emittedSlices.last.map((i) => i.id).toList(),
+          equals(['item-3', 'item-2']));
     });
 
-    test('4. Non-Destructive Invalidation: isStale is true when expires_at <= now without deleting data', () async {
+    test(
+        '4. Non-Destructive Invalidation: isStale is true when expires_at <= now without deleting data',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final pastExpiry = now - 5000; // Expired 5 seconds ago
 
@@ -238,23 +255,31 @@ void main() {
       expect(records.first.isStale, isTrue);
 
       // Verify row still physically exists in SQLite
-      final rawCheck = await storage.db.getAll('SELECT id FROM items WHERE id = ?', ['exp-1']);
+      final rawCheck = await storage.db
+          .getAll('SELECT id FROM items WHERE id = ?', ['exp-1']);
       expect(rawCheck, isNotEmpty);
     });
 
-    test('5. Outbox-Guarded Background Purge: expired record with pending outbox mutation is NEVER purged', () async {
+    test(
+        '5. Outbox-Guarded Background Purge: expired record with pending outbox mutation is NEVER purged',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final pastExpiry = now - 10000;
 
       // Row A: Expired cache record from server (NO pending outbox mutation)
-      final cleanJson = jsonEncode({'id': 'clean-expired', 'title': 'Clean Item', 'amount': 10.0});
+      final cleanJson = jsonEncode(
+          {'id': 'clean-expired', 'title': 'Clean Item', 'amount': 10.0});
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('clean-expired', 1, ?, ?, ?)
       ''', [now, pastExpiry, cleanJson]);
 
       // Row B: Expired cache record WITH a pending outbox mutation
-      final dirtyJson = jsonEncode({'id': 'dirty-expired', 'title': 'Unsynced User Edit', 'amount': 50.0});
+      final dirtyJson = jsonEncode({
+        'id': 'dirty-expired',
+        'title': 'Unsynced User Edit',
+        'amount': 50.0
+      });
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('dirty-expired', 1, ?, ?, ?)
@@ -271,16 +296,20 @@ void main() {
 
       // Assert Row A was purged
       expect(prunedCount, equals(1));
-      final cleanCheck = await storage.db.getAll('SELECT id FROM items WHERE id = ?', ['clean-expired']);
+      final cleanCheck = await storage.db
+          .getAll('SELECT id FROM items WHERE id = ?', ['clean-expired']);
       expect(cleanCheck, isEmpty);
 
       // Assert Row B was strictly protected by the outbox guard!
-      final dirtyCheck = await storage.db.getAll('SELECT id FROM items WHERE id = ?', ['dirty-expired']);
+      final dirtyCheck = await storage.db
+          .getAll('SELECT id FROM items WHERE id = ?', ['dirty-expired']);
       expect(dirtyCheck, isNotEmpty);
       expect(dirtyCheck.first['id'], equals('dirty-expired'));
     });
 
-    test('6. Pull-to-refresh while offline returns RefreshResult.offline without deleting cached rows', () async {
+    test(
+        '6. Pull-to-refresh while offline returns RefreshResult.offline without deleting cached rows',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final pastExpiry = now - 5000;
 
@@ -288,12 +317,19 @@ void main() {
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('item-stale', 1, ?, ?, ?)
-      ''', [now, pastExpiry, jsonEncode({'id': 'item-stale', 'title': 'Stale Item', 'amount': 15.0})]);
+      ''', [
+        now,
+        pastExpiry,
+        jsonEncode({'id': 'item-stale', 'title': 'Stale Item', 'amount': 15.0})
+      ]);
 
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('item-fresh', 1, ?, null, ?)
-      ''', [now, jsonEncode({'id': 'item-fresh', 'title': 'Fresh Item', 'amount': 25.0})]);
+      ''', [
+        now,
+        jsonEncode({'id': 'item-fresh', 'title': 'Fresh Item', 'amount': 25.0})
+      ]);
 
       // Setup table with mock offline monitor
       final offlineMonitor = MockOfflineMonitor(isOnline: false);
@@ -316,21 +352,30 @@ void main() {
       expect(result, equals(RefreshResult.offline));
 
       // Assert ZERO rows were wiped or deleted from local cache
-      final rowsRemaining = await storage.db.getAll('SELECT id FROM items ORDER BY id');
+      final rowsRemaining =
+          await storage.db.getAll('SELECT id FROM items ORDER BY id');
       expect(rowsRemaining.length, equals(2));
-      expect(rowsRemaining.map((r) => r['id']).toList(), equals(['item-fresh', 'item-stale']));
+      expect(rowsRemaining.map((r) => r['id']).toList(),
+          equals(['item-fresh', 'item-stale']));
     });
 
-    test('7. Network exception during fetch returns RefreshResult.offline and preserves cache', () async {
+    test(
+        '7. Network exception during fetch returns RefreshResult.offline and preserves cache',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       await storage.db.execute('''
         INSERT INTO "items" (id, version, updated_at, expires_at, data_json)
         VALUES ('cached-1', 1, ?, null, ?)
-      ''', [now, jsonEncode({'id': 'cached-1', 'title': 'Existing Cache', 'amount': 100.0})]);
+      ''', [
+        now,
+        jsonEncode(
+            {'id': 'cached-1', 'title': 'Existing Cache', 'amount': 100.0})
+      ]);
 
       // Custom client that throws SocketException (simulating network dropping during probe)
-      final clientMock = _FaultyHttpClient(errorToThrow: const SocketException('No route to host'));
+      final clientMock = _FaultyHttpClient(
+          errorToThrow: const SocketException('No route to host'));
 
       final faultyTable = OrbitTable<TestItem>(
         name: 'items',
@@ -349,7 +394,8 @@ void main() {
       expect(result.status, equals(RefreshStatus.offline));
 
       // Cache remains completely intact
-      final rows = await storage.db.getAll('SELECT id FROM items WHERE id = ?', ['cached-1']);
+      final rows = await storage.db
+          .getAll('SELECT id FROM items WHERE id = ?', ['cached-1']);
       expect(rows.length, equals(1));
     });
   });

@@ -28,10 +28,12 @@ class RefreshResult {
   });
 
   /// Static canonical representation of an offline probe or disconnected state.
-  static const RefreshResult offline = RefreshResult(status: RefreshStatus.offline);
+  static const RefreshResult offline =
+      RefreshResult(status: RefreshStatus.offline);
 
   /// Static canonical representation of a successful empty refresh.
-  static const RefreshResult success = RefreshResult(status: RefreshStatus.success);
+  static const RefreshResult success =
+      RefreshResult(status: RefreshStatus.success);
 
   /// Whether the operation stopped because the device is offline or unreachable.
   bool get isOffline => status == RefreshStatus.offline;
@@ -43,7 +45,8 @@ class RefreshResult {
   bool get isError => status == RefreshStatus.error;
 
   @override
-  String toString() => 'RefreshResult(status: $status, count: $count, errorMessage: $errorMessage)';
+  String toString() =>
+      'RefreshResult(status: $status, count: $count, errorMessage: $errorMessage)';
 
   @override
   bool operator ==(Object other) =>

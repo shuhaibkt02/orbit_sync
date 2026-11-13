@@ -26,11 +26,13 @@ void main() {
           childId: 'mut-x',
           parentId: 'mut-x',
         ),
-        throwsA(isA<ArgumentError>().having((e) => e.message, 'message', contains('cannot depend on itself'))),
+        throwsA(isA<ArgumentError>().having(
+            (e) => e.message, 'message', contains('cannot depend on itself'))),
       );
     });
 
-    test('Test 3: Cyclic dependency (A -> B -> C -> A) throws ArgumentError', () {
+    test('Test 3: Cyclic dependency (A -> B -> C -> A) throws ArgumentError',
+        () {
       final graph = <String, String?>{
         'mut-b': 'mut-a',
         'mut-c': 'mut-b',
@@ -42,11 +44,14 @@ void main() {
           childId: 'mut-a',
           parentId: 'mut-c',
         ),
-        throwsA(isA<ArgumentError>().having((e) => e.message, 'message', contains('illegal cycle'))),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', contains('illegal cycle'))),
       );
     });
 
-    test('Test 4: Priority inheritance elevates prerequisite priority and tightens SLA', () {
+    test(
+        'Test 4: Priority inheritance elevates prerequisite priority and tightens SLA',
+        () {
       final inherited = DagCycleValidator.inheritPriority(
         parentPriority: 0,
         parentSlaSeconds: 86400,

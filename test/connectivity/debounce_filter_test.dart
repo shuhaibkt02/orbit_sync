@@ -25,7 +25,9 @@ void main() {
       expect(emittedState, isFalse);
     });
 
-    test('3s Reconnect stabilization suppresses rapid flapping before window elapses', () async {
+    test(
+        '3s Reconnect stabilization suppresses rapid flapping before window elapses',
+        () async {
       final machine = DebouncedStateMachine(
         policy: const DebouncePolicy(
           stabilizationDuration: Duration(milliseconds: 60),
@@ -65,7 +67,9 @@ void main() {
       expect(transitions, isEmpty);
     });
 
-    test('Stable reconnection transitions to online once stabilization window passes', () async {
+    test(
+        'Stable reconnection transitions to online once stabilization window passes',
+        () async {
       final machine = DebouncedStateMachine(
         policy: const DebouncePolicy(
           stabilizationDuration: Duration(milliseconds: 40),
@@ -91,7 +95,9 @@ void main() {
       expect(machine.isOnline, isTrue);
     });
 
-    test('bypassDebounce immediately transitions online without waiting for timer', () {
+    test(
+        'bypassDebounce immediately transitions online without waiting for timer',
+        () {
       final machine = DebouncedStateMachine(
         policy: const DebouncePolicy(
           stabilizationDuration: Duration(seconds: 10),

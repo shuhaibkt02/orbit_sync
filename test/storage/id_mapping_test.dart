@@ -45,7 +45,8 @@ void main() {
         ) VALUES ('synced-old', 'tasks', 't-1', 'create', 'synced', ?, ?)
       ''', [now - 100000000, now - 100000000]);
 
-      final pruned = await storage.pruneSynced(olderThan: const Duration(hours: 1));
+      final pruned =
+          await storage.pruneSynced(olderThan: const Duration(hours: 1));
       expect(pruned, greaterThanOrEqualTo(1));
     });
   });

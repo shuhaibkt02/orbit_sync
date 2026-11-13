@@ -65,7 +65,8 @@ class UndoToast extends StatelessWidget {
                   onUndo();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppleTheme.systemBlue.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(AppleTheme.radiusPill),

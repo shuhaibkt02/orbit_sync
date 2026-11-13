@@ -32,14 +32,16 @@ class HttpSyncTransport implements SyncTransport {
     bool? autoInjectIdempotencyKey,
   })  : baseUrl = baseUrl ?? '',
         _adapter = adapter ?? DefaultHttpAdapter(client: client),
-        autoInjectIdempotencyKey = autoInjectIdempotencyKey ?? (adapter is DioHttpAdapter);
+        autoInjectIdempotencyKey =
+            autoInjectIdempotencyKey ?? (adapter is DioHttpAdapter);
 
   /// Underlying HTTP adapter.
   SyncHttpAdapter get adapter => _adapter;
 
   /// Underlying HTTP client if running on [DefaultHttpAdapter].
-  http.Client? get httpClient =>
-      _adapter is DefaultHttpAdapter ? (_adapter as DefaultHttpAdapter).client : null;
+  http.Client? get httpClient => _adapter is DefaultHttpAdapter
+      ? (_adapter as DefaultHttpAdapter).client
+      : null;
 
   /// Helper to sanitize payloads removing internal sync and offline flags.
   static Map<String, dynamic> sanitizePayload(Map<String, dynamic> payload) =>
@@ -60,14 +62,16 @@ class HttpSyncTransport implements SyncTransport {
     if (getAuthToken != null) {
       final token = await getAuthToken!();
       if (token != null && token.isNotEmpty) {
-        h['Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer $token';
+        h['Authorization'] =
+            token.startsWith('Bearer ') ? token : 'Bearer $token';
       }
     }
     return h;
   }
 
   String _joinUrl(String base, String path) {
-    final cleanBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final cleanBase =
+        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
     final cleanPath = path.startsWith('/') ? path : '/$path';
     return '$cleanBase$cleanPath';
   }
@@ -86,9 +90,11 @@ class HttpSyncTransport implements SyncTransport {
     final sanitizedMutations = mutations.map((m) {
       final sanitized = Map<String, dynamic>.from(m);
       if (sanitized['payload'] is Map<String, dynamic>) {
-        sanitized['payload'] = sanitizer.sanitizePayload(sanitized['payload'] as Map<String, dynamic>);
+        sanitized['payload'] = sanitizer
+            .sanitizePayload(sanitized['payload'] as Map<String, dynamic>);
       } else if (sanitized['payload'] is Map) {
-        sanitized['payload'] = sanitizer.sanitizePayload(Map<String, dynamic>.from(sanitized['payload'] as Map));
+        sanitized['payload'] = sanitizer.sanitizePayload(
+            Map<String, dynamic>.from(sanitized['payload'] as Map));
       }
       return sanitized;
     }).toList();
@@ -125,7 +131,8 @@ class HttpSyncTransport implements SyncTransport {
     final reqHeaders = await _authHeaders();
     if (headers != null) reqHeaders.addAll(headers);
 
-    final isMutating = const {'POST', 'PUT', 'PATCH', 'DELETE'}.contains(method.toUpperCase());
+    final isMutating =
+        const {'POST', 'PUT', 'PATCH', 'DELETE'}.contains(method.toUpperCase());
     if (isMutating && autoInjectIdempotencyKey) {
       if (!reqHeaders.containsKey('Idempotency-Key')) {
         reqHeaders['Idempotency-Key'] = mutationId;
@@ -173,7 +180,8 @@ class HttpSyncTransport implements SyncTransport {
     if (getAuthToken != null) {
       final token = await getAuthToken!();
       if (token != null && token.isNotEmpty) {
-        reqHeaders['Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer $token';
+        reqHeaders['Authorization'] =
+            token.startsWith('Bearer ') ? token : 'Bearer $token';
       }
     }
     if (headers != null) {

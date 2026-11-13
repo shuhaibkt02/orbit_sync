@@ -21,7 +21,9 @@ class GenerationSwapManager {
         ? entities
         : (await storage.db.getAll(
             'SELECT name FROM sqlite_master WHERE type="table" AND name NOT LIKE "\\_%" ESCAPE "\\" AND name NOT LIKE "sqlite_%";',
-          )).map((r) => r['name'] as String).toList();
+          ))
+            .map((r) => r['name'] as String)
+            .toList();
     int cursor = 0;
     final allChanges = <Map<String, dynamic>>[];
     int nextCursor = 0;
@@ -35,7 +37,8 @@ class GenerationSwapManager {
       if (resp.statusCode != HttpStatus.ok || resp.error != null) return false;
 
       final bodyJson = jsonDecode(resp.body) as Map<String, dynamic>;
-      final changes = (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
+      final changes =
+          (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
       allChanges.addAll(changes);
       nextCursor = (bodyJson['next_cursor'] as int?) ?? cursor;
 
@@ -59,14 +62,17 @@ class GenerationSwapManager {
         ''');
 
         // 2. Populate staging table with latest remote changes
-        final entityChanges = allChanges.where((c) => c['entity'] == entity && c['_deleted'] != true);
+        final entityChanges = allChanges
+            .where((c) => c['entity'] == entity && c['_deleted'] != true);
         for (final change in entityChanges) {
           final id = change['id'].toString();
           final data = (change['data'] as Map<String, dynamic>?) ?? {};
           final version = (change['version'] as int?) ?? 1;
           final now = DateTime.now().millisecondsSinceEpoch;
-          final expiresAt = (change['expires_at'] as int?) ?? (data['expires_at'] as int?);
-          await PullChangeApplier.upsertRow(tx, '_staging_$entity', id, data, version, now, expiresAt);
+          final expiresAt =
+              (change['expires_at'] as int?) ?? (data['expires_at'] as int?);
+          await PullChangeApplier.upsertRow(
+              tx, '_staging_$entity', id, data, version, now, expiresAt);
         }
 
         // 3. Ensure target entity table exists before renaming to avoid "no such table" errors
@@ -109,11 +115,13 @@ class GenerationSwapManager {
           if (op == 'delete') {
             await tx.execute('DELETE FROM "$entity" WHERE "id" = ?', [id]);
           } else {
-            final payload = jsonDecode(p['payload_json'] as String) as Map<String, dynamic>;
+            final payload =
+                jsonDecode(p['payload_json'] as String) as Map<String, dynamic>;
             final now = DateTime.now().millisecondsSinceEpoch;
             final expiresAt = payload['expires_at'] as int?;
             final payloadVer = (payload['version'] as int?);
-            final targetVer = payloadVer ?? (((p['base_version'] as int?) ?? 1) + 1);
+            final targetVer =
+                payloadVer ?? (((p['base_version'] as int?) ?? 1) + 1);
             await PullChangeApplier.upsertRow(
               tx,
               entity,

@@ -14,7 +14,8 @@ class PullChangeApplier {
   });
 
   /// Processes a single remote change item inside a write transaction.
-  Future<void> processChange(SqliteWriteContext tx, Map<String, dynamic> change) async {
+  Future<void> processChange(
+      SqliteWriteContext tx, Map<String, dynamic> change) async {
     final entity = change['entity'] as String;
     final id = change['id'].toString();
     final isDeleted = change['_deleted'] == true;
@@ -35,7 +36,8 @@ class PullChangeApplier {
           jsonEncode({
             'type': 'https://orbit-sync.dev/errors/delete-conflict',
             'title': 'Update vs Delete Conflict',
-            'detail': 'Record was deleted on the server while modified offline locally.',
+            'detail':
+                'Record was deleted on the server while modified offline locally.',
           }),
           entity,
           id,
@@ -47,7 +49,8 @@ class PullChangeApplier {
     final remoteData = (change['data'] as Map<String, dynamic>?) ?? {};
     final version = (change['version'] as int?) ?? 1;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final expiresAt = (change['expires_at'] as int?) ?? (remoteData['expires_at'] as int?);
+    final expiresAt =
+        (change['expires_at'] as int?) ?? (remoteData['expires_at'] as int?);
 
     final pendingRows = await tx.getAll(
       "SELECT * FROM _sync_outbox WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held') ORDER BY created_at ASC",
@@ -64,7 +67,8 @@ class PullChangeApplier {
           jsonEncode({
             'type': 'https://orbit-sync.dev/errors/delete-vs-update',
             'title': 'Delete vs Update Conflict',
-            'detail': 'Record was deleted locally while modified remotely on the server.',
+            'detail':
+                'Record was deleted locally while modified remotely on the server.',
           }),
           pendingRows.first['mutation_id'],
         ]);
@@ -74,14 +78,22 @@ class PullChangeApplier {
       await tx.execute('''
         UPDATE _sync_outbox SET status = 'conflict', error_details_json = ? 
         WHERE entity_name = ? AND entity_id = ? AND status IN ('pending', 'in_flight', 'held')
-      ''', [jsonEncode({'title': 'Overwritten by LWW remote change'}), entity, id]);
+      ''', [
+        jsonEncode({'title': 'Overwritten by LWW remote change'}),
+        entity,
+        id
+      ]);
     } else {
       final pendingMut = pendingRows.first;
       final mutId = pendingMut['mutation_id'] as String;
       final baseJson = pendingMut['base_snapshot_json'] as String?;
-      final baseMap = baseJson != null ? (jsonDecode(baseJson) as Map<String, dynamic>) : null;
+      final baseMap = baseJson != null
+          ? (jsonDecode(baseJson) as Map<String, dynamic>)
+          : null;
       final localJson = pendingMut['payload_json'] as String?;
-      final localMap = localJson != null ? (jsonDecode(localJson) as Map<String, dynamic>) : <String, dynamic>{};
+      final localMap = localJson != null
+          ? (jsonDecode(localJson) as Map<String, dynamic>)
+          : <String, dynamic>{};
 
       final result = reconciler.reconcile(
         entity: entity,
@@ -96,12 +108,18 @@ class PullChangeApplier {
           [result.invariantError, mutId],
         );
       } else if (result.merged != null) {
-        await upsertRow(tx, entity, id, result.merged!, version, now, expiresAt);
+        await upsertRow(
+            tx, entity, id, result.merged!, version, now, expiresAt);
         await tx.execute('''
           UPDATE _sync_outbox 
           SET payload_json = ?, base_snapshot_json = ?, base_version = ? 
           WHERE mutation_id = ?
-        ''', [jsonEncode(result.merged!), jsonEncode(remoteData), version, mutId]);
+        ''', [
+          jsonEncode(result.merged!),
+          jsonEncode(remoteData),
+          version,
+          mutId
+        ]);
       }
     }
   }

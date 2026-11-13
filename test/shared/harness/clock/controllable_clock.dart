@@ -2,7 +2,8 @@
 class ControllableClock {
   DateTime _current;
 
-  ControllableClock([DateTime? initial]) : _current = initial ?? DateTime.utc(2026, 10, 17, 12, 0, 0);
+  ControllableClock([DateTime? initial])
+      : _current = initial ?? DateTime.utc(2026, 10, 17, 12, 0, 0);
 
   DateTime now() => _current;
 

@@ -34,7 +34,8 @@ class UuidV7 {
     final verRandA = '7${randA.toRadixString(16).padLeft(3, '0')}';
 
     // 2-bit var (10) + 14 bits from randB
-    final varRandB = ((0x8000 | (randB >> 16 & 0x3FFF))).toRadixString(16).padLeft(4, '0');
+    final varRandB =
+        ((0x8000 | (randB >> 16 & 0x3FFF))).toRadixString(16).padLeft(4, '0');
 
     // Remaining random bits (12 hex chars = 48 bits)
     final randLow = (randB & 0xFFFF).toRadixString(16).padLeft(4, '0') +

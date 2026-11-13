@@ -42,7 +42,8 @@ class SyncWorker implements ISyncWorker {
   Future<void> Function()? onAuthExpired;
   Future<void>? _refreshFuture;
 
-  String? Function(String entity, Map<String, dynamic> mergedRecord)? validateInvariants;
+  String? Function(String entity, Map<String, dynamic> mergedRecord)?
+      validateInvariants;
   int get currentSchemaVersion => _pushOrchestrator.currentSchemaVersion;
   set currentSchemaVersion(int v) => _pushOrchestrator.currentSchemaVersion = v;
   MutationMigrator? get migrator => _pushOrchestrator.migrator;
@@ -56,8 +57,12 @@ class SyncWorker implements ISyncWorker {
   late final GenerationSwapManager _swapManager;
   StreamSubscription<void>? _remoteChangeSub;
 
-  String get baseUrl => transport is HttpSyncTransport ? (transport as HttpSyncTransport).baseUrl : '';
-  http.Client? get httpClient => transport is HttpSyncTransport ? (transport as HttpSyncTransport).httpClient : null;
+  String get baseUrl => transport is HttpSyncTransport
+      ? (transport as HttpSyncTransport).baseUrl
+      : '';
+  http.Client? get httpClient => transport is HttpSyncTransport
+      ? (transport as HttpSyncTransport).httpClient
+      : null;
 
   SyncWorker({
     required this.storage,
@@ -98,10 +103,13 @@ class SyncWorker implements ISyncWorker {
     });
   }
 
-  void _initServices(int initialSchemaVersion, MutationMigrator? initialMigrator) {
-    _swapManager = GenerationSwapManager(storage: storage, transport: transport);
+  void _initServices(
+      int initialSchemaVersion, MutationMigrator? initialMigrator) {
+    _swapManager =
+        GenerationSwapManager(storage: storage, transport: transport);
     _reconciler = ConflictReconciler(
-      validateInvariants: (entity, merged) => validateInvariants?.call(entity, merged),
+      validateInvariants: (entity, merged) =>
+          validateInvariants?.call(entity, merged),
     );
     _pullOrchestrator = PagePullOrchestrator(
       storage: storage,
@@ -112,7 +120,8 @@ class SyncWorker implements ISyncWorker {
       scopeFilter: scopeFilter,
       onAuthExpired: _handleAuthExpired,
       onExpiredCursor: () async {
-        onLog?.call('Orbit: HTTP 410 Gone (expired cursor). Triggering resyncGeneration.');
+        onLog?.call(
+            'Orbit: HTTP 410 Gone (expired cursor). Triggering resyncGeneration.');
         await _swapManager.resyncGeneration();
       },
     );
@@ -148,14 +157,17 @@ class SyncWorker implements ISyncWorker {
   Future<int> getLastSyncedCursor() => _pullOrchestrator.getLastSyncedCursor();
 
   @override
-  Future<void> setLastSyncedCursor(int cursor) => _pullOrchestrator.setLastSyncedCursor(cursor);
+  Future<void> setLastSyncedCursor(int cursor) =>
+      _pullOrchestrator.setLastSyncedCursor(cursor);
 
   @override
-  void registerConflictResolver(String entity, EntityConflictResolver resolver) {
+  void registerConflictResolver(
+      String entity, EntityConflictResolver resolver) {
     _reconciler.registerResolver(entity, resolver);
   }
 
-  void registerIdExtractor(String entity, String? Function(dynamic json) extractor) {
+  void registerIdExtractor(
+      String entity, String? Function(dynamic json) extractor) {
     _pushOrchestrator.registerIdExtractor(entity, extractor);
   }
 
@@ -170,17 +182,20 @@ class SyncWorker implements ISyncWorker {
     String? chaos,
     bool force = false,
   }) async {
-    return _pushOrchestrator.pushBatch(batchSize: batchSize, chaos: chaos, force: force);
+    return _pushOrchestrator.pushBatch(
+        batchSize: batchSize, chaos: chaos, force: force);
   }
 
   @override
-  Future<SyncPullResult> pullPage({String? chaos}) => _pullOrchestrator.pullPage(chaos: chaos);
+  Future<SyncPullResult> pullPage({String? chaos}) =>
+      _pullOrchestrator.pullPage(chaos: chaos);
 
   @override
   Future<int> pullAll() => _pullOrchestrator.pullAll();
 
   @override
-  Future<bool> resyncGeneration(List<String> entities) => _swapManager.resyncGeneration(entities);
+  Future<bool> resyncGeneration(List<String> entities) =>
+      _swapManager.resyncGeneration(entities);
 
   @override
   Future<void> sync({bool force = false}) async {

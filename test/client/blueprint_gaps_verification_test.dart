@@ -21,7 +21,9 @@ class Order {
         id: json['id']?.toString(),
         title: (json['title'] ?? '').toString(),
         amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-        attachment: json['receipt'] != null ? OrbitAttachment.fromJson(json['receipt'] as Map<String, dynamic>) : null,
+        attachment: json['receipt'] != null
+            ? OrbitAttachment.fromJson(json['receipt'] as Map<String, dynamic>)
+            : null,
       );
 }
 
@@ -45,7 +47,8 @@ void main() {
       }
     });
 
-    test('Gap 1 & 2: Collection-level default Priority, SLA, and CoolingTime', () async {
+    test('Gap 1 & 2: Collection-level default Priority, SLA, and CoolingTime',
+        () async {
       final orders = client.collection<Order>(
         name: 'orders',
         priority: Priority.high,
@@ -55,7 +58,8 @@ void main() {
         toJson: (o) => o.toJson(),
       );
 
-      final orderId = await orders.save(Order(title: 'Laptop Order', amount: 1200.0));
+      final orderId =
+          await orders.save(Order(title: 'Laptop Order', amount: 1200.0));
 
       final outbox = await client.query(
         'SELECT priority, sla_seconds, dispatch_after, created_at FROM _sync_outbox WHERE entity_id = ?',
@@ -68,10 +72,12 @@ void main() {
 
       final createdAt = outbox.first['created_at'] as int;
       final dispatchAfter = outbox.first['dispatch_after'] as int;
-      expect(dispatchAfter - createdAt, greaterThanOrEqualTo(299000)); // ~5 minutes
+      expect(dispatchAfter - createdAt,
+          greaterThanOrEqualTo(299000)); // ~5 minutes
     });
 
-    test('Gap 3: Explicit authorId and userId on save() and delete()', () async {
+    test('Gap 3: Explicit authorId and userId on save() and delete()',
+        () async {
       final orders = client.collection<Order>(
         name: 'orders',
         fromJson: Order.fromJson,
@@ -93,7 +99,8 @@ void main() {
       expect(outbox.first['op'], equals('create'));
 
       // Delete with author attribution
-      await orders.delete(orderId, authorId: 'supervisor_44', userId: 'usr_auth_11');
+      await orders.delete(orderId,
+          authorId: 'supervisor_44', userId: 'usr_auth_11');
 
       outbox = await client.query(
         "SELECT author_id, user_id FROM _sync_outbox WHERE entity_id = ? AND op = 'delete'",
@@ -103,12 +110,18 @@ void main() {
       expect(outbox.first['user_id'], equals('usr_auth_11'));
     });
 
-    test('Gap 4: OrbitRecord.isPending and OrbitRecord.isFailed getters', () async {
-      const pendingRecord = OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.pending);
-      const inFlightRecord = OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.inFlight);
-      const syncedRecord = OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.synced);
-      const failedRecord = OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.failed);
-      const rejectedRecord = OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.rejected);
+    test('Gap 4: OrbitRecord.isPending and OrbitRecord.isFailed getters',
+        () async {
+      const pendingRecord =
+          OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.pending);
+      const inFlightRecord =
+          OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.inFlight);
+      const syncedRecord =
+          OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.synced);
+      const failedRecord =
+          OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.failed);
+      const rejectedRecord =
+          OrbitRecord<String>(data: 'test', status: OrbitSyncStatus.rejected);
 
       expect(pendingRecord.isPending, isTrue);
       expect(inFlightRecord.isPending, isTrue);
@@ -127,24 +140,30 @@ void main() {
         toJson: (o) => o.toJson(),
       );
 
-      final orderId = await orders.save(Order(title: 'Mission Critical Task', amount: 99.0));
+      final orderId = await orders
+          .save(Order(title: 'Mission Critical Task', amount: 99.0));
 
       // Pin record: expires_at becomes NULL
       await orders.pin(orderId);
-      var rows = await client.query('SELECT expires_at FROM orders WHERE id = ?', [orderId]);
+      var rows = await client
+          .query('SELECT expires_at FROM orders WHERE id = ?', [orderId]);
       expect(rows.first['expires_at'], isNull);
 
       // Unpin record: sets fresh TTL
       await orders.unpin(orderId, ttl: const Duration(minutes: 30));
-      rows = await client.query('SELECT expires_at FROM orders WHERE id = ?', [orderId]);
+      rows = await client
+          .query('SELECT expires_at FROM orders WHERE id = ?', [orderId]);
       expect(rows.first['expires_at'], isNotNull);
-      expect(rows.first['expires_at'] as int, greaterThan(DateTime.now().millisecondsSinceEpoch));
+      expect(rows.first['expires_at'] as int,
+          greaterThan(DateTime.now().millisecondsSinceEpoch));
     });
 
-    test('Gap 6: OrbitAttachment and MediaConfig metadata extraction', () async {
+    test('Gap 6: OrbitAttachment and MediaConfig metadata extraction',
+        () async {
       final orders = client.collection<Order>(
         name: 'orders',
-        media: const MediaConfig(mode: MediaMode.twoStep, uploadEndpoint: '/orders/{id}/receipt'),
+        media: const MediaConfig(
+            mode: MediaMode.twoStep, uploadEndpoint: '/orders/{id}/receipt'),
         fromJson: Order.fromJson,
         toJson: (o) => o.toJson(),
       );
@@ -190,17 +209,20 @@ void main() {
       expect(countRows.first['cnt'], equals(5));
 
       // Mark outbox mutations as synced to simulate confirmed server mirror cache
-      await client.storage.db.execute("UPDATE _sync_outbox SET status = 'synced'");
+      await client.storage.db
+          .execute("UPDATE _sync_outbox SET status = 'synced'");
 
       // Trigger pruneToQuota directly and via table save
-      final pruned = await client.storage.pruneToQuota('orders', maxCacheRecords: 3);
+      final pruned =
+          await client.storage.pruneToQuota('orders', maxCacheRecords: 3);
       expect(pruned, equals(2));
 
       countRows = await client.query('SELECT COUNT(*) as cnt FROM orders');
       expect(countRows.first['cnt'], equals(3));
 
       // Verify that the oldest orders (ord_1, ord_2) were evicted
-      final remaining = await client.query('SELECT id FROM orders ORDER BY id ASC');
+      final remaining =
+          await client.query('SELECT id FROM orders ORDER BY id ASC');
       final ids = remaining.map((r) => r['id'] as String).toList();
       expect(ids, equals(['ord_3', 'ord_4', 'ord_5']));
     });

@@ -22,7 +22,8 @@ abstract interface class IConnectivityMonitor {
   Stream<bool> get onConnectivityChanged;
 
   /// Probes network reachability with optional debounce bypass.
-  Future<bool> checkReachability({String? targetUrl, bool bypassDebounce = false});
+  Future<bool> checkReachability(
+      {String? targetUrl, bool bypassDebounce = false});
 
   /// Zero-delay wakeup hook for OS app resume / foregrounding events.
   Future<void> notifyAppResumed();

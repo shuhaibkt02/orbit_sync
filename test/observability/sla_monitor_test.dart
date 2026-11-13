@@ -18,7 +18,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('emits SlaWarningEvent at 80% and SlaBreachedEvent at 100% of SLA deadline', () async {
+    test(
+        'emits SlaWarningEvent at 80% and SlaBreachedEvent at 100% of SLA deadline',
+        () async {
       int simulatedNow = 1000000;
       final monitor = SlaMonitor(
         storage: storage,
@@ -75,7 +77,8 @@ void main() {
       await monitor.dispose();
     });
 
-    test('evicts resolved records from tracking cache upon sync completion', () async {
+    test('evicts resolved records from tracking cache upon sync completion',
+        () async {
       int simulatedNow = 1000000;
       final monitor = SlaMonitor(
         storage: storage,

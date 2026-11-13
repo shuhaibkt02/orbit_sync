@@ -48,8 +48,15 @@ class OrbitTable<T> {
   DateTime? get lastHydratedAt => _lastHydratedAt;
 
   OrbitTable({
-    required this.name, required this.fromJson, required this.toJson, required this.storage,
-    this.primaryKey = 'id', this.baseUrl = '', this.endpoints, this.restEndpoint, this.getAuthToken,
+    required this.name,
+    required this.fromJson,
+    required this.toJson,
+    required this.storage,
+    this.primaryKey = 'id',
+    this.baseUrl = '',
+    this.endpoints,
+    this.restEndpoint,
+    this.getAuthToken,
     this.sanitizer = const SqliteTypeSanitizer(),
     this.cacheTtl,
     this.httpClient,
@@ -62,7 +69,10 @@ class OrbitTable<T> {
     this.maxCacheRecords,
   })  : hydrator = EntityHydrator(storage: storage, sanitizer: sanitizer),
         endpointResolver = TableEndpointResolver<T>(
-          entityName: name, baseUrl: baseUrl, endpoints: endpoints, restEndpoint: restEndpoint,
+          entityName: name,
+          baseUrl: baseUrl,
+          endpoints: endpoints,
+          restEndpoint: restEndpoint,
         );
 
   /// Ensures the local entity table exists before executing reads.
@@ -78,13 +88,17 @@ class OrbitTable<T> {
 
   /// Pins a record locally, setting `expires_at = NULL` making it immune to TTL cache eviction.
   Future<void> pin(String id) async {
-    await storage.db.execute('UPDATE "$name" SET expires_at = NULL WHERE id = ?', [id]);
+    await storage.db
+        .execute('UPDATE "$name" SET expires_at = NULL WHERE id = ?', [id]);
   }
 
   /// Unpins a record, optionally setting a new TTL expiration.
   Future<void> unpin(String id, {Duration? ttl}) async {
-    final expiresAt = ttl != null ? DateTime.now().millisecondsSinceEpoch + ttl.inMilliseconds : null;
-    await storage.db.execute('UPDATE "$name" SET expires_at = ? WHERE id = ?', [expiresAt, id]);
+    final expiresAt = ttl != null
+        ? DateTime.now().millisecondsSinceEpoch + ttl.inMilliseconds
+        : null;
+    await storage.db.execute(
+        'UPDATE "$name" SET expires_at = ? WHERE id = ?', [expiresAt, id]);
   }
 
   Future<String> save(
@@ -93,26 +107,43 @@ class OrbitTable<T> {
     Map<String, String>? pathParams,
     Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
-    Duration? sla, Duration? holdFor, Duration? coolingTime, Duration? ttl,
-    dynamic priority, String? correlationTag,
+    Duration? sla,
+    Duration? holdFor,
+    Duration? coolingTime,
+    Duration? ttl,
+    dynamic priority,
+    String? correlationTag,
     String? authorId,
     String? userId,
     String? dependsOnMutationId,
   }) async {
     final rawMap = toJson(item);
-    final targetId = id ?? (rawMap[primaryKey] ?? rawMap['id'] ?? rawMap['_id'])?.toString() ?? UuidV7.generate();
+    final targetId = id ??
+        (rawMap[primaryKey] ?? rawMap['id'] ?? rawMap['_id'])?.toString() ??
+        UuidV7.generate();
 
     final isUpdate = (endpoints != null || restEndpoint != null) &&
-        (await storage.db.getAll('SELECT id FROM "$name" WHERE id = ? LIMIT 1', [targetId])).isNotEmpty;
+        (await storage.db.getAll(
+                'SELECT id FROM "$name" WHERE id = ? LIMIT 1', [targetId]))
+            .isNotEmpty;
     final ep = endpointResolver.resolveSave(
-      item: item, id: targetId, isUpdate: isUpdate, pathParams: pathParams, queryParams: queryParams,
+      item: item,
+      id: targetId,
+      isUpdate: isUpdate,
+      pathParams: pathParams,
+      queryParams: queryParams,
     );
 
     final resolvedHeaders = await endpointResolver.resolveHeaders(headers);
-    final effectiveAuthorId = authorId ?? (rawMap['author_id'] as String?) ?? (rawMap['authorId'] as String?);
-    final effectiveUserId = userId ?? (rawMap['user_id'] as String?) ?? (rawMap['userId'] as String?);
+    final effectiveAuthorId = authorId ??
+        (rawMap['author_id'] as String?) ??
+        (rawMap['authorId'] as String?);
+    final effectiveUserId = userId ??
+        (rawMap['user_id'] as String?) ??
+        (rawMap['userId'] as String?);
 
-    String? effectiveMediaPath = (rawMap['media_path'] as String?) ?? (rawMap['mediaPath'] as String?);
+    String? effectiveMediaPath =
+        (rawMap['media_path'] as String?) ?? (rawMap['mediaPath'] as String?);
     if (effectiveMediaPath == null && media != null) {
       final field = media!.fieldName;
       if (rawMap.containsKey(field)) {
@@ -120,7 +151,8 @@ class OrbitTable<T> {
         if (val is OrbitAttachment) {
           effectiveMediaPath = val.localPath;
         } else if (val is Map) {
-          effectiveMediaPath = (val['local_path'] ?? val['localPath'])?.toString();
+          effectiveMediaPath =
+              (val['local_path'] ?? val['localPath'])?.toString();
         } else if (val is String) {
           effectiveMediaPath = val;
         }
@@ -128,8 +160,10 @@ class OrbitTable<T> {
     }
     if (effectiveMediaPath == null) {
       for (final val in rawMap.values) {
-        if (val is Map && (val['type'] == 'orbit_attachment' || val['local_path'] != null)) {
-          effectiveMediaPath = (val['local_path'] ?? val['localPath'])?.toString();
+        if (val is Map &&
+            (val['type'] == 'orbit_attachment' || val['local_path'] != null)) {
+          effectiveMediaPath =
+              (val['local_path'] ?? val['localPath'])?.toString();
           break;
         }
       }
@@ -148,9 +182,21 @@ class OrbitTable<T> {
     final effectiveCooling = coolingTime ?? defaultCoolingTime;
 
     await storage.save(
-      entity: name, id: targetId, data: rawMap, endpointUrl: ep.url, httpMethod: ep.method,
-      sla: effectiveSla, holdFor: holdFor, coolingTime: effectiveCooling, ttl: ttl, priority: resolvedPriority, correlationTag: correlationTag,
-      headers: resolvedHeaders, authorId: effectiveAuthorId, userId: effectiveUserId, mediaPath: effectiveMediaPath,
+      entity: name,
+      id: targetId,
+      data: rawMap,
+      endpointUrl: ep.url,
+      httpMethod: ep.method,
+      sla: effectiveSla,
+      holdFor: holdFor,
+      coolingTime: effectiveCooling,
+      ttl: ttl,
+      priority: resolvedPriority,
+      correlationTag: correlationTag,
+      headers: resolvedHeaders,
+      authorId: effectiveAuthorId,
+      userId: effectiveUserId,
+      mediaPath: effectiveMediaPath,
       dependsOnMutationId: dependsOnMutationId,
     );
 
@@ -172,7 +218,8 @@ class OrbitTable<T> {
     String? authorId,
     String? userId,
   }) async {
-    final ep = endpointResolver.resolveDelete(id: id, pathParams: pathParams, queryParams: queryParams);
+    final ep = endpointResolver.resolveDelete(
+        id: id, pathParams: pathParams, queryParams: queryParams);
     final resolvedHeaders = await endpointResolver.resolveHeaders(headers);
     final effectiveCooling = coolingTime ?? defaultCoolingTime;
     return await storage.delete(
@@ -189,7 +236,8 @@ class OrbitTable<T> {
     );
   }
 
-  Future<bool> undoDelete(String id) async => await storage.undoDelete(entity: name, id: id);
+  Future<bool> undoDelete(String id) async =>
+      await storage.undoDelete(entity: name, id: id);
 
   Future<T?> get(String id) async {
     await _ensureTable();
@@ -202,16 +250,26 @@ class OrbitTable<T> {
   }
 
   Future<OrbitRecord<T>?> getRecord(String id) async {
-    final records = await queryRecords(where: 'id = ?', whereArgs: [id], limit: 1);
+    final records =
+        await queryRecords(where: 'id = ?', whereArgs: [id], limit: 1);
     return records.isEmpty ? null : records.first;
   }
 
-  static final _systemCols = {'id', 'version', 'updated_at', 'expires_at', '_base_snapshot_json', 'data_json'};
+  static final _systemCols = {
+    'id',
+    'version',
+    'updated_at',
+    'expires_at',
+    '_base_snapshot_json',
+    'data_json'
+  };
 
   String _rewriteWhere(String whereClause) {
     if (whereClause.contains('json_extract')) return whereClause;
     return whereClause.replaceAllMapped(
-      RegExp(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*(=|!=|<>|>|<|>=|<=|LIKE|IS|IN))', caseSensitive: false),
+      RegExp(
+          r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*(=|!=|<>|>|<|>=|<=|LIKE|IS|IN))',
+          caseSensitive: false),
       (match) {
         final col = match.group(1)!;
         if (_systemCols.contains(col.toLowerCase())) return col;
@@ -223,10 +281,12 @@ class OrbitTable<T> {
   String _rewriteOrderBy(String orderByClause) {
     if (orderByClause.contains('json_extract')) return orderByClause;
     return orderByClause.replaceAllMapped(
-      RegExp(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*(ASC|DESC|\,|$))', caseSensitive: false),
+      RegExp(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*(ASC|DESC|\,|$))',
+          caseSensitive: false),
       (match) {
         final col = match.group(1)!;
-        if (col.toUpperCase() == 'ASC' || col.toUpperCase() == 'DESC') return col;
+        if (col.toUpperCase() == 'ASC' || col.toUpperCase() == 'DESC')
+          return col;
         if (_systemCols.contains(col.toLowerCase())) return col;
         return "json_extract(data_json, '\$.$col')";
       },
@@ -308,9 +368,11 @@ class OrbitTable<T> {
 
     if (predicate != null) {
       final sql = _buildSql(sqlWhere, orderBy, null, null);
-      final rows = await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
+      final rows =
+          await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
       Iterable<T> stream = rows
-          .map((r) => fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(r))))
+          .map((r) =>
+              fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(r))))
           .where(predicate);
       if (offset != null && offset > 0) {
         stream = stream.skip(offset);
@@ -322,7 +384,8 @@ class OrbitTable<T> {
     }
 
     final sql = _buildSql(sqlWhere, orderBy, limit, offset);
-    final rows = await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
+    final rows =
+        await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
     return rows
         .map((r) => fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(r))))
         .toList();
@@ -361,12 +424,16 @@ class OrbitTable<T> {
     return watchRaw(sql, whereArgs);
   }
 
-  Stream<List<T>> watchRaw(String query, [List<dynamic> parameters = const []]) {
+  Stream<List<T>> watchRaw(String query,
+      [List<dynamic> parameters = const []]) {
     return Stream<List<T>>.multi((multiController) {
       final sub = storage
           .watch(query, parameters: sanitizer.sanitizeList(parameters))
           .leadingImmediateDebounce(const Duration(milliseconds: 100))
-          .map((rs) => rs.map((r) => fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(r)))).toList())
+          .map((rs) => rs
+              .map((r) =>
+                  fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(r))))
+              .toList())
           .listen(
             multiController.addSync,
             onError: multiController.addErrorSync,
@@ -378,7 +445,8 @@ class OrbitTable<T> {
     });
   }
 
-  String _buildRecordsSql(String? where, String? orderBy, int? limit, [int? offset]) {
+  String _buildRecordsSql(String? where, String? orderBy, int? limit,
+      [int? offset]) {
     var sql = '''
       SELECT * FROM (
         SELECT t.id, t.version, t.updated_at, t.expires_at,
@@ -445,8 +513,10 @@ class OrbitTable<T> {
 
     if (predicate != null) {
       final sql = _buildRecordsSql(sqlWhere, orderBy, null, null);
-      final rows = await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
-      Iterable<OrbitRecord<T>> stream = rows.map(_mapRowToRecord).where(predicate);
+      final rows =
+          await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
+      Iterable<OrbitRecord<T>> stream =
+          rows.map(_mapRowToRecord).where(predicate);
       if (offset != null && offset > 0) {
         stream = stream.skip(offset);
       }
@@ -457,7 +527,8 @@ class OrbitTable<T> {
     }
 
     final sql = _buildRecordsSql(sqlWhere, orderBy, limit, offset);
-    final rows = await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
+    final rows =
+        await storage.db.getAll(sql, sanitizer.sanitizeList(whereArgs));
     return rows.map(_mapRowToRecord).toList();
   }
 
@@ -534,20 +605,25 @@ class OrbitTable<T> {
     final baseJson = rowMap.remove('_base_snapshot_json') as String?;
     final expiresAt = rowMap['expires_at'] as int?;
     final updatedAtMs = rowMap['updated_at'] as int?;
-    final updatedAt = updatedAtMs != null ? DateTime.fromMillisecondsSinceEpoch(updatedAtMs) : null;
+    final updatedAt = updatedAtMs != null
+        ? DateTime.fromMillisecondsSinceEpoch(updatedAtMs)
+        : null;
 
     T? previousData;
     if (baseJson != null && baseJson.isNotEmpty && baseJson != '{}') {
       try {
         final decoded = jsonDecode(baseJson);
         if (decoded is Map) {
-          previousData = fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(decoded)));
+          previousData =
+              fromJson(sanitizer.decodeRow(Map<String, dynamic>.from(decoded)));
         }
       } catch (_) {}
     }
 
     final status = switch (outboxStatus) {
-      'pending' => outboxOp == 'delete' ? OrbitSyncStatus.pendingDelete : OrbitSyncStatus.pending,
+      'pending' => outboxOp == 'delete'
+          ? OrbitSyncStatus.pendingDelete
+          : OrbitSyncStatus.pending,
       'in_flight' => OrbitSyncStatus.inFlight,
       'failed' || 'dlq' => OrbitSyncStatus.failed,
       'validation_error' => OrbitSyncStatus.rejected,
@@ -570,7 +646,8 @@ class OrbitTable<T> {
     Map<String, String>? pathParams,
     Map<String, String>? headers,
   }) =>
-      refresh(queryParams: queryParams, pathParams: pathParams, headers: headers);
+      refresh(
+          queryParams: queryParams, pathParams: pathParams, headers: headers);
 
   Future<RefreshResult> refresh({
     Map<String, dynamic>? queryParams,
@@ -593,7 +670,9 @@ class OrbitTable<T> {
     } else {
       final req = endpoints!.list!(queryParams);
       resolved = endpointResolver.urlResolver.resolve(
-        req.path, pathParams: pathParams, queryParams: queryParams ?? req.queryParams,
+        req.path,
+        pathParams: pathParams,
+        queryParams: queryParams ?? req.queryParams,
       );
     }
     final uri = Uri.parse(resolved);
@@ -602,7 +681,9 @@ class OrbitTable<T> {
       final reqHeaders = <String, String>{'content-type': 'application/json'};
       if (getAuthToken != null) {
         final token = await getAuthToken!();
-        if (token != null) reqHeaders['authorization'] = token.startsWith('Bearer ') ? token : 'Bearer $token';
+        if (token != null)
+          reqHeaders['authorization'] =
+              token.startsWith('Bearer ') ? token : 'Bearer $token';
       }
       final resolvedHeaders = await endpointResolver.resolveHeaders(headers);
       if (resolvedHeaders != null) reqHeaders.addAll(resolvedHeaders);
@@ -632,7 +713,8 @@ class OrbitTable<T> {
       }
 
       if (statusCode < 200 || statusCode >= 300) {
-        return RefreshResult(status: RefreshStatus.error, errorMessage: 'HTTP $statusCode');
+        return RefreshResult(
+            status: RefreshStatus.error, errorMessage: 'HTTP $statusCode');
       }
 
       final decoded = jsonDecode(body);
@@ -662,7 +744,8 @@ class OrbitTable<T> {
           errStr.contains('failed host lookup')) {
         return RefreshResult.offline;
       }
-      return RefreshResult(status: RefreshStatus.error, errorMessage: e.toString());
+      return RefreshResult(
+          status: RefreshStatus.error, errorMessage: e.toString());
     }
   }
 }

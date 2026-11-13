@@ -19,11 +19,15 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Scenario 1: Partial batch success (Items 1 & 3 sync, Item 2 quarantined on 422)', () async {
+    test(
+        'Scenario 1: Partial batch success (Items 1 & 3 sync, Item 2 quarantined on 422)',
+        () async {
       final server = await ScriptedBatchServer.start();
       server.scriptAll([
         const Accept('wo-1'),
-        const Reject('wo-2', status: HttpStatus.unprocessableEntity, reason: 'Warehouse 49 closed'),
+        const Reject('wo-2',
+            status: HttpStatus.unprocessableEntity,
+            reason: 'Warehouse 49 closed'),
         const Accept('wo-3'),
       ]);
 
@@ -34,16 +38,22 @@ void main() {
 
       // Store 3 work orders offline
       await client.store('work_orders', {'title': 'Fix generator'}, id: 'wo-1');
-      await client.store('work_orders', {'title': 'Inspect furnace'}, id: 'wo-2');
-      await client.store('work_orders', {'title': 'Replace filters'}, id: 'wo-3');
+      await client.store('work_orders', {'title': 'Inspect furnace'},
+          id: 'wo-2');
+      await client.store('work_orders', {'title': 'Replace filters'},
+          id: 'wo-3');
 
       // Sync batch
       await client.sync();
 
       // Assert independent outbox statuses
-      final outbox1 = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', ['wo-1']);
-      final outbox2 = await client.query('SELECT status, error_details_json FROM _sync_outbox WHERE entity_id = ?', ['wo-2']);
-      final outbox3 = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', ['wo-3']);
+      final outbox1 = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', ['wo-1']);
+      final outbox2 = await client.query(
+          'SELECT status, error_details_json FROM _sync_outbox WHERE entity_id = ?',
+          ['wo-2']);
+      final outbox3 = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', ['wo-3']);
 
       expect(outbox1.first['status'], equals('synced'));
       expect(outbox2.first['status'], equals('validation_error'));
@@ -55,7 +65,8 @@ void main() {
       final activeWo3 = await client.restoreById('work_orders', 'wo-3');
 
       expect(activeWo1, isNotNull);
-      expect(activeWo2, isNull, reason: 'Rejected item must be rolled back from active domain table');
+      expect(activeWo2, isNull,
+          reason: 'Rejected item must be rolled back from active domain table');
       expect(activeWo3, isNotNull);
 
       // Verify typed failure transparency
@@ -73,7 +84,8 @@ void main() {
       int receivedBodyBytes = 0;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
-        final bodyBytes = await req.fold<List<int>>([], (prev, element) => prev..addAll(element));
+        final bodyBytes = await req
+            .fold<List<int>>([], (prev, element) => prev..addAll(element));
         receivedBodyBytes = bodyBytes.length;
         req.response.statusCode = HttpStatus.ok;
         req.response.headers.contentType = ContentType.json;
@@ -81,7 +93,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/attachments';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/attachments';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/large_payload.db',
       );
@@ -98,30 +111,41 @@ void main() {
       });
 
       // Verify outbox has written and persisted the 10 MB payload to SQLite disk
-      final outboxRows = await client.query('SELECT status, payload_json FROM _sync_outbox WHERE entity_id = ?', [attId]);
+      final outboxRows = await client.query(
+          'SELECT status, payload_json FROM _sync_outbox WHERE entity_id = ?',
+          [attId]);
       expect(outboxRows.first['status'], equals('pending'));
-      expect((outboxRows.first['payload_json'] as String).length, greaterThan(tenMb));
+      expect((outboxRows.first['payload_json'] as String).length,
+          greaterThan(tenMb));
 
       // Sync 10 MB payload over the wire
       await client.sync();
 
       expect(receivedBodyBytes, greaterThan(tenMb));
-      final syncedRows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [attId]);
+      final syncedRows = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', [attId]);
       expect(syncedRows.first['status'], equals('synced'));
 
       await client.close();
       await server.close();
     });
 
-    test('Scenario 3: Two Generals (Server commits, socket drops before ACK, retry is idempotent)', () async {
+    test(
+        'Scenario 3: Two Generals (Server commits, socket drops before ACK, retry is idempotent)',
+        () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final serverHits = <String, int>{};
       final idempotencyCache = <String, String>{};
 
       server.listen((HttpRequest req) async {
         final bodyStr = await utf8.decoder.bind(req).join();
-        final body = bodyStr.isNotEmpty ? (jsonDecode(bodyStr) as Map<String, dynamic>) : <String, dynamic>{};
-        final id = (body['id'] as String?) ?? req.headers.value('x-entity-id') ?? req.headers.value('X-Entity-ID') ?? 'unknown';
+        final body = bodyStr.isNotEmpty
+            ? (jsonDecode(bodyStr) as Map<String, dynamic>)
+            : <String, dynamic>{};
+        final id = (body['id'] as String?) ??
+            req.headers.value('x-entity-id') ??
+            req.headers.value('X-Entity-ID') ??
+            'unknown';
         final idempotencyKey = req.headers.value('Idempotency-Key') ?? id;
 
         if (idempotencyCache.containsKey(idempotencyKey)) {
@@ -143,7 +167,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/orders';
 
       // Setup FaultInjectionHttpClient with DropSocketAfterRequestBody
       final faultClient = FaultInjectionHttpClient(
@@ -157,30 +182,38 @@ void main() {
       await client.registerEntity('orders', url: targetUrl);
 
       // Store order offline
-      final orderId = await client.store('orders', {'id': 'ord-rack-1', 'item': 'Server Rack', 'price': 5000});
+      final orderId = await client.store(
+          'orders', {'id': 'ord-rack-1', 'item': 'Server Rack', 'price': 5000});
 
       // 1. First sync: server receives request & commits, but socket is dropped before client gets response!
       await client.sync();
 
       // Client sees network drop -> outbox MUST remain pending with incremented retry count
-      var outboxRows = await client.query('SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+      var outboxRows = await client.query(
+          'SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?',
+          [orderId]);
       expect(outboxRows.first['status'], equals('pending'));
       expect(outboxRows.first['retry_count'], equals(1));
-      expect(serverHits[orderId], equals(1), reason: 'Server did receive and commit first attempt');
+      expect(serverHits[orderId], equals(1),
+          reason: 'Server did receive and commit first attempt');
 
       // 2. Second sync: network restored, client retries with exact same Idempotency-Key
       await client.sync(force: true);
 
-      outboxRows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+      outboxRows = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
       expect(outboxRows.first['status'], equals('synced'));
-      expect(serverHits[orderId], equals(1), reason: 'Server deduplicated; zero duplicate records created');
+      expect(serverHits[orderId], equals(1),
+          reason: 'Server deduplicated; zero duplicate records created');
 
       await client.close();
       faultClient.close();
       await server.close();
     });
 
-    test('Scenario 4: Volume soak test (5,000 records under SQLite WAL indexing)', () async {
+    test(
+        'Scenario 4: Volume soak test (5,000 records under SQLite WAL indexing)',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/soak.db',
         maxReaders: 4,
@@ -212,20 +245,26 @@ void main() {
 
       // Read query latency under 5,000 records must stay <50ms
       final readSw = Stopwatch()..start();
-      final page = await client.restore('tasks', orderBy: "json_extract(data_json, '\$.sequence') ASC", where: "CAST(json_extract(data_json, '\$.sequence') AS INTEGER) < 100");
+      final page = await client.restore('tasks',
+          orderBy: "json_extract(data_json, '\$.sequence') ASC",
+          where:
+              "CAST(json_extract(data_json, '\$.sequence') AS INTEGER) < 100");
       readSw.stop();
 
       expect(page, hasLength(100));
       expect(readSw.elapsedMilliseconds, lessThan(200));
 
       // Verify total outbox count
-      final countRows = await client.query('SELECT COUNT(*) as cnt FROM _sync_outbox');
+      final countRows =
+          await client.query('SELECT COUNT(*) as cnt FROM _sync_outbox');
       expect(countRows.first['cnt'], equals(totalRecords));
 
       await client.close();
     });
 
-    test('Scenario 5: Storage full / transaction abort guarantees zero orphaned outbox records', () async {
+    test(
+        'Scenario 5: Storage full / transaction abort guarantees zero orphaned outbox records',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/storage_full.db',
       );
@@ -237,24 +276,31 @@ void main() {
       // Second write attempts to insert duplicate id inside transaction (simulates DB error / constraint / disk error)
       try {
         await client.storage.db.writeTransaction((tx) async {
-          await tx.execute("INSERT INTO items (id, version, updated_at, expires_at, data_json) VALUES ('i1', 1, 1000, 0, '{\"sku\":\"SKU-UNIQUE-1\"}')");
-          await tx.execute("INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, created_at, status) VALUES ('m2', 'items', 'i2', 'upsert', 1000, 'pending')");
+          await tx.execute(
+              "INSERT INTO items (id, version, updated_at, expires_at, data_json) VALUES ('i1', 1, 1000, 0, '{\"sku\":\"SKU-UNIQUE-1\"}')");
+          await tx.execute(
+              "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, created_at, status) VALUES ('m2', 'items', 'i2', 'upsert', 1000, 'pending')");
         });
       } catch (_) {
         // Expected transaction rollback
       }
 
       // Assert invariant: neither active table nor outbox contains partial/orphaned 'i2' / 'm2' records
-      final itemRows = await client.query("SELECT * FROM items WHERE json_extract(data_json, '\$.sku') = 'SKU-UNIQUE-1'");
+      final itemRows = await client.query(
+          "SELECT * FROM items WHERE json_extract(data_json, '\$.sku') = 'SKU-UNIQUE-1'");
       expect(itemRows, hasLength(1));
 
-      final outboxRows = await client.query("SELECT * FROM _sync_outbox WHERE entity_id = 'i2'");
-      expect(outboxRows, isEmpty, reason: 'Zero orphaned outbox records after aborted transaction');
+      final outboxRows = await client
+          .query("SELECT * FROM _sync_outbox WHERE entity_id = 'i2'");
+      expect(outboxRows, isEmpty,
+          reason: 'Zero orphaned outbox records after aborted transaction');
 
       await client.close();
     });
 
-    test('Scenario 6: Injected DNS resolution failure (DnsFailure) pauses without crash and recovers', () async {
+    test(
+        'Scenario 6: Injected DNS resolution failure (DnsFailure) pauses without crash and recovers',
+        () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
         req.response.statusCode = HttpStatus.ok;
@@ -263,7 +309,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/records';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/records';
       final faultClient = FaultInjectionHttpClient(
         script: [const DnsFailure()],
       );
@@ -274,20 +321,26 @@ void main() {
       );
       await client.registerEntity('records', url: targetUrl);
 
-      final recId = await client.store('records', {'name': 'DNS Resilient Record'});
+      final recId =
+          await client.store('records', {'name': 'DNS Resilient Record'});
 
       // Attempt 1: Injected DNS failure (SocketException)
       await client.sync();
 
-      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
-      expect(rows.first['status'], equals('pending'), reason: 'DNS failure leaves outbox pending');
+      var rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [recId]);
+      expect(rows.first['status'], equals('pending'),
+          reason: 'DNS failure leaves outbox pending');
       expect(rows.first['retry_count'], equals(1));
       expect(rows.first['next_retry_at'], isNotNull);
 
       // Attempt 2: DNS resolves -> sync recovers with force: true
       await client.sync(force: true);
 
-      rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      rows = await client.query(
+          'SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [recId]);
       expect(rows.first['status'], equals('synced'));
       expect(rows.first['next_retry_at'], isNull);
 
@@ -296,7 +349,9 @@ void main() {
       await server.close();
     });
 
-    test('Scenario 7: Injected TLS handshake failure (TlsFailure) pauses without corruption and recovers', () async {
+    test(
+        'Scenario 7: Injected TLS handshake failure (TlsFailure) pauses without corruption and recovers',
+        () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
         req.response.statusCode = HttpStatus.ok;
@@ -305,7 +360,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/records';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/records';
       final faultClient = FaultInjectionHttpClient(
         script: [const TlsFailure()],
       );
@@ -316,20 +372,26 @@ void main() {
       );
       await client.registerEntity('records', url: targetUrl);
 
-      final recId = await client.store('records', {'name': 'TLS Resilient Record'});
+      final recId =
+          await client.store('records', {'name': 'TLS Resilient Record'});
 
       // Attempt 1: Injected TLS handshake failure (HandshakeException)
       await client.sync();
 
-      var rows = await client.query('SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
-      expect(rows.first['status'], equals('pending'), reason: 'TLS handshake failure leaves outbox pending');
+      var rows = await client.query(
+          'SELECT status, retry_count, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [recId]);
+      expect(rows.first['status'], equals('pending'),
+          reason: 'TLS handshake failure leaves outbox pending');
       expect(rows.first['retry_count'], equals(1));
       expect(rows.first['next_retry_at'], isNotNull);
 
       // Attempt 2: Handshake succeeds -> sync recovers
       await client.sync(force: true);
 
-      rows = await client.query('SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?', [recId]);
+      rows = await client.query(
+          'SELECT status, next_retry_at FROM _sync_outbox WHERE entity_id = ?',
+          [recId]);
       expect(rows.first['status'], equals('synced'));
       expect(rows.first['next_retry_at'], isNull);
 

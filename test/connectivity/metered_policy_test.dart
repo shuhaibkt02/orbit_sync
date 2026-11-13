@@ -4,7 +4,9 @@ import 'package:orbit_sync/src/connectivity/domain/policies/network_metered_poli
 
 void main() {
   group('Layer 3 Connectivity: Metered Network Policies', () {
-    test('NetworkMeteredPolicy.any allows sync on all connection types for all payload types', () {
+    test(
+        'NetworkMeteredPolicy.any allows sync on all connection types for all payload types',
+        () {
       const policy = NetworkMeteredPolicy.any;
 
       expect(policy.canSync(isMetered: false, isMedia: false), isTrue);
@@ -13,7 +15,9 @@ void main() {
       expect(policy.canSync(isMetered: true, isMedia: true), isTrue);
     });
 
-    test('NetworkMeteredPolicy.wifiOnlyMedia allows text/json on metered, blocks heavy media', () {
+    test(
+        'NetworkMeteredPolicy.wifiOnlyMedia allows text/json on metered, blocks heavy media',
+        () {
       const policy = NetworkMeteredPolicy.wifiOnlyMedia;
 
       // On unmetered (e.g. Wi-Fi / Ethernet), everything passes
@@ -25,7 +29,9 @@ void main() {
       expect(policy.canSync(isMetered: true, isMedia: true), isFalse);
     });
 
-    test('NetworkMeteredPolicy.wifiOnlyAll halts all outbox traffic on metered networks', () {
+    test(
+        'NetworkMeteredPolicy.wifiOnlyAll halts all outbox traffic on metered networks',
+        () {
       const policy = NetworkMeteredPolicy.wifiOnlyAll;
 
       expect(policy.canSync(isMetered: false, isMedia: false), isTrue);

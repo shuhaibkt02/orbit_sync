@@ -13,11 +13,17 @@ enum HttpMethod {
 
   static HttpMethod fromString(String method) {
     switch (method.toUpperCase()) {
-      case 'POST': return HttpMethod.post;
-      case 'PUT': return HttpMethod.put;
-      case 'PATCH': return HttpMethod.patch;
-      case 'DELETE': return HttpMethod.delete;
-      case 'GET': default: return HttpMethod.get;
+      case 'POST':
+        return HttpMethod.post;
+      case 'PUT':
+        return HttpMethod.put;
+      case 'PATCH':
+        return HttpMethod.patch;
+      case 'DELETE':
+        return HttpMethod.delete;
+      case 'GET':
+      default:
+        return HttpMethod.get;
     }
   }
 }
@@ -119,7 +125,8 @@ class RestEndpoint {
   }
 
   /// Evaluates collection headers dynamically at execution time, merging any [overrides].
-  Future<Map<String, String>> resolveHeaders([Map<String, String>? overrides]) async {
+  Future<Map<String, String>> resolveHeaders(
+      [Map<String, String>? overrides]) async {
     final result = <String, String>{};
     if (headers != null) {
       final dynamicHeaders = await headers!();
@@ -148,7 +155,8 @@ class RestEndpoint {
 
   /// Helper to join base path and id with a single slash.
   static String _joinPath(String base, String id) {
-    final cleanBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final cleanBase =
+        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
     final cleanId = id.startsWith('/') ? id.substring(1) : id;
     return '$cleanBase/$cleanId';
   }
@@ -200,22 +208,32 @@ class RestEndpoints<T> {
   }) {
     final base = endpoint ?? path;
     final cEp = createEndpoint ?? createPath ?? base;
-    final uEp = updateEndpoint ?? updatePath ?? (base != null ? '$base/:id' : null);
-    final dEp = deleteEndpoint ?? deletePath ?? (base != null ? '$base/:id' : null);
+    final uEp =
+        updateEndpoint ?? updatePath ?? (base != null ? '$base/:id' : null);
+    final dEp =
+        deleteEndpoint ?? deletePath ?? (base != null ? '$base/:id' : null);
     final lEp = listEndpoint ?? listPath ?? base;
 
     return RestEndpoints<T>(
-      list: lEp != null ? (p) => RestRequest(path: lEp, method: listMethod, queryParams: p) : null,
+      list: lEp != null
+          ? (p) => RestRequest(path: lEp, method: listMethod, queryParams: p)
+          : null,
       unwrapList: unwrapList,
-      create: cEp != null ? (item) => RestRequest(path: cEp, method: createMethod) : null,
+      create: cEp != null
+          ? (item) => RestRequest(path: cEp, method: createMethod)
+          : null,
       update: uEp != null
           ? (item) {
-              final id = (toJson(item)[primaryKey] ?? toJson(item)['id'])?.toString() ?? '';
-              return RestRequest(path: uEp.replaceAll(':id', id), method: updateMethod);
+              final id = (toJson(item)[primaryKey] ?? toJson(item)['id'])
+                      ?.toString() ??
+                  '';
+              return RestRequest(
+                  path: uEp.replaceAll(':id', id), method: updateMethod);
             }
           : null,
       delete: dEp != null
-          ? (id) => RestRequest(path: dEp.replaceAll(':id', id), method: deleteMethod)
+          ? (id) =>
+              RestRequest(path: dEp.replaceAll(':id', id), method: deleteMethod)
           : null,
       headers: headers,
       idExtractor: idExtractor,
@@ -233,26 +251,42 @@ class RestEndpoints<T> {
     return RestEndpoints<T>(
       list: (params) {
         final q = endpoint.resolveQueryParams(params);
-        return RestRequest(path: endpoint.resolveListPath(), method: HttpMethod.get, queryParams: q);
+        return RestRequest(
+            path: endpoint.resolveListPath(),
+            method: HttpMethod.get,
+            queryParams: q);
       },
       unwrapList: unwrapList,
       getById: (id) {
         final q = endpoint.resolveQueryParams();
-        return RestRequest(path: endpoint.resolveDetailPath(id), method: HttpMethod.get, queryParams: q);
+        return RestRequest(
+            path: endpoint.resolveDetailPath(id),
+            method: HttpMethod.get,
+            queryParams: q);
       },
       create: (item) {
         final q = endpoint.resolveQueryParams();
-        return RestRequest(path: endpoint.resolveCreatePath(), method: HttpMethod.post, queryParams: q);
+        return RestRequest(
+            path: endpoint.resolveCreatePath(),
+            method: HttpMethod.post,
+            queryParams: q);
       },
       update: (item) {
         final raw = toJson(item);
-        final id = (raw[primaryKey] ?? raw['id'] ?? raw['_id'])?.toString() ?? '';
+        final id =
+            (raw[primaryKey] ?? raw['id'] ?? raw['_id'])?.toString() ?? '';
         final q = endpoint.resolveQueryParams();
-        return RestRequest(path: endpoint.resolveUpdatePath(id), method: HttpMethod.put, queryParams: q);
+        return RestRequest(
+            path: endpoint.resolveUpdatePath(id),
+            method: HttpMethod.put,
+            queryParams: q);
       },
       delete: (id) {
         final q = endpoint.resolveQueryParams();
-        return RestRequest(path: endpoint.resolveDeletePath(id), method: HttpMethod.delete, queryParams: q);
+        return RestRequest(
+            path: endpoint.resolveDeletePath(id),
+            method: HttpMethod.delete,
+            queryParams: q);
       },
       headers: null,
       idExtractor: idExtractor,
@@ -262,7 +296,8 @@ class RestEndpoints<T> {
   /// Default list unwrapper handling raw JSON array or `{"data": [...]}` envelope.
   static List<Map<String, dynamic>> defaultUnwrap(dynamic json) {
     if (json is List) return json.cast<Map<String, dynamic>>();
-    if (json is Map && json['data'] is List) return (json['data'] as List).cast<Map<String, dynamic>>();
+    if (json is Map && json['data'] is List)
+      return (json['data'] as List).cast<Map<String, dynamic>>();
     return const [];
   }
 }

@@ -9,7 +9,8 @@ import '../../transport/sync_transport.dart';
 import '../../connectivity/connectivity_monitor.dart';
 import '../orbit_client_impl.dart';
 import 'schema_migration_runner.dart';
-import '../../observability/domain/models/sync_event.dart' show SlaWarningEvent, SlaBreachedEvent;
+import '../../observability/domain/models/sync_event.dart'
+    show SlaWarningEvent, SlaBreachedEvent;
 
 /// Bootstraps and initializes storage, migration runners, workers, and network monitors.
 class OrbitClientInitializer {
@@ -54,7 +55,8 @@ class OrbitClientInitializer {
     Map<String, dynamic>? scopeFilter,
     Future<String?> Function()? getAuthToken,
     Future<void> Function()? onAuthExpired,
-    String? Function(String entity, Map<String, dynamic> record)? validateInvariants,
+    String? Function(String entity, Map<String, dynamic> record)?
+        validateInvariants,
     int currentSchemaVersion = 1,
     MutationMigrator? migrator,
     void Function(String message)? onLog,
@@ -76,7 +78,9 @@ class OrbitClientInitializer {
 
     String? effectiveAppDir = appDir ?? baseDir;
     if (effectiveAppDir == null && effectivePath != ':memory:') {
-      final match = RegExp(r'^(.*)[/\\]orbit[/\\](?:users[/\\][^/\\]+|guest)[/\\]orbit\.db$').firstMatch(effectivePath);
+      final match = RegExp(
+              r'^(.*)[/\\]orbit[/\\](?:users[/\\][^/\\]+|guest)[/\\]orbit\.db$')
+          .firstMatch(effectivePath);
       if (match != null) {
         effectiveAppDir = match.group(1);
       } else {
@@ -108,14 +112,17 @@ class OrbitClientInitializer {
     }
 
     String effectiveBase = baseUrl ?? '';
-    if (effectiveBase.isEmpty && transport is HttpSyncTransport && transport.baseUrl.isNotEmpty) {
+    if (effectiveBase.isEmpty &&
+        transport is HttpSyncTransport &&
+        transport.baseUrl.isNotEmpty) {
       effectiveBase = transport.baseUrl;
     }
 
     if (effectiveBase.isNotEmpty) {
       final uri = Uri.tryParse(effectiveBase);
       if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-        throw ArgumentError('baseUrl must be a valid HTTP/HTTPS URL (e.g. "https://api.example.com"). Got: "$effectiveBase"');
+        throw ArgumentError(
+            'baseUrl must be a valid HTTP/HTTPS URL (e.g. "https://api.example.com"). Got: "$effectiveBase"');
       }
     }
 
@@ -131,7 +138,8 @@ class OrbitClientInitializer {
       }
     }
 
-    final storage = await SyncStorage.open(path: effectivePath, maxReaders: maxReaders);
+    final storage =
+        await SyncStorage.open(path: effectivePath, maxReaders: maxReaders);
     final migrationRunner = SchemaMigrationRunner(
       storage: storage,
       targetSchemaVersion: currentSchemaVersion,
@@ -161,8 +169,8 @@ class OrbitClientInitializer {
       timeout: connectivityTimeout,
       baseUrl: effectiveBase.isNotEmpty ? effectiveBase : null,
       probeUrl: healthCheckUrl,
-      defaultProbeUrl: healthCheckUrl ??
-          (effectiveBase.isNotEmpty ? effectiveBase : null),
+      defaultProbeUrl:
+          healthCheckUrl ?? (effectiveBase.isNotEmpty ? effectiveBase : null),
       reachabilityChecker: reachabilityChecker,
       onScheduleNativeAlarm: onScheduleNativeAlarm,
     );

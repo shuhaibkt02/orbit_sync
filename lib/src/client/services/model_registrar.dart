@@ -83,9 +83,15 @@ class ModelRegistrar {
 
     final effectiveEndpoint = effectiveRestEndpoint != null
         ? effectiveRestEndpoint.path
-        : (endpoint is String ? endpoint : (path ?? (hasAnyEndpointConfig ? (endpoint?.toString() ?? path) : '/$name')));
+        : (endpoint is String
+            ? endpoint
+            : (path ??
+                (hasAnyEndpointConfig
+                    ? (endpoint?.toString() ?? path)
+                    : '/$name')));
 
-    if (effectiveRestEndpoint == null && (queryParams != null || dynamicHeaders != null)) {
+    if (effectiveRestEndpoint == null &&
+        (queryParams != null || dynamicHeaders != null)) {
       effectiveRestEndpoint = RestEndpoint(
         path: effectiveEndpoint ?? '/$name',
         createPath: createPath ?? createEndpoint,
@@ -153,7 +159,8 @@ class ModelRegistrar {
       indexes: indexes,
       foreignKeyClause: foreignKeys.isNotEmpty ? foreignKeys.first : null,
     );
-    storage.registerEntityTable(name, columns, foreignKeyClause: foreignKeys.isNotEmpty ? foreignKeys.first : null);
+    storage.registerEntityTable(name, columns,
+        foreignKeyClause: foreignKeys.isNotEmpty ? foreignKeys.first : null);
     for (final idx in indexes) {
       SqliteSchema.createExpressionIndex(storage.db, name, idx);
     }

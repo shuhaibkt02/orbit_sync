@@ -32,15 +32,18 @@ class SyncJob implements Future<SyncSummary> {
   Stream<SyncSummary> asStream() => _completer.future.asStream();
 
   @override
-  Future<SyncSummary> catchError(Function onError, {bool Function(Object error)? test}) =>
+  Future<SyncSummary> catchError(Function onError,
+          {bool Function(Object error)? test}) =>
       _completer.future.catchError(onError, test: test);
 
   @override
-  Future<R> then<R>(FutureOr<R> Function(SyncSummary value) onValue, {Function? onError}) =>
+  Future<R> then<R>(FutureOr<R> Function(SyncSummary value) onValue,
+          {Function? onError}) =>
       _completer.future.then(onValue, onError: onError);
 
   @override
-  Future<SyncSummary> timeout(Duration timeLimit, {FutureOr<SyncSummary> Function()? onTimeout}) =>
+  Future<SyncSummary> timeout(Duration timeLimit,
+          {FutureOr<SyncSummary> Function()? onTimeout}) =>
       _completer.future.timeout(timeLimit, onTimeout: onTimeout);
 
   @override

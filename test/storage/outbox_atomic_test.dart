@@ -20,28 +20,35 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 2: Atomic Outbox Commit - Rollback on failure guarantees zero partial writes', () async {
-      final initialCount = await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
+    test(
+        'Test Case 2: Atomic Outbox Commit - Rollback on failure guarantees zero partial writes',
+        () async {
+      final initialCount =
+          await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
       expect(initialCount['count'], 0);
 
       expect(
         () async {
           await storage.db.writeTransaction((tx) async {
-            await tx.execute("INSERT INTO tasks (id, title, priority, version, updated_at) VALUES ('atomic-1', 'Fail Title', 'low', 1, 1000);");
+            await tx.execute(
+                "INSERT INTO tasks (id, title, priority, version, updated_at) VALUES ('atomic-1', 'Fail Title', 'low', 1, 1000);");
             throw Exception('Simulated crash during outbox commit');
           });
         },
         throwsA(isA<Exception>()),
       );
 
-      final afterCount = await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
+      final afterCount =
+          await storage.db.get('SELECT COUNT(*) as count FROM tasks;');
       expect(afterCount['count'], 0);
 
-      final outboxCount = await storage.db.get('SELECT COUNT(*) as count FROM _sync_outbox;');
+      final outboxCount =
+          await storage.db.get('SELECT COUNT(*) as count FROM _sync_outbox;');
       expect(outboxCount['count'], 0);
     });
 
-    test('Test Case 3: Shadow-Base Materialization & Optimistic Rollback', () async {
+    test('Test Case 3: Shadow-Base Materialization & Optimistic Rollback',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-100',
@@ -49,8 +56,10 @@ void main() {
         version: 1,
       );
 
-      final row1 = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      final data1 = jsonDecode(row1['data_json'] as String) as Map<String, dynamic>;
+      final row1 = await storage.db
+          .get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
+      final data1 =
+          jsonDecode(row1['data_json'] as String) as Map<String, dynamic>;
       expect(data1['title'], 'Original Title');
       expect(data1['priority'], 'low');
       expect(row1.containsKey('_base_snapshot_json'), isFalse);
@@ -62,28 +71,36 @@ void main() {
         version: 2,
       );
 
-      final row2 = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      final data2 = jsonDecode(row2['data_json'] as String) as Map<String, dynamic>;
+      final row2 = await storage.db
+          .get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
+      final data2 =
+          jsonDecode(row2['data_json'] as String) as Map<String, dynamic>;
       expect(data2['title'], 'Optimistic Title');
       expect(data2['priority'], 'high');
 
-      final outbox2 = await storage.db.get('SELECT * FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
-      final baseSnapshot = jsonDecode(outbox2['base_snapshot_json'] as String) as Map<String, dynamic>;
+      final outbox2 = await storage.db
+          .get('SELECT * FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
+      final baseSnapshot = jsonDecode(outbox2['base_snapshot_json'] as String)
+          as Map<String, dynamic>;
       expect(baseSnapshot['title'], 'Original Title');
       expect(baseSnapshot['priority'], 'low');
 
       await storage.rollbackOptimistic(mut2, status: 'conflict');
 
-      final rowRestored = await storage.db.get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
-      final dataRestored = jsonDecode(rowRestored['data_json'] as String) as Map<String, dynamic>;
+      final rowRestored = await storage.db
+          .get('SELECT * FROM tasks WHERE id = ?', ['task-100']);
+      final dataRestored = jsonDecode(rowRestored['data_json'] as String)
+          as Map<String, dynamic>;
       expect(dataRestored['title'], 'Original Title');
       expect(dataRestored['priority'], 'low');
 
-      final outboxStatus = await storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
+      final outboxStatus = await storage.db
+          .get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [mut2]);
       expect(outboxStatus['status'], 'conflict');
     });
 
-    test('Test Case 13: Foreign Key Cascade Capture on Outbox Deletion', () async {
+    test('Test Case 13: Foreign Key Cascade Capture on Outbox Deletion',
+        () async {
       await storage.registerEntityTable('invoices', {'customer': 'TEXT'});
       await storage.db.execute('''
         CREATE TABLE IF NOT EXISTS "line_items" (

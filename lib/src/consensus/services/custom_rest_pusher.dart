@@ -26,7 +26,8 @@ class CustomRestPusher {
     this.maxConcurrentLanes = 4,
   });
 
-  void registerIdExtractor(String entity, String? Function(dynamic json) extractor) {
+  void registerIdExtractor(
+      String entity, String? Function(dynamic json) extractor) {
     idExtractors[entity] = extractor;
   }
 
@@ -53,8 +54,10 @@ class CustomRestPusher {
     // 2. Intra-Entity FIFO: In each lane, mutations must execute in strict chronological sequence_id ASC order
     for (final lane in entityLanes.values) {
       lane.sort((a, b) {
-        final seqA = (a['sequence_id'] as int?) ?? (a['created_at'] as int?) ?? 0;
-        final seqB = (b['sequence_id'] as int?) ?? (b['created_at'] as int?) ?? 0;
+        final seqA =
+            (a['sequence_id'] as int?) ?? (a['created_at'] as int?) ?? 0;
+        final seqB =
+            (b['sequence_id'] as int?) ?? (b['created_at'] as int?) ?? 0;
         return seqA.compareTo(seqB);
       });
     }
@@ -68,7 +71,8 @@ class CustomRestPusher {
 
     Future<void> processLane(List<Row> laneRows) async {
       for (final r in laneRows) {
-        if ((terminalResult != null && terminalResult!.status == SyncPushStatus.unauthorized) ||
+        if ((terminalResult != null &&
+                terminalResult!.status == SyncPushStatus.unauthorized) ||
             hasRateLimited) {
           break;
         }
@@ -82,7 +86,9 @@ class CustomRestPusher {
             'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
             [parentId],
           );
-          final pStatus = parentRows.isNotEmpty ? (parentRows.first['status'] as String) : null;
+          final pStatus = parentRows.isNotEmpty
+              ? (parentRows.first['status'] as String)
+              : null;
           if (pStatus != 'synced') {
             await storage.db.execute(
               "UPDATE _sync_outbox SET status = 'held', updated_at = ? WHERE mutation_id = ?",
@@ -106,15 +112,18 @@ class CustomRestPusher {
         final entityId = r['entity_id'] as String;
         final entityName = (r['entity_name'] as String?) ?? 'default';
         final op = r['op'] as String;
-        final method = (r['http_method'] as String?) ?? (op == 'delete' ? 'DELETE' : 'POST');
+        final method = (r['http_method'] as String?) ??
+            (op == 'delete' ? 'DELETE' : 'POST');
         var targetUrl = rawUrl;
         var payloadJson = r['payload_json'] as String?;
 
         // Dynamically rewrite any child references harvested from parents in this batch or previous batches
-        final allIdMaps = await storage.db.getAll('SELECT local_temp_id, canonical_server_id FROM _sync_id_map');
+        final allIdMaps = await storage.db.getAll(
+            'SELECT local_temp_id, canonical_server_id FROM _sync_id_map');
         final fullIdMap = Map<String, String>.from(harvestedIdMap);
         for (final row in allIdMaps) {
-          fullIdMap[row['local_temp_id'] as String] = row['canonical_server_id'] as String;
+          fullIdMap[row['local_temp_id'] as String] =
+              row['canonical_server_id'] as String;
         }
 
         for (final entry in fullIdMap.entries) {
@@ -128,7 +137,9 @@ class CustomRestPusher {
           }
         }
 
-        if (targetUrl.contains('{id}') || targetUrl.contains(':id') || targetUrl.contains('{parentId}')) {
+        if (targetUrl.contains('{id}') ||
+            targetUrl.contains(':id') ||
+            targetUrl.contains('{parentId}')) {
           if (parentId != null) {
             final parentRows = await storage.db.getAll(
               'SELECT entity_id FROM _sync_outbox WHERE mutation_id = ?',
@@ -145,7 +156,9 @@ class CustomRestPusher {
         }
 
         try {
-          final payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : null;
+          final payload = payloadJson != null
+              ? (jsonDecode(payloadJson) as Map<String, dynamic>)
+              : null;
 
           Map<String, String>? customHeaders;
           final rawHeaders = r['headers_json'] as String?;
@@ -153,7 +166,8 @@ class CustomRestPusher {
             try {
               final decoded = jsonDecode(rawHeaders);
               if (decoded is Map) {
-                customHeaders = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+                customHeaders =
+                    decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
               }
             } catch (_) {}
           }
@@ -166,10 +180,18 @@ class CustomRestPusher {
           try {
             if (mediaPath != null && mediaPath.isNotEmpty) {
               final uri = Uri.parse(targetUrl);
-              final fieldName = (payload?['field_name'] ?? payload?['fieldName'] ?? 'file').toString();
-              final fileName = (payload?['file_name'] ?? payload?['fileName'] ?? mediaPath.split(Platform.pathSeparator).last).toString();
-              final mimeType = payload?['mime_type']?.toString() ?? payload?['mimeType']?.toString();
-              final extraFields = payload != null ? Map<String, dynamic>.from(sanitizePayload(payload)) : null;
+              final fieldName =
+                  (payload?['field_name'] ?? payload?['fieldName'] ?? 'file')
+                      .toString();
+              final fileName = (payload?['file_name'] ??
+                      payload?['fileName'] ??
+                      mediaPath.split(Platform.pathSeparator).last)
+                  .toString();
+              final mimeType = payload?['mime_type']?.toString() ??
+                  payload?['mimeType']?.toString();
+              final extraFields = payload != null
+                  ? Map<String, dynamic>.from(sanitizePayload(payload))
+                  : null;
               extraFields?.remove('field_name');
               extraFields?.remove('fieldName');
               extraFields?.remove('file_name');
@@ -186,7 +208,8 @@ class CustomRestPusher {
                 filePath: mediaPath,
                 fileName: fileName,
                 mimeType: mimeType,
-                extraFields: extraFields?.isNotEmpty == true ? extraFields : null,
+                extraFields:
+                    extraFields?.isNotEmpty == true ? extraFields : null,
                 headers: customHeaders,
               );
             } else {
@@ -203,30 +226,41 @@ class CustomRestPusher {
           } catch (e) {
             processedIds.add(mutationId);
             await recordFailure(r, mutationId, nowMs, errorMsg: e.toString());
-            terminalResult ??= SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
+            terminalResult ??= SyncPushResult(
+                status: SyncPushStatus.networkError,
+                errorMessage: e.toString());
             break;
           }
 
           if (resp.error != null) {
-            final err = resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
+            final err = resp.error is Exception
+                ? resp.error as Exception
+                : Exception(resp.error.toString());
             processedIds.add(mutationId);
             await recordFailure(r, mutationId, nowMs, errorMsg: err.toString());
-            terminalResult ??= SyncPushResult(status: SyncPushStatus.networkError, errorMessage: err.toString());
+            terminalResult ??= SyncPushResult(
+                status: SyncPushStatus.networkError,
+                errorMessage: err.toString());
             break;
           }
 
           if (resp.statusCode >= 200 && resp.statusCode < 300) {
             await storage.db.writeTransaction((tx) async {
-              if ((method == 'POST' || method == 'PUT') && resp.body.isNotEmpty) {
+              if ((method == 'POST' || method == 'PUT') &&
+                  resp.body.isNotEmpty) {
                 try {
                   final decoded = jsonDecode(resp.body);
                   if (decoded is Map) {
                     final extractor = idExtractors[entityName];
                     final extracted = extractor?.call(decoded);
                     final remoteId = (extracted ??
-                        decoded['id'] ??
-                        decoded['_id'] ??
-                        (decoded['data'] is Map ? (decoded['data']['id'] ?? decoded['data']['_id']) : null))?.toString();
+                            decoded['id'] ??
+                            decoded['_id'] ??
+                            (decoded['data'] is Map
+                                ? (decoded['data']['id'] ??
+                                    decoded['data']['_id'])
+                                : null))
+                        ?.toString();
                     if (remoteId != null && remoteId.isNotEmpty) {
                       harvestedIdMap[entityId] = remoteId;
                       if (remoteId != entityId) {
@@ -287,7 +321,8 @@ class CustomRestPusher {
 
               if (op == 'delete') {
                 try {
-                  await tx.execute('DELETE FROM "$entityName" WHERE id = ?', [entityId]);
+                  await tx.execute(
+                      'DELETE FROM "$entityName" WHERE id = ?', [entityId]);
                 } catch (_) {}
               }
 
@@ -312,21 +347,26 @@ class CustomRestPusher {
               mutationIds,
             );
             await onAuthExpired?.call();
-            terminalResult = const SyncPushResult(status: SyncPushStatus.unauthorized);
+            terminalResult =
+                const SyncPushResult(status: SyncPushStatus.unauthorized);
             break;
           } else if (resp.statusCode == HttpStatus.tooManyRequests) {
             processedIds.add(mutationId);
             final retryHeader = getRetryAfterHeader(resp.headers);
-            final nextRetry = parseNextRetryAfter(retryHeader, nowMs, backoffPolicy);
+            final nextRetry =
+                parseNextRetryAfter(retryHeader, nowMs, backoffPolicy);
             await storage.db.execute(
               "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id = ?",
               [nextRetry, mutationId],
             );
-            terminalResult ??= const SyncPushResult(status: SyncPushStatus.networkError, errorMessage: 'Rate limited (HTTP 429)');
+            terminalResult ??= const SyncPushResult(
+                status: SyncPushStatus.networkError,
+                errorMessage: 'Rate limited (HTTP 429)');
             hasRateLimited = true;
             break;
           } else if (resp.statusCode == HttpStatus.badRequest) {
-            final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
+            final targetStatus =
+                (profile == SyncProfile.basic) ? 'failed' : 'dlq';
             await storage.db.execute(
               'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
               [targetStatus, resp.body, mutationId],
@@ -339,19 +379,24 @@ class CustomRestPusher {
               'UPDATE _sync_outbox SET status = ?, next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
               ['conflict', resp.body, mutationId],
             );
-            terminalResult ??= SyncPushResult(status: SyncPushStatus.conflict, errorMessage: resp.body);
+            terminalResult ??= SyncPushResult(
+                status: SyncPushStatus.conflict, errorMessage: resp.body);
             break;
           } else if (resp.statusCode == HttpStatus.unprocessableEntity) {
-            await storage.rollbackOptimistic(mutationId, status: 'validation_error');
+            await storage.rollbackOptimistic(mutationId,
+                status: 'validation_error');
             await storage.db.execute(
               'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
               [resp.body, mutationId],
             );
-            terminalResult ??= SyncPushResult(status: SyncPushStatus.validationError, errorMessage: resp.body);
+            terminalResult ??= SyncPushResult(
+                status: SyncPushStatus.validationError,
+                errorMessage: resp.body);
             processedIds.add(mutationId);
             break;
           } else {
-            final errorBody = resp.body.isNotEmpty ? resp.body : 'HTTP ${resp.statusCode}';
+            final errorBody =
+                resp.body.isNotEmpty ? resp.body : 'HTTP ${resp.statusCode}';
             await recordFailure(r, mutationId, nowMs, errorMsg: errorBody);
             processedIds.add(mutationId);
             break;
@@ -359,7 +404,8 @@ class CustomRestPusher {
         } catch (e) {
           processedIds.add(mutationId);
           await recordFailure(r, mutationId, nowMs, errorMsg: e.toString());
-          terminalResult ??= SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
+          terminalResult ??= SyncPushResult(
+              status: SyncPushStatus.networkError, errorMessage: e.toString());
           break;
         }
       }
@@ -373,7 +419,8 @@ class CustomRestPusher {
 
       Future<void> laneWorker() async {
         while (true) {
-          if ((terminalResult != null && terminalResult!.status == SyncPushStatus.unauthorized) ||
+          if ((terminalResult != null &&
+                  terminalResult!.status == SyncPushStatus.unauthorized) ||
               hasRateLimited) {
             break;
           }
@@ -386,18 +433,23 @@ class CustomRestPusher {
       final workers = List.generate(workerCount, (_) => laneWorker());
       await Future.wait(workers);
 
-      if (terminalResult != null && terminalResult!.status == SyncPushStatus.unauthorized) {
+      if (terminalResult != null &&
+          terminalResult!.status == SyncPushStatus.unauthorized) {
         return terminalResult!;
       }
       if (appliedCount > 0) {
-        return SyncPushResult(status: SyncPushStatus.success, applied: appliedCount, errorMessage: terminalResult?.errorMessage);
+        return SyncPushResult(
+            status: SyncPushStatus.success,
+            applied: appliedCount,
+            errorMessage: terminalResult?.errorMessage);
       }
       if (terminalResult != null) {
         return terminalResult!;
       }
       return SyncPushResult(status: SyncPushStatus.success, applied: 0);
     } finally {
-      final unhandled = mutationIds.where((id) => !processedIds.contains(id)).toList();
+      final unhandled =
+          mutationIds.where((id) => !processedIds.contains(id)).toList();
       if (unhandled.isNotEmpty) {
         final ph = List.filled(unhandled.length, '?').join(', ');
         await storage.db.execute(
@@ -408,11 +460,15 @@ class CustomRestPusher {
     }
   }
 
-  Future<void> recordFailure(Row r, String mutId, int nowMs, {String? errorMsg}) async {
+  Future<void> recordFailure(Row r, String mutId, int nowMs,
+      {String? errorMsg}) async {
     final currentRetry = (r['retry_count'] as int?) ?? 0;
     final newRetry = currentRetry + 1;
-    final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
-    final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+    final targetStatus =
+        (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+    final nextRetry = (targetStatus == 'dlq')
+        ? null
+        : backoffPolicy.nextRetryAt(newRetry, nowMs);
     await storage.db.execute(
       'UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ?, error_details_json = ? WHERE mutation_id = ?',
       [targetStatus, newRetry, nextRetry, errorMsg ?? 'Server error', mutId],

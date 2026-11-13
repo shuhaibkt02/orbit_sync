@@ -14,7 +14,8 @@ class SyncSummary {
     this.durationMs = 0,
   });
 
-  bool get hasErrors => failed > 0 || (errorMessage != null && errorMessage!.isNotEmpty);
+  bool get hasErrors =>
+      failed > 0 || (errorMessage != null && errorMessage!.isNotEmpty);
   bool get isSuccess => !hasErrors;
 
   static const empty = SyncSummary();

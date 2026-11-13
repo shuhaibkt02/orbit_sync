@@ -19,7 +19,8 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 14: Database Corruption Quarantine & Auto-Recreation', () async {
+    test('Test Case 14: Database Corruption Quarantine & Auto-Recreation',
+        () async {
       final corruptDbFile = File('${tempDir.path}/corrupt_test.db');
       corruptDbFile.writeAsBytesSync(List.filled(512, 0xFF));
 
@@ -46,7 +47,9 @@ void main() {
       await recoveredStorage.close();
     });
 
-    test('Test Case 15: Mocked Cloud Backup Shield & Time-Travel Restore Detection', () async {
+    test(
+        'Test Case 15: Mocked Cloud Backup Shield & Time-Travel Restore Detection',
+        () async {
       final dbPath = '${tempDir.path}/timetravel_test.db';
       final mockSecureStorage = <String, String>{};
       String? shieldedPath;
@@ -73,7 +76,8 @@ void main() {
         data: {'title': 'Old draft from Device A'},
       );
 
-      final outbox1 = await storage1.db.getAll("SELECT status FROM _sync_outbox WHERE entity_id = 'task-time-travel-1';");
+      final outbox1 = await storage1.db.getAll(
+          "SELECT status FROM _sync_outbox WHERE entity_id = 'task-time-travel-1';");
       expect(outbox1.first['status'], 'pending');
 
       await storage1.close();
@@ -93,7 +97,8 @@ void main() {
       expect(detectedMismatchSqlite, initialId);
       expect(detectedMismatchSecure, 'device-B-keychain-id-999');
 
-      final outboxDeviceB = await storageDeviceB.db.getAll("SELECT status FROM _sync_outbox WHERE entity_id = 'task-time-travel-1';");
+      final outboxDeviceB = await storageDeviceB.db.getAll(
+          "SELECT status FROM _sync_outbox WHERE entity_id = 'task-time-travel-1';");
       expect(outboxDeviceB.first['status'], 'held');
 
       await storageDeviceB.close();

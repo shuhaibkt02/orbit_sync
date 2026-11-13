@@ -16,37 +16,52 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 5 Multi-User Session Sandboxing & Token Pinning', () {
-    test('computeSessionPath produces deterministic 16-char SHA-256 sandboxed paths', () {
-      final path1 = sessionManager.computeSessionPath(tempDir.path, 'user_alice@example.com');
-      final path2 = sessionManager.computeSessionPath(tempDir.path, 'user_alice@example.com');
-      final path3 = sessionManager.computeSessionPath(tempDir.path, 'user_bob@example.com');
+  group(
+      'Layer 5 Facade: Challenge 5 Multi-User Session Sandboxing & Token Pinning',
+      () {
+    test(
+        'computeSessionPath produces deterministic 16-char SHA-256 sandboxed paths',
+        () {
+      final path1 = sessionManager.computeSessionPath(
+          tempDir.path, 'user_alice@example.com');
+      final path2 = sessionManager.computeSessionPath(
+          tempDir.path, 'user_alice@example.com');
+      final path3 = sessionManager.computeSessionPath(
+          tempDir.path, 'user_bob@example.com');
 
       expect(path1, equals(path2));
       expect(path1, isNot(equals(path3)));
       expect(path1, contains('/orbit_sessions/'));
     });
 
-    test('assertTokenSubject throws AuthSubjectMismatchException when JWT sub claim mismatches', () async {
+    test(
+        'assertTokenSubject throws AuthSubjectMismatchException when JWT sub claim mismatches',
+        () async {
       // Create fake JWT with sub = user_alice
-      final header = base64Url.encode(utf8.encode(jsonEncode({'alg': 'HS256'})));
-      final payloadAlice = base64Url.encode(utf8.encode(jsonEncode({'sub': 'user_alice'})));
+      final header =
+          base64Url.encode(utf8.encode(jsonEncode({'alg': 'HS256'})));
+      final payloadAlice =
+          base64Url.encode(utf8.encode(jsonEncode({'sub': 'user_alice'})));
       final fakeJwt = '$header.$payloadAlice.fakeSignature';
 
       // Matches Alice -> no exception
       await expectLater(
-        sessionManager.assertTokenSubject(token: fakeJwt, expectedUserId: 'user_alice'),
+        sessionManager.assertTokenSubject(
+            token: fakeJwt, expectedUserId: 'user_alice'),
         completes,
       );
 
       // Mismatches Bob -> throws AuthSubjectMismatchException
       expect(
-        () => sessionManager.assertTokenSubject(token: fakeJwt, expectedUserId: 'user_bob'),
+        () => sessionManager.assertTokenSubject(
+            token: fakeJwt, expectedUserId: 'user_bob'),
         throwsA(isA<AuthSubjectMismatchException>()),
       );
     });
 
-    test('mergeGuestSession transfers unpushed guest mutations into target database', () async {
+    test(
+        'mergeGuestSession transfers unpushed guest mutations into target database',
+        () async {
       final guestPath = '${tempDir.path}/guest.db';
       final targetPath = '${tempDir.path}/user.db';
 
@@ -64,7 +79,8 @@ void main() {
 
       // Assert target user database now has the unpushed item
       final userClient = await OrbitClient.initialize(databasePath: targetPath);
-      final pending = await userClient.query("SELECT * FROM _sync_outbox WHERE status = 'pending'");
+      final pending = await userClient
+          .query("SELECT * FROM _sync_outbox WHERE status = 'pending'");
       expect(pending.length, equals(1));
       expect(pending.first['entity_name'], equals('cart_items'));
 

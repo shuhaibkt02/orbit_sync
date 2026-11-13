@@ -22,7 +22,9 @@ class _FakeProbe implements INetworkProbe {
 
 void main() {
   group('Layer 3 Connectivity: Heartbeat & Lifecycle', () {
-    test('ConnectivityMonitor polls periodically in dead zone and stops when online', () async {
+    test(
+        'ConnectivityMonitor polls periodically in dead zone and stops when online',
+        () async {
       final probe = _FakeProbe()..nextOnline = false;
       final monitor = ConnectivityMonitor(
         probe: probe,
@@ -49,7 +51,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('Entering dead zone triggers onScheduleNativeAlarm callback for OS alarm integration', () async {
+    test(
+        'Entering dead zone triggers onScheduleNativeAlarm callback for OS alarm integration',
+        () async {
       final probe = _FakeProbe()..nextOnline = false;
       var alarmScheduled = false;
 
@@ -68,7 +72,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('notifyAppResumed triggers immediate reachability check bypassing debounce', () async {
+    test(
+        'notifyAppResumed triggers immediate reachability check bypassing debounce',
+        () async {
       final probe = _FakeProbe()..nextOnline = true;
       final monitor = ConnectivityMonitor(
         probe: probe,
@@ -93,7 +99,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('ConnectivityMonitor.dispose cleanly shuts down all streams and timers', () async {
+    test(
+        'ConnectivityMonitor.dispose cleanly shuts down all streams and timers',
+        () async {
       final monitor = ConnectivityMonitor();
       expect(monitor.onConnectivityChanged.isBroadcast, isTrue);
       expect(monitor.onStateChanged.isBroadcast, isTrue);

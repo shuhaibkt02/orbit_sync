@@ -9,7 +9,8 @@ class SessionManager {
   const SessionManager();
 
   String computeSessionPath(String appDir, String userId) {
-    final hash = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final hash =
+        sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
     return '$appDir/orbit_sessions/$hash/orbit.db';
   }
 
@@ -25,7 +26,8 @@ class SessionManager {
     }
     final base = appDir ?? baseDir;
     if (base == null || base.isEmpty) {
-      throw ArgumentError('Either databasePath or appDir/baseDir must be provided.');
+      throw ArgumentError(
+          'Either databasePath or appDir/baseDir must be provided.');
     }
     final cleanBase = base.replaceAll(RegExp(r'[/\\]+$'), '');
     final cleanUser = userId?.trim();

@@ -20,7 +20,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 6: Grace Window (holdFor) Coalescing & Snapshot Revision Trail', () async {
+    test(
+        'Test Case 6: Grace Window (holdFor) Coalescing & Snapshot Revision Trail',
+        () async {
       final mut1 = await storage.save(
         entity: 'tasks',
         id: 'task-grace-1',
@@ -37,19 +39,23 @@ void main() {
 
       expect(mut2, equals(mut1));
 
-      final outboxRows = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-grace-1';");
+      final outboxRows = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-grace-1';");
       expect(outboxRows.length, 1);
 
       final outbox = outboxRows.first;
-      expect(jsonDecode(outbox['payload_json'] as String)['title'], 'Revised Draft');
+      expect(jsonDecode(outbox['payload_json'] as String)['title'],
+          'Revised Draft');
 
-      final history = jsonDecode(outbox['revision_history_json'] as String) as List<dynamic>;
+      final history = jsonDecode(outbox['revision_history_json'] as String)
+          as List<dynamic>;
       expect(history.length, 1);
       expect(history.first['snapshot']['title'], 'Initial Draft');
       expect(history.first['snapshot']['priority'], 'low');
     });
 
-    test('Test Case 7: Zero-Network Local Annihilation on Grace Delete', () async {
+    test('Test Case 7: Zero-Network Local Annihilation on Grace Delete',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-grace-delete',
@@ -64,10 +70,12 @@ void main() {
 
       expect(deleteMut, isNull);
 
-      final domainRows = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-grace-delete';");
+      final domainRows = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-grace-delete';");
       expect(domainRows, isEmpty);
 
-      final outboxRows = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-grace-delete';");
+      final outboxRows = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-grace-delete';");
       expect(outboxRows, isEmpty);
     });
 
@@ -85,21 +93,28 @@ void main() {
       );
       expect(delMut, isNotNull);
 
-      final domainAfterDel = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-undo-1';");
+      final domainAfterDel = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-undo-1';");
       expect(domainAfterDel, isEmpty);
 
-      final undone = await storage.undoDelete(entity: 'tasks', id: 'task-undo-1');
+      final undone =
+          await storage.undoDelete(entity: 'tasks', id: 'task-undo-1');
       expect(undone, isTrue);
 
-      final domainRestored = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-undo-1';");
+      final domainRestored = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-undo-1';");
       expect(domainRestored.length, 1);
-      final restoredData = jsonDecode(domainRestored.first['data_json'] as String) as Map<String, dynamic>;
+      final restoredData =
+          jsonDecode(domainRestored.first['data_json'] as String)
+              as Map<String, dynamic>;
       expect(restoredData['title'], 'Undoable Task');
 
-      final deleteOutbox = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-undo-1' AND op = 'delete';");
+      final deleteOutbox = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-undo-1' AND op = 'delete';");
       expect(deleteOutbox, isEmpty);
 
-      final createOutbox = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-undo-1' AND op = 'create';");
+      final createOutbox = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-undo-1' AND op = 'create';");
       expect(createOutbox.length, 1);
     });
   });

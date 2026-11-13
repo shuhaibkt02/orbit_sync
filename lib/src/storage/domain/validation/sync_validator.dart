@@ -17,7 +17,8 @@ class SyncValidator {
       throw ArgumentError('Entity ID cannot be empty or whitespace.');
     }
     if (id.length > 256) {
-      throw ArgumentError('Entity ID exceeds maximum length of 256 characters.');
+      throw ArgumentError(
+          'Entity ID exceeds maximum length of 256 characters.');
     }
     if (id.contains('\x00')) {
       throw ArgumentError('Entity ID cannot contain null bytes.');
@@ -46,13 +47,23 @@ class SyncValidator {
     if (method != null) {
       const allowed = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'};
       if (!allowed.contains(method.toUpperCase())) {
-        throw ArgumentError('Invalid HTTP method: "$method". Allowed: $allowed');
+        throw ArgumentError(
+            'Invalid HTTP method: "$method". Allowed: $allowed');
       }
     }
   }
 
   static void validateStatus(String status) {
-    const allowed = {'pending', 'in_flight', 'synced', 'failed', 'dlq', 'held', 'conflict', 'validation_error'};
+    const allowed = {
+      'pending',
+      'in_flight',
+      'synced',
+      'failed',
+      'dlq',
+      'held',
+      'conflict',
+      'validation_error'
+    };
     if (!allowed.contains(status)) {
       throw ArgumentError('Invalid status: "$status". Allowed: $allowed');
     }
@@ -67,7 +78,8 @@ class SyncValidator {
         return nonEncodable.toString();
       });
     } catch (e) {
-      throw ArgumentError('Invalid domain data: payload must be JSON-serializable. Error: $e');
+      throw ArgumentError(
+          'Invalid domain data: payload must be JSON-serializable. Error: $e');
     }
   }
 }

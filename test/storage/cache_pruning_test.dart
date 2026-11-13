@@ -19,14 +19,17 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 12: TTL Local Cache Expiration & Dirty Record Shielding', () async {
+    test('Test Case 12: TTL Local Cache Expiration & Dirty Record Shielding',
+        () async {
       final cleanMutId = await storage.save(
         entity: 'orders',
         id: 'ord-ttl-clean',
         data: {'item': 'Clean Catalog Item', 'price': 10.0},
         ttl: const Duration(milliseconds: 50),
       );
-      await storage.db.execute("UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id = ?;", [cleanMutId]);
+      await storage.db.execute(
+          "UPDATE _sync_outbox SET status = 'synced' WHERE mutation_id = ?;",
+          [cleanMutId]);
 
       await storage.save(
         entity: 'orders',
@@ -40,10 +43,12 @@ void main() {
       final prunedCount = await storage.pruneExpiredCache('orders');
       expect(prunedCount, 1);
 
-      final cleanCheck = await storage.db.getAll("SELECT id FROM orders WHERE id = 'ord-ttl-clean';");
+      final cleanCheck = await storage.db
+          .getAll("SELECT id FROM orders WHERE id = 'ord-ttl-clean';");
       expect(cleanCheck, isEmpty);
 
-      final dirtyCheck = await storage.db.getAll("SELECT id FROM orders WHERE id = 'ord-ttl-dirty';");
+      final dirtyCheck = await storage.db
+          .getAll("SELECT id FROM orders WHERE id = 'ord-ttl-dirty';");
       expect(dirtyCheck.length, 1);
       expect(dirtyCheck.first['id'], 'ord-ttl-dirty');
     });
@@ -59,7 +64,9 @@ void main() {
       await storage.checkpoint(truncate: true);
     });
 
-    test('Test Case 17: Chunked Batch Operations (SQLITE_MAX_VARIABLE_NUMBER Defense)', () async {
+    test(
+        'Test Case 17: Chunked Batch Operations (SQLITE_MAX_VARIABLE_NUMBER Defense)',
+        () async {
       final largeIdList = List.generate(1200, (i) => 'id-$i');
       final processedBatches = <int>[];
 

@@ -53,8 +53,12 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 4 Strongly-Typed OrbitTable & SQLite Type Sanitizer', () {
-    test('SqliteTypeSanitizer automatically converts booleans, dates, and nested maps', () {
+  group(
+      'Layer 5 Facade: Challenge 4 Strongly-Typed OrbitTable & SQLite Type Sanitizer',
+      () {
+    test(
+        'SqliteTypeSanitizer automatically converts booleans, dates, and nested maps',
+        () {
       const sanitizer = SqliteTypeSanitizer();
       final now = DateTime.now();
 
@@ -74,7 +78,8 @@ void main() {
       expect(sanitized['nested'], equals('{"city":"Berlin"}'));
     });
 
-    test('registerModel provides typed CRUD and automatic index registration', () async {
+    test('registerModel provides typed CRUD and automatic index registration',
+        () async {
       final products = client.registerModel<TestProduct>(
         name: 'products',
         endpoint: '/products',
@@ -110,15 +115,33 @@ void main() {
     test('RestEndpoints declarative mappings support HttpMethod constants', () {
       final endpoints = RestEndpoints<TestProduct>(
         list: (params) => const RestRequest(path: '/api/v1/products'),
-        create: (item) => const RestRequest(path: '/api/v1/products', method: HttpMethod.post),
-        update: (item) => RestRequest(path: '/api/v1/products/${item.id}', method: HttpMethod.put),
-        delete: (id) => RestRequest(path: '/api/v1/products/$id', method: HttpMethod.delete),
+        create: (item) => const RestRequest(
+            path: '/api/v1/products', method: HttpMethod.post),
+        update: (item) => RestRequest(
+            path: '/api/v1/products/${item.id}', method: HttpMethod.put),
+        delete: (id) => RestRequest(
+            path: '/api/v1/products/$id', method: HttpMethod.delete),
       );
 
-      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals(HttpMethod.post));
-      expect(endpoints.update!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).method, equals(HttpMethod.put));
+      expect(
+          endpoints
+              .create!(TestProduct(
+                  id: '1', title: 'T', price: 10, inStock: true, metadata: {}))
+              .method,
+          equals(HttpMethod.post));
+      expect(
+          endpoints
+              .update!(TestProduct(
+                  id: '1', title: 'T', price: 10, inStock: true, metadata: {}))
+              .method,
+          equals(HttpMethod.put));
       expect(endpoints.delete!('1').method, equals(HttpMethod.delete));
-      expect(endpoints.create!(TestProduct(id: '1', title: 'T', price: 10, inStock: true, metadata: {})).verb, equals('POST'));
+      expect(
+          endpoints
+              .create!(TestProduct(
+                  id: '1', title: 'T', price: 10, inStock: true, metadata: {}))
+              .verb,
+          equals('POST'));
     });
   });
 }

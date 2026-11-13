@@ -59,7 +59,8 @@ class FaultInjectionHttpClient extends http.BaseClient {
         // Forward to inner so server receives and processes the bytes, then drop the socket!
         final streamed = await _inner.send(_rebuild(request, body));
         await streamed.stream.drain();
-        throw const SocketException('injected: drop after request body (Two Generals)');
+        throw const SocketException(
+            'injected: drop after request body (Two Generals)');
       case ReturnStatus(:final statusCode, :final body, :final headers):
         return _canned(request, statusCode, body ?? '', headers ?? {});
       case DelayResponse(:final duration):

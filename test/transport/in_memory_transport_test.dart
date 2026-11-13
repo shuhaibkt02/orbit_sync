@@ -4,14 +4,17 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: InMemorySyncTransport', () {
-    test('Zero-socket in-memory operations record batches and custom pushes', () async {
+    test('Zero-socket in-memory operations record batches and custom pushes',
+        () async {
       final mock = SyncTransport.inMemory() as InMemorySyncTransport;
 
       expect(mock.pushedBatches, isEmpty);
       expect(mock.customPushes, isEmpty);
 
       final batchResp = await mock.pushBatch(
-        mutations: [{'id': '101', 'action': 'create'}],
+        mutations: [
+          {'id': '101', 'action': 'create'}
+        ],
         idempotencyKey: 'idemp-1',
       );
       expect(batchResp.isSuccess, isTrue);
@@ -32,7 +35,9 @@ void main() {
 
     test('Simulated error and canned pull changes', () async {
       final mock = SyncTransport.inMemory(
-        cannedPullChanges: [{'id': 'remote-1', 'title': 'Remote Book'}],
+        cannedPullChanges: [
+          {'id': 'remote-1', 'title': 'Remote Book'}
+        ],
         pullNextCursor: 42,
       ) as InMemorySyncTransport;
 
@@ -45,7 +50,8 @@ void main() {
 
       // Simulate network drop
       mock.pushError = 'Simulated TCP Drop';
-      final failedPush = await mock.pushBatch(mutations: [], idempotencyKey: 'fail-1');
+      final failedPush =
+          await mock.pushBatch(mutations: [], idempotencyKey: 'fail-1');
       expect(failedPush.isSuccess, isFalse);
       expect(failedPush.isNetworkError, isTrue);
       expect(failedPush.error, equals('Simulated TCP Drop'));

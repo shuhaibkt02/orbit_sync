@@ -25,7 +25,8 @@ class BackoffPolicy {
     if (jitterFraction <= 0) return Duration(milliseconds: capped);
     final jitter = (capped * jitterFraction).round();
     final offset = jitter > 0 ? _rng.nextInt(jitter * 2 + 1) - jitter : 0;
-    return Duration(milliseconds: (capped + offset).clamp(0, max.inMilliseconds));
+    return Duration(
+        milliseconds: (capped + offset).clamp(0, max.inMilliseconds));
   }
 
   /// Calculates next retry timestamp in epoch milliseconds.

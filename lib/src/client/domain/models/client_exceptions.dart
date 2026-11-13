@@ -20,5 +20,6 @@ class ClientClosedException implements Exception {
   const ClientClosedException([this.operation = 'Operation']);
 
   @override
-  String toString() => 'ClientClosedException: Cannot execute $operation because client is closed.';
+  String toString() =>
+      'ClientClosedException: Cannot execute $operation because client is closed.';
 }

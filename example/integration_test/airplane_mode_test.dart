@@ -15,7 +15,8 @@ void main() {
     defaultValue: 'http://10.0.2.2:8080',
   );
 
-  testWidgets('E2E: $mutationCount mutations survive airplane mode and OS kill', (tester) async {
+  testWidgets('E2E: $mutationCount mutations survive airplane mode and OS kill',
+      (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: Text('Offline Sync E2E Running'))),
     );
@@ -42,11 +43,13 @@ void main() {
     final phaseRows = await client.query(
       "SELECT value FROM _sync_metadata WHERE key = 'e2e_phase'",
     );
-    final phase = phaseRows.isEmpty ? null : phaseRows.first['value'] as String?;
+    final phase =
+        phaseRows.isEmpty ? null : phaseRows.first['value'] as String?;
     debugPrint('==> [E2E Test] Current database phase: $phase');
 
     if (phase == null) {
-      debugPrint('==> [E2E Test] Entering Phase 1: Queuing $mutationCount offline mutations');
+      debugPrint(
+          '==> [E2E Test] Entering Phase 1: Queuing $mutationCount offline mutations');
       // ---- PHASE 1: Queue mutations offline ----
       // DO NOT call client.close()! We intentionally leave the SQLite connection open
       // so 'adb shell am force-stop' kills a live, uncheckpointed DB process.
@@ -66,16 +69,20 @@ void main() {
         "SELECT COUNT(*) AS cnt FROM _sync_outbox WHERE status = 'pending'",
       );
       final initialCount = (initialPending.first['cnt'] as num?)?.toInt() ?? 0;
-      debugPrint('==> [E2E Test] Phase 1 verified on-disk: $initialCount mutations queued in outbox');
-      expect(initialCount, equals(mutationCount), reason: 'Phase 1 must queue all mutations in pending state');
+      debugPrint(
+          '==> [E2E Test] Phase 1 verified on-disk: $initialCount mutations queued in outbox');
+      expect(initialCount, equals(mutationCount),
+          reason: 'Phase 1 must queue all mutations in pending state');
 
-      debugPrint('==> [E2E Test] Phase 1 complete. Outbox ready. Process awaiting kill.');
+      debugPrint(
+          '==> [E2E Test] Phase 1 complete. Outbox ready. Process awaiting kill.');
       // Return immediately without closing client or DB
       return;
     }
 
     if (phase == 'ready_for_kill') {
-      debugPrint('==> [E2E Test] Entering Phase 2: Verifying uncheckpointed outbox durability & syncing');
+      debugPrint(
+          '==> [E2E Test] Entering Phase 2: Verifying uncheckpointed outbox durability & syncing');
       // ---- PHASE 2: Verify outbox durability, sync, verify drained ----
       final pendingRows = await client.query(
         "SELECT COUNT(*) AS cnt FROM _sync_outbox WHERE status = 'pending'",
@@ -102,7 +109,8 @@ void main() {
         );
         remainingCount = remainingRows.length;
         if (remainingCount == 0) {
-          debugPrint('==> [E2E Test] Outbox completely drained in attempt $attempt');
+          debugPrint(
+              '==> [E2E Test] Outbox completely drained in attempt $attempt');
           break;
         }
         await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -113,7 +121,8 @@ void main() {
           "SELECT * FROM _sync_outbox WHERE status != 'synced'",
         );
         for (final row in failedRows.take(3)) {
-          debugPrint('==> [E2E Test] Failed row: id=${row['mutation_id']}, status=${row['status']}, retry=${row['retry_count']}, err=${row['error_details_json']}');
+          debugPrint(
+              '==> [E2E Test] Failed row: id=${row['mutation_id']}, status=${row['status']}, retry=${row['retry_count']}, err=${row['error_details_json']}');
         }
       }
 

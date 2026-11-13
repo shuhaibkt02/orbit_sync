@@ -31,7 +31,8 @@ void main() {
   OrbitClient? currentClient;
 
   setUp(() {
-    dbPath = '${Directory.systemTemp.path}/cqrs_test_${DateTime.now().microsecondsSinceEpoch}.db';
+    dbPath =
+        '${Directory.systemTemp.path}/cqrs_test_${DateTime.now().microsecondsSinceEpoch}.db';
   });
 
   tearDown(() async {
@@ -44,7 +45,9 @@ void main() {
   });
 
   group('Strict CQRS Separation & Outbox Sync', () {
-    test('orbit.sync() strictly pushes outbox mutations and NEVER calls /sync/pull', () async {
+    test(
+        'orbit.sync() strictly pushes outbox mutations and NEVER calls /sync/pull',
+        () async {
       final requestedUrls = <String>[];
       final mockClient = MockClient((request) async {
         requestedUrls.add('${request.method} ${request.url.path}');
@@ -85,15 +88,24 @@ void main() {
   });
 
   group('On-Demand Cache Hydration on Empty Table (Cold Start)', () {
-    test('table.query() lazily hydrates empty local table from endpoints.list', () async {
+    test('table.query() lazily hydrates empty local table from endpoints.list',
+        () async {
       int listCallCount = 0;
       final mockClient = MockClient((request) async {
         if (request.url.path == '/api/orders' && request.method == 'GET') {
           listCallCount++;
           return http.Response(
             jsonEncode([
-              {'id': 'remote-1', 'item': 'Server Hydrated Order', 'quantity': 5},
-              {'id': 'remote-2', 'item': 'Second Hydrated Order', 'quantity': 10},
+              {
+                'id': 'remote-1',
+                'item': 'Server Hydrated Order',
+                'quantity': 5
+              },
+              {
+                'id': 'remote-2',
+                'item': 'Second Hydrated Order',
+                'quantity': 10
+              },
             ]),
             200,
           );
@@ -129,12 +141,18 @@ void main() {
       expect(secondResults.length, equals(2));
     });
 
-    test('table.watch() emits immediately and hydrates in background on cold start', () async {
+    test(
+        'table.watch() emits immediately and hydrates in background on cold start',
+        () async {
       final mockClient = MockClient((request) async {
         if (request.url.path == '/api/orders' && request.method == 'GET') {
           return http.Response(
             jsonEncode([
-              {'id': 'order-watch-1', 'item': 'Reactive Remote Item', 'quantity': 1},
+              {
+                'id': 'order-watch-1',
+                'item': 'Reactive Remote Item',
+                'quantity': 1
+              },
             ]),
             200,
           );
@@ -184,7 +202,11 @@ void main() {
           listCallCount++;
           return http.Response(
             jsonEncode([
-              {'id': 'order-1', 'item': 'Version $listCallCount', 'quantity': listCallCount},
+              {
+                'id': 'order-1',
+                'item': 'Version $listCallCount',
+                'quantity': listCallCount
+              },
             ]),
             200,
           );
@@ -229,7 +251,9 @@ void main() {
   });
 
   group('Offline / Network Error Fault Tolerance', () {
-    test('table.query() gracefully returns local data when remote call fails (offline)', () async {
+    test(
+        'table.query() gracefully returns local data when remote call fails (offline)',
+        () async {
       final mockClient = MockClient((request) async {
         // Simulating complete network outage / DNS failure
         throw http.ClientException('Network unreachable (Offline)');
@@ -250,7 +274,8 @@ void main() {
       );
 
       // Pre-populate one item locally
-      await orders.save(Order(id: 'local-offline', item: 'Cached Local Order', quantity: 1));
+      await orders.save(
+          Order(id: 'local-offline', item: 'Cached Local Order', quantity: 1));
 
       // Query should NOT throw exception even though remote fails
       final results = await orders.query();
@@ -261,11 +286,14 @@ void main() {
   });
 
   group('baseUrl Standardization', () {
-    test('SyncWorker and HttpSyncTransport accept baseUrl and expose it cleanly', () {
+    test(
+        'SyncWorker and HttpSyncTransport accept baseUrl and expose it cleanly',
+        () {
       final transport = SyncTransport.http(
         baseUrl: 'https://production.api.com',
       );
-      expect((transport as HttpSyncTransport).baseUrl, equals('https://production.api.com'));
+      expect((transport as HttpSyncTransport).baseUrl,
+          equals('https://production.api.com'));
       // Deprecated getter continues to function for backward compatibility
       expect(transport.baseUrl, equals('https://production.api.com'));
     });

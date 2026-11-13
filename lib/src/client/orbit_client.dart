@@ -15,7 +15,8 @@ import 'domain/models/orbit_sync_event.dart';
 import 'domain/models/sync_job.dart';
 import 'domain/models/rest_endpoints.dart';
 import '../observability/sync_observer.dart';
-import '../observability/domain/models/sync_event.dart' show SlaWarningEvent, SlaBreachedEvent;
+import '../observability/domain/models/sync_event.dart'
+    show SlaWarningEvent, SlaBreachedEvent;
 import '../observability/services/sync_center.dart';
 import 'services/session_manager.dart';
 import 'services/orbit_table_impl.dart';
@@ -69,7 +70,8 @@ abstract class OrbitClient {
     Map<String, dynamic>? scopeFilter,
     Future<String?> Function()? getAuthToken,
     Future<void> Function()? onAuthExpired,
-    String? Function(String entity, Map<String, dynamic> record)? validateInvariants,
+    String? Function(String entity, Map<String, dynamic> record)?
+        validateInvariants,
     int currentSchemaVersion = 1,
     MutationMigrator? migrator,
     void Function(String message)? onLog,
@@ -254,7 +256,8 @@ abstract class OrbitClient {
   });
 
   /// Restores raw records from a domain table.
-  Future<List<Map<String, dynamic>>> restore(String entity, {String? where, List<dynamic> whereArgs = const [], String? orderBy});
+  Future<List<Map<String, dynamic>>> restore(String entity,
+      {String? where, List<dynamic> whereArgs = const [], String? orderBy});
 
   /// Restores a single raw record from a domain table by ID.
   Future<Map<String, dynamic>?> restoreById(String entity, String id);
@@ -369,7 +372,8 @@ abstract class OrbitClient {
   ConnectivityMonitor get connectivity;
 
   /// Direct REST hydration helper to fetch remote records and save them to local storage.
-  Future<int> fetchAndStore(String entity, {required String url, Map<String, String>? headers});
+  Future<int> fetchAndStore(String entity,
+      {required String url, Map<String, String>? headers});
 
   /// Telemetry stream of sync events with correlation IDs.
   Stream<OrbitSyncEvent> get syncEvents;

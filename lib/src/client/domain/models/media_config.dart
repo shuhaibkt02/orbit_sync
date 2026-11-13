@@ -51,20 +51,28 @@ class OrbitAttachment {
 
   /// Serializes attachment metadata into JSON for storage in `data_json`.
   Map<String, dynamic> toJson() => {
-    'type': 'orbit_attachment',
-    'local_path': localPath,
-    if (fileName != null) 'file_name': fileName,
-    if (mimeType != null) 'mime_type': mimeType,
-    'field_name': fieldName,
-  };
+        'type': 'orbit_attachment',
+        'local_path': localPath,
+        if (fileName != null) 'file_name': fileName,
+        if (mimeType != null) 'mime_type': mimeType,
+        'field_name': fieldName,
+      };
 
   /// Deserializes attachment metadata from JSON.
-  factory OrbitAttachment.fromJson(Map<String, dynamic> json) => OrbitAttachment(
-    localPath: (json['local_path'] ?? json['localPath'] ?? json['media_path'] ?? json['mediaPath'] ?? '').toString(),
-    fileName: json['file_name']?.toString() ?? json['fileName']?.toString(),
-    mimeType: json['mime_type']?.toString() ?? json['mimeType']?.toString(),
-    fieldName: json['field_name']?.toString() ?? json['fieldName']?.toString() ?? 'file',
-  );
+  factory OrbitAttachment.fromJson(Map<String, dynamic> json) =>
+      OrbitAttachment(
+        localPath: (json['local_path'] ??
+                json['localPath'] ??
+                json['media_path'] ??
+                json['mediaPath'] ??
+                '')
+            .toString(),
+        fileName: json['file_name']?.toString() ?? json['fileName']?.toString(),
+        mimeType: json['mime_type']?.toString() ?? json['mimeType']?.toString(),
+        fieldName: json['field_name']?.toString() ??
+            json['fieldName']?.toString() ??
+            'file',
+      );
 
   @override
   String toString() => 'OrbitAttachment(path: $localPath, mimeType: $mimeType)';

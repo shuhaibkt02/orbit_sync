@@ -24,7 +24,8 @@ void main() {
   OrbitClient? currentClient;
 
   setUp(() {
-    dbPath = '${Directory.systemTemp.path}/fixes_test_${DateTime.now().microsecondsSinceEpoch}.db';
+    dbPath =
+        '${Directory.systemTemp.path}/fixes_test_${DateTime.now().microsecondsSinceEpoch}.db';
   });
 
   tearDown(() async {
@@ -35,7 +36,9 @@ void main() {
   });
 
   group('Fix 2: Response Body ID Harvesting & Foreign Key Rewriting', () {
-    test('POST response server ID is harvested and rewrites pending child mutations', () async {
+    test(
+        'POST response server ID is harvested and rewrites pending child mutations',
+        () async {
       final capturedRequests = <String, Map<String, dynamic>>{};
 
       final mockClient = MockClient((request) async {
@@ -47,7 +50,8 @@ void main() {
           );
         }
         if (request.method == 'POST' && request.url.path.contains('/items')) {
-          capturedRequests[request.url.path] = jsonDecode(request.body) as Map<String, dynamic>;
+          capturedRequests[request.url.path] =
+              jsonDecode(request.body) as Map<String, dynamic>;
           return http.Response(jsonEncode({'status': 'ok'}), 200);
         }
         return http.Response('Not Found', 404);
@@ -62,7 +66,8 @@ void main() {
 
       // 1. Register parent and child tables
       await client.registerTable('orders', {'title': 'TEXT'});
-      await client.registerTable('order_items', {'order_id': 'TEXT', 'item': 'TEXT'});
+      await client
+          .registerTable('order_items', {'order_id': 'TEXT', 'item': 'TEXT'});
 
       final tempOrderId = 'temp-ord-uuid-001';
 
@@ -98,23 +103,31 @@ void main() {
       expect(canonicalId, equals('ord_srv_777'));
 
       // 6. Assert local active parent record was updated with server ID
-      final parentRows = await client.query("SELECT id, json_extract(data_json, '\$.title') as title FROM orders WHERE id = 'ord_srv_777'");
+      final parentRows = await client.query(
+          "SELECT id, json_extract(data_json, '\$.title') as title FROM orders WHERE id = 'ord_srv_777'");
       expect(parentRows, isNotEmpty);
       expect(parentRows.first['title'], equals('Dinner Order'));
 
       // 7. Assert child request received the harvested server ID, NOT the temp UUID!
-      expect(capturedRequests.containsKey('/api/orders/ord_srv_777/items'), isTrue);
-      expect(capturedRequests['/api/orders/ord_srv_777/items']!['order_id'], equals('ord_srv_777'));
+      expect(capturedRequests.containsKey('/api/orders/ord_srv_777/items'),
+          isTrue);
+      expect(capturedRequests['/api/orders/ord_srv_777/items']!['order_id'],
+          equals('ord_srv_777'));
     });
   });
 
   group('Fix 3: Multi-Isolate Safety Guard on in_flight Reset', () {
-    test('initSystemSchema preserves active in_flight requests and resets only stale (> 5m) locks', () async {
+    test(
+        'initSystemSchema preserves active in_flight requests and resets only stale (> 5m) locks',
+        () async {
       final storage = await SyncStorage.open(path: dbPath);
 
       final now = DateTime.now().millisecondsSinceEpoch;
-      final recentTimestamp = now - const Duration(seconds: 30).inMilliseconds; // 30s ago (active)
-      final staleTimestamp = now - const Duration(minutes: 10).inMilliseconds; // 10m ago (stale/dead lock)
+      final recentTimestamp =
+          now - const Duration(seconds: 30).inMilliseconds; // 30s ago (active)
+      final staleTimestamp = now -
+          const Duration(minutes: 10)
+              .inMilliseconds; // 10m ago (stale/dead lock)
 
       // Insert active in-flight mutation
       await storage.db.execute('''
@@ -137,7 +150,9 @@ void main() {
         'SELECT mutation_id, status FROM _sync_outbox ORDER BY mutation_id',
       );
 
-      final statusMap = {for (final r in rows) r['mutation_id'] as String: r['status'] as String};
+      final statusMap = {
+        for (final r in rows) r['mutation_id'] as String: r['status'] as String
+      };
 
       // Active request (< 5 mins) MUST NOT be reset to pending
       expect(statusMap['active-mut-1'], equals('in_flight'));
@@ -150,7 +165,9 @@ void main() {
   });
 
   group('Fix 4: Enterprise Dio Interceptor Passthrough & Table Hydration', () {
-    test('Dio interceptor catches 401, refreshes token, and retries successfully', () async {
+    test(
+        'Dio interceptor catches 401, refreshes token, and retries successfully',
+        () async {
       final dio = Dio();
       int attemptCount = 0;
       String currentToken = 'expired-token';
@@ -189,13 +206,17 @@ void main() {
           return ResponseBody.fromString(
             '{"error": "Token expired"}',
             401,
-            headers: {'content-type': ['application/json']},
+            headers: {
+              'content-type': ['application/json']
+            },
           );
         }
         return ResponseBody.fromString(
           '{"status": "recovered"}',
           200,
-          headers: {'content-type': ['application/json']},
+          headers: {
+            'content-type': ['application/json']
+          },
         );
       });
 
@@ -219,7 +240,9 @@ void main() {
       transport.dispose();
     });
 
-    test('OrbitTable.refresh() routes through configured SyncTransport.dio cleanly', () async {
+    test(
+        'OrbitTable.refresh() routes through configured SyncTransport.dio cleanly',
+        () async {
       final dio = Dio();
       bool dioWasCalled = false;
 
@@ -230,7 +253,9 @@ void main() {
             {'id': 'dio-order-1', 'title': 'Enterprise Order via Dio'},
           ]),
           200,
-          headers: {'content-type': ['application/json']},
+          headers: {
+            'content-type': ['application/json']
+          },
         );
       });
 
@@ -271,7 +296,8 @@ class _MockDioAdapter implements HttpClientAdapter {
   _MockDioAdapter(this.handler);
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<List<int>>? requestStream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<List<int>>? requestStream, Future<void>? cancelFuture) async {
     return handler(options);
   }
 

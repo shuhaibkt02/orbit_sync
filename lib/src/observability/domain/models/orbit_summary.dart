@@ -25,17 +25,24 @@ class OrbitSummary {
   bool get isSyncing => inFlight > 0;
 
   /// True when the outbox is completely caught up with zero errors or unpushed work.
-  bool get isClean => pending == 0 && inFlight == 0 && failed == 0 && rejected == 0;
+  bool get isClean =>
+      pending == 0 && inFlight == 0 && failed == 0 && rejected == 0;
 
   /// True when any mutations have encountered 422 rejections, conflicts, or permanent failure.
   bool get hasErrors => failed > 0 || rejected > 0;
 
   /// Time elapsed since the oldest pending mutation was enqueued.
-  Duration? get oldestPendingAge =>
-      oldestPendingAt != null ? DateTime.now().toUtc().difference(oldestPendingAt!) : null;
+  Duration? get oldestPendingAge => oldestPendingAt != null
+      ? DateTime.now().toUtc().difference(oldestPendingAt!)
+      : null;
 
   factory OrbitSummary.fromRows(Iterable<Row> rows) {
-    int pending = 0, inFlight = 0, synced = 0, rejected = 0, failed = 0, total = 0;
+    int pending = 0,
+        inFlight = 0,
+        synced = 0,
+        rejected = 0,
+        failed = 0,
+        total = 0;
     int? oldestEpoch;
 
     for (final r in rows) {

@@ -33,7 +33,8 @@ void main() {
   late InMemorySyncTransport transport;
 
   setUp(() async {
-    dbPath = '${Directory.systemTemp.path}/test_enhancement_${DateTime.now().microsecondsSinceEpoch}.db';
+    dbPath =
+        '${Directory.systemTemp.path}/test_enhancement_${DateTime.now().microsecondsSinceEpoch}.db';
     transport = SyncTransport.inMemory() as InMemorySyncTransport;
 
     client = await OrbitClient.initialize(
@@ -58,7 +59,8 @@ void main() {
   });
 
   group('Pure JSON Document Store & Outbox Wire Enhancements', () {
-    test('1. Cached table re-use: orbit.table<T>("notes") returns same handle', () {
+    test('1. Cached table re-use: orbit.table<T>("notes") returns same handle',
+        () {
       final retrieved = client.table<Note>('notes');
       expect(retrieved, isNotNull);
       expect(retrieved.name, equals('notes'));
@@ -69,14 +71,21 @@ void main() {
       );
     });
 
-    test('2. Custom headers saved to outbox headers_json and dispatched via pushCustom', () async {
+    test(
+        '2. Custom headers saved to outbox headers_json and dispatched via pushCustom',
+        () async {
       await notes.save(
         Note(id: 'note-1', content: 'Initial note'),
-        headers: {'X-Audit-Reason': 'Created by user', 'X-Tenant-Id': 'tenant-42'},
+        headers: {
+          'X-Audit-Reason': 'Created by user',
+          'X-Tenant-Id': 'tenant-42'
+        },
       );
 
       // Verify headers were stored in _sync_outbox
-      final rows = await client.query('SELECT headers_json FROM _sync_outbox WHERE entity_id = ?', ['note-1']);
+      final rows = await client.query(
+          'SELECT headers_json FROM _sync_outbox WHERE entity_id = ?',
+          ['note-1']);
       expect(rows, isNotEmpty);
       expect(rows.first['headers_json'], contains('X-Audit-Reason'));
       expect(rows.first['headers_json'], contains('tenant-42'));
@@ -86,11 +95,14 @@ void main() {
       expect(transport.customPushes, isNotEmpty);
       final lastPush = transport.customPushes.first;
       expect(lastPush['headers'], isNotNull);
-      expect((lastPush['headers'] as Map)['X-Audit-Reason'], equals('Created by user'));
+      expect((lastPush['headers'] as Map)['X-Audit-Reason'],
+          equals('Created by user'));
       expect((lastPush['headers'] as Map)['X-Tenant-Id'], equals('tenant-42'));
     });
 
-    test('3. Audit Trail: OrbitRecord provides previousData alongside current data', () async {
+    test(
+        '3. Audit Trail: OrbitRecord provides previousData alongside current data',
+        () async {
       // 1. Initial save
       await notes.save(Note(id: 'note-audit', content: 'Version 1 Draft'));
 
@@ -112,7 +124,8 @@ void main() {
       expect(record.hasPreviousData, isTrue);
     });
 
-    test('4. Single record detail stream: watchById reactively updates', () async {
+    test('4. Single record detail stream: watchById reactively updates',
+        () async {
       await notes.save(Note(id: 'note-detail', content: 'Before'));
 
       final emissions = <Note?>[];
@@ -132,7 +145,9 @@ void main() {
       await sub.cancel();
     });
 
-    test('5. Soft delete with undoWindow preserves row with OrbitSyncStatus.pendingDelete', () async {
+    test(
+        '5. Soft delete with undoWindow preserves row with OrbitSyncStatus.pendingDelete',
+        () async {
       await notes.save(Note(id: 'note-del', content: 'To be deleted'));
 
       // Delete with 10 second undo window
@@ -158,7 +173,9 @@ void main() {
       expect(client.isOnline, isTrue);
     });
 
-    test('7. Pull-to-refresh race: concurrent sync calls wait on same in-flight job', () async {
+    test(
+        '7. Pull-to-refresh race: concurrent sync calls wait on same in-flight job',
+        () async {
       transport.simulatedLatency = const Duration(milliseconds: 150);
 
       await notes.save(Note(id: 'race-note', content: 'Sync race test'));
@@ -173,7 +190,9 @@ void main() {
       expect(results[0].durationMs, equals(results[1].durationMs));
     });
 
-    test('8. Untyped store and delete pass custom headers to outbox and custom pushes', () async {
+    test(
+        '8. Untyped store and delete pass custom headers to outbox and custom pushes',
+        () async {
       await client.store(
         'notes',
         {'id': 'untyped-1', 'content': 'Untyped store'},
@@ -181,13 +200,17 @@ void main() {
         headers: {'X-Custom-Store': 'true'},
       );
 
-      var rows = await client.query('SELECT headers_json FROM _sync_outbox WHERE entity_id = ?', ['untyped-1']);
+      var rows = await client.query(
+          'SELECT headers_json FROM _sync_outbox WHERE entity_id = ?',
+          ['untyped-1']);
       expect(rows, isNotEmpty);
       expect(rows.first['headers_json'], contains('X-Custom-Store'));
 
       await client.sync();
-      expect(transport.customPushes.any((p) => p['entityId'] == 'untyped-1'), isTrue);
-      final push = transport.customPushes.firstWhere((p) => p['entityId'] == 'untyped-1');
+      expect(transport.customPushes.any((p) => p['entityId'] == 'untyped-1'),
+          isTrue);
+      final push = transport.customPushes
+          .firstWhere((p) => p['entityId'] == 'untyped-1');
       expect((push['headers'] as Map)['X-Custom-Store'], equals('true'));
 
       // Delete with custom headers
@@ -198,7 +221,9 @@ void main() {
         headers: {'X-Custom-Delete': 'true'},
       );
 
-      rows = await client.query("SELECT headers_json FROM _sync_outbox WHERE entity_id = ? AND op = 'delete'", ['untyped-1']);
+      rows = await client.query(
+          "SELECT headers_json FROM _sync_outbox WHERE entity_id = ? AND op = 'delete'",
+          ['untyped-1']);
       expect(rows, isNotEmpty);
       expect(rows.first['headers_json'], contains('X-Custom-Delete'));
     });

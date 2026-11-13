@@ -40,7 +40,9 @@ class PagePullOrchestrator {
         chaos: chaos,
       );
       if (resp.error != null) {
-        throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
+        throw resp.error is Exception
+            ? resp.error as Exception
+            : Exception(resp.error.toString());
       }
       if (resp.statusCode == HttpStatus.gone) {
         return const SyncPullResult(status: SyncPullStatus.expiredCursor);
@@ -56,7 +58,8 @@ class PagePullOrchestrator {
       }
 
       final bodyJson = jsonDecode(resp.body) as Map<String, dynamic>;
-      final changes = (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
+      final changes =
+          (bodyJson['changes'] as List).cast<Map<String, dynamic>>();
       final nextCursor = bodyJson['next_cursor'] as int;
       final hasMore = bodyJson['has_more'] as bool;
 
@@ -79,7 +82,8 @@ class PagePullOrchestrator {
         hasMore: hasMore,
       );
     } catch (e) {
-      return SyncPullResult(status: SyncPullStatus.networkError, errorMessage: e.toString());
+      return SyncPullResult(
+          status: SyncPullStatus.networkError, errorMessage: e.toString());
     }
   }
 

@@ -19,7 +19,9 @@ import 'ui/widgets/undo_toast.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+    const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark),
   );
   runApp(const OrbitSyncExampleApp());
 }
@@ -53,9 +55,19 @@ class _TaskScreenState extends State<TaskScreen> {
       final dir = await getApplicationDocumentsDirectory();
       final mock = await MockBackend.start();
       _mockBackend = mock;
-      final client = await OrbitClient.initialize(databasePath: p.join(dir.path, 'orbit_tasks.db'), baseUrl: mock.url);
-      final table = client.collection<Task>(name: 'tasks', endpoint: '/tasks', fromJson: Task.fromJson, toJson: (t) => t.toJson());
-      if (mounted) setState(() { _orbit = client; _tasks = table; _initError = null; });
+      final client = await OrbitClient.initialize(
+          databasePath: p.join(dir.path, 'orbit_tasks.db'), baseUrl: mock.url);
+      final table = client.collection<Task>(
+          name: 'tasks',
+          endpoint: '/tasks',
+          fromJson: Task.fromJson,
+          toJson: (t) => t.toJson());
+      if (mounted)
+        setState(() {
+          _orbit = client;
+          _tasks = table;
+          _initError = null;
+        });
     } catch (e) {
       if (mounted) setState(() => _initError = e.toString());
     }
@@ -72,13 +84,16 @@ class _TaskScreenState extends State<TaskScreen> {
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   Future<void> _addTask(String title) async {
     if (_tasks == null || title.trim().isEmpty) return;
     try {
-      await _tasks!.save(Task(title: title.trim(), createdAt: DateTime.now().millisecondsSinceEpoch));
+      await _tasks!.save(Task(
+          title: title.trim(),
+          createdAt: DateTime.now().millisecondsSinceEpoch));
     } catch (e) {
       _showError('Failed to save task: $e');
     }
@@ -87,7 +102,8 @@ class _TaskScreenState extends State<TaskScreen> {
   Future<void> _toggle(Task t, bool done) async {
     if (_tasks == null) return;
     try {
-      await _tasks!.save(Task(id: t.id, title: t.title, isDone: done, createdAt: t.createdAt));
+      await _tasks!.save(
+          Task(id: t.id, title: t.title, isDone: done, createdAt: t.createdAt));
     } catch (e) {
       _showError('Failed to update task: $e');
     }
@@ -99,7 +115,9 @@ class _TaskScreenState extends State<TaskScreen> {
     setState(() => _recentlyDeleted = t);
     try {
       await _tasks!.delete(t.id!);
-      _undoTimer = Timer(const Duration(seconds: 4), () { if (mounted) setState(() => _recentlyDeleted = null); });
+      _undoTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _recentlyDeleted = null);
+      });
     } catch (e) {
       _showError('Failed to delete task: $e');
     }
@@ -120,9 +138,16 @@ class _TaskScreenState extends State<TaskScreen> {
   Future<void> _seedDemo() async {
     if (_tasks == null) return;
     try {
-      final samples = ['🛒 Buy groceries', '🚀 Test airplane mode', '📚 Read offline sync docs'];
+      final samples = [
+        '🛒 Buy groceries',
+        '🚀 Test airplane mode',
+        '📚 Read offline sync docs'
+      ];
       for (var i = 0; i < samples.length; i++) {
-        await _tasks!.save(Task(title: samples[i], isDone: i == 0, createdAt: DateTime.now().millisecondsSinceEpoch - i * 60000));
+        await _tasks!.save(Task(
+            title: samples[i],
+            isDone: i == 0,
+            createdAt: DateTime.now().millisecondsSinceEpoch - i * 60000));
       }
     } catch (e) {
       _showError('Failed to seed tasks: $e');
@@ -137,18 +162,21 @@ class _TaskScreenState extends State<TaskScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(CupertinoIcons.exclamationmark_triangle, color: Colors.red, size: 48),
+              const Icon(CupertinoIcons.exclamationmark_triangle,
+                  color: Colors.red, size: 48),
               const SizedBox(height: 12),
               Text('Failed to start engine: $_initError'),
               const SizedBox(height: 12),
-              CupertinoButton.filled(onPressed: _initOrbit, child: const Text('Retry')),
+              CupertinoButton.filled(
+                  onPressed: _initOrbit, child: const Text('Retry')),
             ],
           ),
         ),
       );
     }
     if (_orbit == null || _tasks == null) {
-      return const Scaffold(body: Center(child: CupertinoActivityIndicator(radius: 14)));
+      return const Scaffold(
+          body: Center(child: CupertinoActivityIndicator(radius: 14)));
     }
 
     return Scaffold(
@@ -162,15 +190,37 @@ class _TaskScreenState extends State<TaskScreen> {
             searchQuery: _searchQuery,
             searchController: _searchController,
             onSearchChanged: (v) => setState(() => _searchQuery = v),
-            onSearchCleared: () { _searchController.clear(); setState(() => _searchQuery = ''); },
+            onSearchCleared: () {
+              _searchController.clear();
+              setState(() => _searchQuery = '');
+            },
             onToggle: _toggle,
             onDelete: _delete,
             onSelectSuggestion: _addTask,
           ),
-          Positioned(top: 0, left: 0, right: 0, child: AppleHeaderBar(orbit: _orbit!, onSeedDemo: _seedDemo)),
+          Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppleHeaderBar(orbit: _orbit!, onSeedDemo: _seedDemo)),
           if (_recentlyDeleted != null)
-            Positioned(bottom: 96, left: 16, right: 16, child: Center(child: UndoToast(message: 'Task removed', onUndo: _undo, onDismiss: () => setState(() => _recentlyDeleted = null)))),
-          Positioned(bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? MediaQuery.of(context).viewInsets.bottom + 10 : 24, left: 16, right: 16, child: QuickAddBar(onAdd: _addTask)),
+            Positioned(
+                bottom: 96,
+                left: 16,
+                right: 16,
+                child: Center(
+                    child: UndoToast(
+                        message: 'Task removed',
+                        onUndo: _undo,
+                        onDismiss: () =>
+                            setState(() => _recentlyDeleted = null)))),
+          Positioned(
+              bottom: MediaQuery.of(context).viewInsets.bottom > 0
+                  ? MediaQuery.of(context).viewInsets.bottom + 10
+                  : 24,
+              left: 16,
+              right: 16,
+              child: QuickAddBar(onAdd: _addTask)),
         ],
       ),
     );

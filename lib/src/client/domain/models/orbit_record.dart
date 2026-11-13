@@ -21,13 +21,15 @@ class OrbitRecord<T> {
   });
 
   bool get isDirty => status.isDirty;
-  bool get isPending => status == OrbitSyncStatus.pending || status == OrbitSyncStatus.inFlight;
+  bool get isPending =>
+      status == OrbitSyncStatus.pending || status == OrbitSyncStatus.inFlight;
   bool get isSynced => status == OrbitSyncStatus.synced;
   bool get isRejected => status == OrbitSyncStatus.rejected;
   bool get isPendingDelete => status == OrbitSyncStatus.pendingDelete;
   bool get isFailed => status == OrbitSyncStatus.failed;
   bool get hasPreviousData => previousData != null;
-  bool get isStale => expiresAt != null && expiresAt! <= DateTime.now().millisecondsSinceEpoch;
+  bool get isStale =>
+      expiresAt != null && expiresAt! <= DateTime.now().millisecondsSinceEpoch;
 
   @override
   String toString() => 'OrbitRecord(status: $status, data: $data)';

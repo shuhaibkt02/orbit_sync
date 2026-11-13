@@ -41,12 +41,15 @@ void main() {
       );
 
       await monitor.checkReachability();
-      expect(recordingProbe.probedUris, equals([Uri.parse('https://api.mycompany.com')]));
+      expect(recordingProbe.probedUris,
+          equals([Uri.parse('https://api.mycompany.com')]));
       expect(monitor.isOnline, isTrue);
       monitor.dispose();
     });
 
-    test('Probe targets custom probeUrl when both probeUrl and baseUrl are configured', () async {
+    test(
+        'Probe targets custom probeUrl when both probeUrl and baseUrl are configured',
+        () async {
       final recordingProbe = _RecordingProbe();
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -56,11 +59,14 @@ void main() {
       );
 
       await monitor.checkReachability();
-      expect(recordingProbe.probedUris, equals([Uri.parse('https://api.mycompany.com/health')]));
+      expect(recordingProbe.probedUris,
+          equals([Uri.parse('https://api.mycompany.com/health')]));
       monitor.dispose();
     });
 
-    test('Probe falls back to clean default when neither baseUrl nor probeUrl is provided', () async {
+    test(
+        'Probe falls back to clean default when neither baseUrl nor probeUrl is provided',
+        () async {
       final recordingProbe = _RecordingProbe();
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -68,12 +74,15 @@ void main() {
       );
 
       await monitor.checkReachability();
-      expect(recordingProbe.probedUris, equals([Uri.parse(ConnectivityMonitor.fallbackProbeUrl)]));
+      expect(recordingProbe.probedUris,
+          equals([Uri.parse(ConnectivityMonitor.fallbackProbeUrl)]));
       expect(ConnectivityMonitor.fallbackProbeUrl.contains('gstatic'), isFalse);
       monitor.dispose();
     });
 
-    test('checkReachability(targetUrl) dynamically overrides configured probe URL', () async {
+    test(
+        'checkReachability(targetUrl) dynamically overrides configured probe URL',
+        () async {
       final recordingProbe = _RecordingProbe();
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -81,19 +90,25 @@ void main() {
         debouncePolicy: DebouncePolicy.immediate,
       );
 
-      await monitor.checkReachability(targetUrl: 'https://override.example.com/ping');
-      expect(recordingProbe.probedUris, equals([Uri.parse('https://override.example.com/ping')]));
+      await monitor.checkReachability(
+          targetUrl: 'https://override.example.com/ping');
+      expect(recordingProbe.probedUris,
+          equals([Uri.parse('https://override.example.com/ping')]));
       monitor.dispose();
     });
   });
 
   group('Ticket 15: Asymmetric Network Debouncing & Flapping Protection', () {
-    test('Standard DebouncePolicy defaults to 1.5s reconnect stabilization and 0ms disconnect', () {
-      expect(DebouncePolicy.standard.stabilizationDuration, equals(const Duration(milliseconds: 1500)));
+    test(
+        'Standard DebouncePolicy defaults to 1.5s reconnect stabilization and 0ms disconnect',
+        () {
+      expect(DebouncePolicy.standard.stabilizationDuration,
+          equals(const Duration(milliseconds: 1500)));
       expect(DebouncePolicy.standard.disconnectDuration, equals(Duration.zero));
     });
 
-    test('Signals offline immediately (0ms) when network disconnects', () async {
+    test('Signals offline immediately (0ms) when network disconnects',
+        () async {
       final recordingProbe = _RecordingProbe()..returnOnline = true;
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -108,11 +123,14 @@ void main() {
       stopwatch.stop();
 
       expect(monitor.isOnline, isFalse);
-      expect(stopwatch.elapsedMilliseconds, lessThan(100)); // 0ms delay without waiting 1.5s
+      expect(stopwatch.elapsedMilliseconds,
+          lessThan(100)); // 0ms delay without waiting 1.5s
       monitor.dispose();
     });
 
-    test('Asymmetric 1.5s debounce: suppresses online status until 1.5s window elapses', () async {
+    test(
+        'Asymmetric 1.5s debounce: suppresses online status until 1.5s window elapses',
+        () async {
       final recordingProbe = _RecordingProbe()..returnOnline = false;
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -141,7 +159,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('Flapping protection: reconnect canceled if network cuts within 1.5s window', () async {
+    test(
+        'Flapping protection: reconnect canceled if network cuts within 1.5s window',
+        () async {
       final recordingProbe = _RecordingProbe()..returnOnline = false;
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -174,7 +194,8 @@ void main() {
       monitor.dispose();
     });
 
-    test('bypassDebounce immediately transitions online without waiting 1.5s', () async {
+    test('bypassDebounce immediately transitions online without waiting 1.5s',
+        () async {
       final recordingProbe = _RecordingProbe()..returnOnline = false;
       final monitor = ConnectivityMonitor(
         probe: recordingProbe,
@@ -193,7 +214,9 @@ void main() {
   });
 
   group('Ticket 15: Captive Portal Detection', () {
-    test('Probe returning Content-Type: text/html flags isCaptivePortal: true and isOnline: false', () async {
+    test(
+        'Probe returning Content-Type: text/html flags isCaptivePortal: true and isOnline: false',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '<html><head><title>Hotel Login</title></head><body>Please authenticate</body></html>',
@@ -218,7 +241,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('Probe returning HTML body without text/html header flags isCaptivePortal: true and isOnline: false', () async {
+    test(
+        'Probe returning HTML body without text/html header flags isCaptivePortal: true and isOnline: false',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '<!DOCTYPE html><html><body>Airport Free Wi-Fi Login</body></html>',
@@ -229,7 +254,8 @@ void main() {
       });
 
       final probe = HttpNetworkProbe(client: mockClient);
-      final result = await probe.probe(Uri.parse('https://api.mycompany.com/health'));
+      final result =
+          await probe.probe(Uri.parse('https://api.mycompany.com/health'));
 
       expect(result.isOnline, isFalse);
       expect(result.isCaptivePortal, isTrue);
@@ -237,7 +263,9 @@ void main() {
       probe.dispose();
     });
 
-    test('Unexpected 302 redirect to external captive portal domain flags isCaptivePortal: true', () async {
+    test(
+        'Unexpected 302 redirect to external captive portal domain flags isCaptivePortal: true',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '',
@@ -261,7 +289,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('Unexpected 302 redirect to relative portal path flags isCaptivePortal: true', () async {
+    test(
+        'Unexpected 302 redirect to relative portal path flags isCaptivePortal: true',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '',
@@ -272,14 +302,17 @@ void main() {
       });
 
       final probe = HttpNetworkProbe(client: mockClient);
-      final result = await probe.probe(Uri.parse('https://api.mycompany.com/health'));
+      final result =
+          await probe.probe(Uri.parse('https://api.mycompany.com/health'));
 
       expect(result.isOnline, isFalse);
       expect(result.isCaptivePortal, isTrue);
       probe.dispose();
     });
 
-    test('Clean 200 OK JSON response flags isOnline: true and isCaptivePortal: false', () async {
+    test(
+        'Clean 200 OK JSON response flags isOnline: true and isCaptivePortal: false',
+        () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '{"status": "healthy"}',
@@ -304,7 +337,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('Gateway 401/403/404 JSON response proves gateway reachability without captive portal', () async {
+    test(
+        'Gateway 401/403/404 JSON response proves gateway reachability without captive portal',
+        () async {
       for (final code in [401, 403, 404]) {
         final mockClient = MockClient((request) async {
           return http.Response(
@@ -316,9 +351,11 @@ void main() {
         });
 
         final probe = HttpNetworkProbe(client: mockClient);
-        final result = await probe.probe(Uri.parse('https://api.mycompany.com/health'));
+        final result =
+            await probe.probe(Uri.parse('https://api.mycompany.com/health'));
 
-        expect(result.isOnline, isTrue, reason: 'Status $code from gateway proves DNS & TLS reachability');
+        expect(result.isOnline, isTrue,
+            reason: 'Status $code from gateway proves DNS & TLS reachability');
         expect(result.isCaptivePortal, isFalse);
         probe.dispose();
       }
@@ -337,7 +374,9 @@ void main() {
       expect(NetworkConnectionType.vpn.isMetered, isFalse);
     });
 
-    test('Connection type transitions dynamically update ConnectivityMonitor and emit state', () async {
+    test(
+        'Connection type transitions dynamically update ConnectivityMonitor and emit state',
+        () async {
       final typeProvider = DefaultNetworkTypeProvider();
       final monitor = ConnectivityMonitor(
         probe: _RecordingProbe(),

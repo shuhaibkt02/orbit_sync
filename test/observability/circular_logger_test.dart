@@ -3,7 +3,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 6 Observability: Circular Logger (Challenge 1)', () {
-    test('enforces in-memory capacity cap and evicts oldest entries (FIFO)', () {
+    test('enforces in-memory capacity cap and evicts oldest entries (FIFO)',
+        () {
       final logger = SyncLogger(capacity: 10, minLevel: LogLevel.debug);
       expect(logger.isEmpty, isTrue);
 

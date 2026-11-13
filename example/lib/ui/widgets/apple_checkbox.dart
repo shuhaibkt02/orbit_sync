@@ -20,7 +20,8 @@ class AppleCheckbox extends StatefulWidget {
   State<AppleCheckbox> createState() => _AppleCheckboxState();
 }
 
-class _AppleCheckboxState extends State<AppleCheckbox> with SingleTickerProviderStateMixin {
+class _AppleCheckboxState extends State<AppleCheckbox>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _checkScale;
 

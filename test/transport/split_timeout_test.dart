@@ -37,7 +37,8 @@ class _StallingClient extends http.BaseClient {
 void main() {
   group('Layer 4 Transport: Split Timeout & Zombie Socket Defense', () {
     test('Connect timeout triggers when connection handshake stalls', () async {
-      final stallingClient = _StallingClient(stallConnect: const Duration(milliseconds: 150));
+      final stallingClient =
+          _StallingClient(stallConnect: const Duration(milliseconds: 150));
       final adapter = DefaultHttpAdapter(client: stallingClient);
 
       final req = TransportRequest(
@@ -58,8 +59,10 @@ void main() {
       stallingClient.close();
     });
 
-    test('Read/transfer timeout triggers when response stream hangs mid-flight', () async {
-      final stallingClient = _StallingClient(stallBody: const Duration(milliseconds: 200));
+    test('Read/transfer timeout triggers when response stream hangs mid-flight',
+        () async {
+      final stallingClient =
+          _StallingClient(stallBody: const Duration(milliseconds: 200));
       final adapter = DefaultHttpAdapter(client: stallingClient);
 
       final req = TransportRequest(

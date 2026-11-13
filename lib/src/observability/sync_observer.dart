@@ -7,10 +7,12 @@ import 'services/sla_monitor.dart';
 class SyncObserver {
   final SyncLogger logger;
   SlaMonitor? slaMonitor;
-  final Future<void> Function(String mutationId, {bool syncNow})? onRetryMutation;
+  final Future<void> Function(String mutationId, {bool syncNow})?
+      onRetryMutation;
   final Future<void> Function({bool syncNow})? onRetryAllFailed;
 
-  final StreamController<SyncEvent> _controller = StreamController<SyncEvent>.broadcast();
+  final StreamController<SyncEvent> _controller =
+      StreamController<SyncEvent>.broadcast();
   StreamSubscription<SyncEvent>? _slaSub;
   bool _isClosed = false;
 
@@ -33,7 +35,8 @@ class SyncObserver {
 
   Stream<SyncEvent> get events => _controller.stream;
 
-  Stream<T> _filter<T extends SyncEvent>() => events.where((e) => e is T).cast<T>();
+  Stream<T> _filter<T extends SyncEvent>() =>
+      events.where((e) => e is T).cast<T>();
 
   // 1. Connectivity Triggers
   Stream<OnlineEvent> get onOnline => _filter<OnlineEvent>();
@@ -41,19 +44,26 @@ class SyncObserver {
   Stream<ProbeTimeoutEvent> get onProbeTimeout => _filter<ProbeTimeoutEvent>();
 
   // 2. Storage Triggers
-  Stream<MutationQueuedEvent> get onMutationQueued => _filter<MutationQueuedEvent>();
-  Stream<MutationCoalescedEvent> get onMutationCoalesced => _filter<MutationCoalescedEvent>();
-  Stream<DatabasePrunedEvent> get onDatabasePruned => _filter<DatabasePrunedEvent>();
-  Stream<StorageWarningEvent> get onStorageWarning => _filter<StorageWarningEvent>();
+  Stream<MutationQueuedEvent> get onMutationQueued =>
+      _filter<MutationQueuedEvent>();
+  Stream<MutationCoalescedEvent> get onMutationCoalesced =>
+      _filter<MutationCoalescedEvent>();
+  Stream<DatabasePrunedEvent> get onDatabasePruned =>
+      _filter<DatabasePrunedEvent>();
+  Stream<StorageWarningEvent> get onStorageWarning =>
+      _filter<StorageWarningEvent>();
 
   // 3. SLA Monitor Triggers
   Stream<SlaWarningEvent> get onSlaWarning => _filter<SlaWarningEvent>();
   Stream<SlaBreachedEvent> get onSlaBreached => _filter<SlaBreachedEvent>();
 
   // 4. Consensus & Engine Triggers
-  Stream<ConflictDetectedEvent> get onConflictDetected => _filter<ConflictDetectedEvent>();
-  Stream<PoisonPillQuarantinedEvent> get onPoisonPillQuarantined => _filter<PoisonPillQuarantinedEvent>();
-  Stream<CascadeFailureEvent> get onCascadeFailure => _filter<CascadeFailureEvent>();
+  Stream<ConflictDetectedEvent> get onConflictDetected =>
+      _filter<ConflictDetectedEvent>();
+  Stream<PoisonPillQuarantinedEvent> get onPoisonPillQuarantined =>
+      _filter<PoisonPillQuarantinedEvent>();
+  Stream<CascadeFailureEvent> get onCascadeFailure =>
+      _filter<CascadeFailureEvent>();
   Stream<SyncRejectedEvent> get onSyncRejected => _filter<SyncRejectedEvent>();
 
   // 5. Transport Triggers

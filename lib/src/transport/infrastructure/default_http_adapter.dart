@@ -36,11 +36,11 @@ class DefaultHttpAdapter implements SyncHttpAdapter {
 
       // 2. Enforce Read / Transfer Timeout (Body payload streaming)
       final resp = await http.Response.fromStream(streamed).timeout(
-            request.readTimeout,
-            onTimeout: () => throw TimeoutException(
-              'Read timeout after ${request.readTimeout.inSeconds}s',
-            ),
-          );
+        request.readTimeout,
+        onTimeout: () => throw TimeoutException(
+          'Read timeout after ${request.readTimeout.inSeconds}s',
+        ),
+      );
 
       return TransportResponse(
         statusCode: resp.statusCode,
@@ -67,7 +67,8 @@ class DefaultHttpAdapter implements SyncHttpAdapter {
   }) async {
     return TransportResponse(
       statusCode: 0,
-      error: UnsupportedError('pushMultipart is not supported by DefaultHttpAdapter. Use DioHttpAdapter.'),
+      error: UnsupportedError(
+          'pushMultipart is not supported by DefaultHttpAdapter. Use DioHttpAdapter.'),
     );
   }
 

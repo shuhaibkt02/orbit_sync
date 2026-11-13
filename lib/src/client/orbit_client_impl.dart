@@ -67,13 +67,20 @@ class OrbitClientImpl implements OrbitClient {
   final int pullPageLimit;
   final Map<String, dynamic>? scopeFilter;
   final Future<void> Function()? onAuthExpired;
-  final String? Function(String entity, Map<String, dynamic> record)? validateInvariants;
+  final String? Function(String entity, Map<String, dynamic> record)?
+      validateInvariants;
   final void Function(String message)? onLog;
   final SyncTransport? _transport;
   final http.Client? httpClient;
   final BackoffPolicy? backoffPolicy;
 
-  final Map<String, ({Map<String, String> columns, String? foreignKeyClause, String? url})> _registeredTables = {};
+  final Map<
+      String,
+      ({
+        Map<String, String> columns,
+        String? foreignKeyClause,
+        String? url
+      })> _registeredTables = {};
   final Map<String, String? Function(dynamic json)> _idExtractors = {};
   SlaMonitor? _slaMon;
 
@@ -97,7 +104,8 @@ class OrbitClientImpl implements OrbitClient {
   Future<void> syncNow() => _syncCenter.syncNow();
 
   @override
-  Future<void> retryItem(String mutationId) => _syncCenter.retryItem(mutationId);
+  Future<void> retryItem(String mutationId) =>
+      _syncCenter.retryItem(mutationId);
 
   final List<StreamController<dynamic>> _activeWatchControllers = [];
   Timer? _periodicTimer;
@@ -132,16 +140,31 @@ class OrbitClientImpl implements OrbitClient {
         _transport = transport {
     horizonGuard = CausalHorizonGuard(_storage);
     hydrator = EntityHydrator(storage: _storage);
-    _slaMon = SlaMonitor(storage: _storage, nowMsProvider: nowMsProvider)..start();
+    _slaMon = SlaMonitor(storage: _storage, nowMsProvider: nowMsProvider)
+      ..start();
     queryHelper = DashboardQueryHelper(storage: _storage, watchFn: watch);
     observer = SyncObserver(
       slaMonitor: _slaMon,
-      onRetryMutation: (id, {syncNow = false}) async { await queryHelper.retryMutation(id); if (syncNow) await sync(force: true); },
-      onRetryAllFailed: ({syncNow = false}) async { await queryHelper.retryAllFailed(); if (syncNow) await sync(force: true); },
+      onRetryMutation: (id, {syncNow = false}) async {
+        await queryHelper.retryMutation(id);
+        if (syncNow) await sync(force: true);
+      },
+      onRetryAllFailed: ({syncNow = false}) async {
+        await queryHelper.retryAllFailed();
+        if (syncNow) await sync(force: true);
+      },
     );
-    coordinator = SyncCoordinator(worker: _worker, eventBus: eventBus, onEvent: observer.publish);
-    drainOrchestrator = DrainOrchestrator(storage: _storage, worker: _worker, connectivity: connectivity, activeWatchControllers: _activeWatchControllers, awaitInFlightSync: () async => coordinator.currentInFlightSync);
-    final adapter = _worker.transport is HttpSyncTransport ? (_worker.transport as HttpSyncTransport).adapter : null;
+    coordinator = SyncCoordinator(
+        worker: _worker, eventBus: eventBus, onEvent: observer.publish);
+    drainOrchestrator = DrainOrchestrator(
+        storage: _storage,
+        worker: _worker,
+        connectivity: connectivity,
+        activeWatchControllers: _activeWatchControllers,
+        awaitInFlightSync: () async => coordinator.currentInFlightSync);
+    final adapter = _worker.transport is HttpSyncTransport
+        ? (_worker.transport as HttpSyncTransport).adapter
+        : null;
     _registrar = ModelRegistrar(
       storage: _storage,
       baseUrl: baseUrl,
@@ -150,17 +173,28 @@ class OrbitClientImpl implements OrbitClient {
       adapter: adapter,
       connectivity: connectivity,
     );
-    _crudHelper = EntityCrudHelper(storage: _storage, observer: observer, isClosed: () => drainOrchestrator.isClosed);
+    _crudHelper = EntityCrudHelper(
+        storage: _storage,
+        observer: observer,
+        isClosed: () => drainOrchestrator.isClosed);
     _syncCenter = OrbitSyncCenterImpl(
       storage: _storage,
       syncNowFn: () => sync(force: true),
       nowMsProvider: nowMsProvider,
     );
 
-    connectivity.onConnectivityChanged.listen((on) => observer.publish(on ? OnlineEvent(timestamp: DateTime.now().toUtc()) : OfflineEvent(timestamp: DateTime.now().toUtc())));
-    connectivity.onProbeTimeout = (t, ep) => observer.publish(ProbeTimeoutEvent(timestamp: DateTime.now().toUtc(), targetUrl: ep, latencyMs: t.inMilliseconds));
+    connectivity.onConnectivityChanged.listen((on) => observer.publish(on
+        ? OnlineEvent(timestamp: DateTime.now().toUtc())
+        : OfflineEvent(timestamp: DateTime.now().toUtc())));
+    connectivity.onProbeTimeout = (t, ep) => observer.publish(ProbeTimeoutEvent(
+        timestamp: DateTime.now().toUtc(),
+        targetUrl: ep,
+        latencyMs: t.inMilliseconds));
     final origAuth = _worker.onAuthExpired;
-    _worker.onAuthExpired = () async { observer.publish(AuthExpiredEvent(timestamp: DateTime.now().toUtc())); await origAuth?.call(); };
+    _worker.onAuthExpired = () async {
+      observer.publish(AuthExpiredEvent(timestamp: DateTime.now().toUtc()));
+      await origAuth?.call();
+    };
   }
 
   @override
@@ -205,7 +239,9 @@ class OrbitClientImpl implements OrbitClient {
     Map<String, String> Function()? queryParams,
     String? Function(dynamic json)? idExtractor,
   }) {
-    final effectiveEp = endpoint is RestEndpoint ? endpoint.path : (endpoint?.toString() ?? path ?? '/$name');
+    final effectiveEp = endpoint is RestEndpoint
+        ? endpoint.path
+        : (endpoint?.toString() ?? path ?? '/$name');
     _crudHelper.entityUrls[name] = effectiveEp;
     if (idExtractor != null) {
       _idExtractors[name] = idExtractor;
@@ -358,13 +394,20 @@ class OrbitClientImpl implements OrbitClient {
   bool get isOnline => connectivity.isOnline;
 
   @override
-  Future<void> registerTable(String entityName, Map<String, String> columnTypes, {String? foreignKeyClause, String? url}) async {
-    _registeredTables[entityName] = (columns: columnTypes, foreignKeyClause: foreignKeyClause, url: url);
-    await _crudHelper.registerTable(entityName, columnTypes, foreignKeyClause: foreignKeyClause, url: url);
+  Future<void> registerTable(String entityName, Map<String, String> columnTypes,
+      {String? foreignKeyClause, String? url}) async {
+    _registeredTables[entityName] =
+        (columns: columnTypes, foreignKeyClause: foreignKeyClause, url: url);
+    await _crudHelper.registerTable(entityName, columnTypes,
+        foreignKeyClause: foreignKeyClause, url: url);
   }
 
-  Future<void> registerEntity(String entityName, {String? url, Map<String, String> columnTypes = const {}, String? foreignKeyClause}) =>
-      registerTable(entityName, columnTypes, foreignKeyClause: foreignKeyClause, url: url);
+  Future<void> registerEntity(String entityName,
+          {String? url,
+          Map<String, String> columnTypes = const {},
+          String? foreignKeyClause}) =>
+      registerTable(entityName, columnTypes,
+          foreignKeyClause: foreignKeyClause, url: url);
 
   Future<String> save({
     required String entity,
@@ -470,49 +513,92 @@ class OrbitClientImpl implements OrbitClient {
       );
 
   @override
-  Future<bool> undoDelete({String? entity, required String id}) => _crudHelper.undoDelete(entity: entity, id: id);
-  Future<List<Map<String, dynamic>>> restore(String entity, {String? where, List<dynamic> whereArgs = const [], String? orderBy}) =>
-      _crudHelper.restore(entity, where: where, whereArgs: whereArgs, orderBy: orderBy);
-  Future<Map<String, dynamic>?> restoreById(String entity, String id) => _crudHelper.restoreById(entity, id);
+  Future<bool> undoDelete({String? entity, required String id}) =>
+      _crudHelper.undoDelete(entity: entity, id: id);
+  Future<List<Map<String, dynamic>>> restore(String entity,
+          {String? where,
+          List<dynamic> whereArgs = const [],
+          String? orderBy}) =>
+      _crudHelper.restore(entity,
+          where: where, whereArgs: whereArgs, orderBy: orderBy);
+  Future<Map<String, dynamic>?> restoreById(String entity, String id) =>
+      _crudHelper.restoreById(entity, id);
 
   @override
   Future<List<Row>> query(String query, [List<dynamic> parameters = const []]) {
     if (isClosed) throw const ClientClosedException('query');
-    return storage.db.getAll(query, const SqliteTypeSanitizer().sanitizeList(parameters));
+    return storage.db
+        .getAll(query, const SqliteTypeSanitizer().sanitizeList(parameters));
   }
 
   @override
   Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []}) {
     if (isClosed) throw const ClientClosedException('watch');
-    return storage.watch(query, parameters: const SqliteTypeSanitizer().sanitizeList(parameters));
+    return storage.watch(query,
+        parameters: const SqliteTypeSanitizer().sanitizeList(parameters));
   }
 
   @override
   SyncJob sync({String? entity, bool force = false, bool pull = false}) =>
-      coordinator.triggerSync(force: force, isPaused: _isPaused, isClosed: isClosed, pull: pull);
-  Future<int> fetchAndStore(String entity, {required String url, Map<String, String>? headers}) => hydrator.fetchAndStore(entity, url: url, headers: headers, getAuthToken: getAuthToken);
+      coordinator.triggerSync(
+          force: force, isPaused: _isPaused, isClosed: isClosed, pull: pull);
+  Future<int> fetchAndStore(String entity,
+          {required String url, Map<String, String>? headers}) =>
+      hydrator.fetchAndStore(entity,
+          url: url, headers: headers, getAuthToken: getAuthToken);
 
-  Future<void> softRejectRecord(String entity, String id, {String? reason}) async {
-    await horizonGuard.softRejectRecord(entity: entity, id: id, errorMessage: reason);
-    observer.publish(SyncRejectedEvent(timestamp: DateTime.now().toUtc(), entity: entity, entityId: id, errorMessage: reason ?? 'Business rejected'));
+  Future<void> softRejectRecord(String entity, String id,
+      {String? reason}) async {
+    await horizonGuard.softRejectRecord(
+        entity: entity, id: id, errorMessage: reason);
+    observer.publish(SyncRejectedEvent(
+        timestamp: DateTime.now().toUtc(),
+        entity: entity,
+        entityId: id,
+        errorMessage: reason ?? 'Business rejected'));
   }
 
   Future<int> holdDescendants(String parentId) async {
     final h = await horizonGuard.holdDescendantMutations(parentId);
-    if (h > 0) observer.publish(CascadeFailureEvent(timestamp: DateTime.now().toUtc(), parentMutationId: parentId, childMutationId: 'held-$h'));
+    if (h > 0)
+      observer.publish(CascadeFailureEvent(
+          timestamp: DateTime.now().toUtc(),
+          parentMutationId: parentId,
+          childMutationId: 'held-$h'));
     return h;
   }
 
   void startPeriodicSync({Duration? interval}) {
-    _periodicInterval = interval ?? (profile == SyncProfile.basic ? const Duration(seconds: 60) : profile == SyncProfile.standard ? const Duration(seconds: 30) : const Duration(seconds: 15));
+    _periodicInterval = interval ??
+        (profile == SyncProfile.basic
+            ? const Duration(seconds: 60)
+            : profile == SyncProfile.standard
+                ? const Duration(seconds: 30)
+                : const Duration(seconds: 15));
     _periodicTimer?.cancel();
-    _periodicTimer = Timer.periodic(_periodicInterval, (_) { if (!_isPaused) sync(); });
+    _periodicTimer = Timer.periodic(_periodicInterval, (_) {
+      if (!_isPaused) sync();
+    });
   }
 
-  void pauseSync() { _isPaused = true; }
-  void resumeSync() { _isPaused = false; sync(); }
-  Future<void> notifyAppResumed() async { await connectivity.notifyAppResumed(); if (connectivity.isOnline && !_isPaused) await sync(); }
-  StreamSubscription<bool> attachConnectivity(Stream<bool> isOnline) => isOnline.listen((on) { if (on && !_isPaused) sync(); });
+  void pauseSync() {
+    _isPaused = true;
+  }
+
+  void resumeSync() {
+    _isPaused = false;
+    sync();
+  }
+
+  Future<void> notifyAppResumed() async {
+    await connectivity.notifyAppResumed();
+    if (connectivity.isOnline && !_isPaused) await sync();
+  }
+
+  StreamSubscription<bool> attachConnectivity(Stream<bool> isOnline) =>
+      isOnline.listen((on) {
+        if (on && !_isPaused) sync();
+      });
 
   @override
   Future<SyncStatusSummary> getSummary() => queryHelper.getSummary();
@@ -523,27 +609,36 @@ class OrbitClientImpl implements OrbitClient {
   @override
   Stream<List<SyncFailure>> watchFailures() => queryHelper.watchFailures();
   @override
-  Stream<ResultSet> watchFailedMutations() => watch("SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC");
+  Stream<ResultSet> watchFailedMutations() => watch(
+      "SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC");
   @override
-  Future<List<Row>> getFailedMutations() => query("SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC");
+  Future<List<Row>> getFailedMutations() => query(
+      "SELECT * FROM _sync_outbox WHERE status IN ('failed', 'dlq', 'validation_error') ORDER BY created_at DESC");
   @override
   Future<int> pruneExpiredCache(String entity) async {
     final count = await storage.pruneExpiredCache(entity);
-    if (count > 0) observer.publish(DatabasePrunedEvent(timestamp: DateTime.now().toUtc(), prunedCount: count));
+    if (count > 0)
+      observer.publish(DatabasePrunedEvent(
+          timestamp: DateTime.now().toUtc(), prunedCount: count));
     return count;
   }
 
   @override
-  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) =>
+  Future<int> pruneSyncedOutbox(
+          {Duration retention = const Duration(days: 7)}) =>
       storage.pruneSyncedOutbox(retention: retention);
   @override
-  Future<List<OutboxRecord>> getRecords({String? status, int limit = 100}) => queryHelper.getRecords(status: status, limit: limit);
+  Future<List<OutboxRecord>> getRecords({String? status, int limit = 100}) =>
+      queryHelper.getRecords(status: status, limit: limit);
   @override
-  Stream<List<OutboxRecord>> watchRecords({String? status, int limit = 100}) => queryHelper.watchRecords(status: status, limit: limit);
+  Stream<List<OutboxRecord>> watchRecords({String? status, int limit = 100}) =>
+      queryHelper.watchRecords(status: status, limit: limit);
   @override
-  Future<List<OutboxRecord>> getStaleRecords({required Duration maxAge}) => queryHelper.getStaleRecords(maxAge: maxAge);
+  Future<List<OutboxRecord>> getStaleRecords({required Duration maxAge}) =>
+      queryHelper.getStaleRecords(maxAge: maxAge);
   @override
-  Stream<List<OutboxRecord>> watchStaleRecords({required Duration maxAge}) => queryHelper.watchStaleRecords(maxAge: maxAge);
+  Stream<List<OutboxRecord>> watchStaleRecords({required Duration maxAge}) =>
+      queryHelper.watchStaleRecords(maxAge: maxAge);
 
   @override
   Future<void> retryMutation(String mutationId, {bool syncNow = false}) async {
@@ -558,10 +653,12 @@ class OrbitClientImpl implements OrbitClient {
   }
 
   @override
-  Future<void> cancelMutation(String mutationId) => queryHelper.cancelMutation(mutationId);
+  Future<void> cancelMutation(String mutationId) =>
+      queryHelper.cancelMutation(mutationId);
 
   @override
-  Future<void> markSynced(String mutationId) => queryHelper.markSynced(mutationId);
+  Future<void> markSynced(String mutationId) =>
+      queryHelper.markSynced(mutationId);
 
   @override
   Future<void> switchUser(String newUserId) async {
@@ -570,7 +667,8 @@ class OrbitClientImpl implements OrbitClient {
 
     if (coordinator.isSyncing && coordinator.currentInFlightSync != null) {
       try {
-        await coordinator.currentInFlightSync!.timeout(const Duration(seconds: 2));
+        await coordinator.currentInFlightSync!
+            .timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
 
@@ -679,11 +777,13 @@ class OrbitClientImpl implements OrbitClient {
   }
 
   @override
-  Future<void> close({Duration drainTimeout = const Duration(seconds: 3)}) async {
+  Future<void> close(
+      {Duration drainTimeout = const Duration(seconds: 3)}) async {
     await observer.dispose();
     await _syncCenter.dispose();
     await eventBus.dispose();
-    await drainOrchestrator.executeClose(drainTimeout: drainTimeout, periodicTimer: _periodicTimer);
+    await drainOrchestrator.executeClose(
+        drainTimeout: drainTimeout, periodicTimer: _periodicTimer);
     _periodicTimer = null;
   }
 }

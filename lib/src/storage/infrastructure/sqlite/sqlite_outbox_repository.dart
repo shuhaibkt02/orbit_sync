@@ -112,12 +112,15 @@ class SqliteOutboxRepository implements IOutboxRepository {
   }
 
   @override
-  Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) {
-    return SqliteBaselineManager.rollbackOptimistic(db, mutationId, status: status);
+  Future<void> rollbackOptimistic(String mutationId,
+      {String status = 'conflict'}) {
+    return SqliteBaselineManager.rollbackOptimistic(db, mutationId,
+        status: status);
   }
 
   @override
-  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) {
+  Future<int> pruneSyncedOutbox(
+      {Duration retention = const Duration(days: 7)}) {
     return SqliteCacheCleaner.pruneSyncedOutbox(db, retention: retention);
   }
 
@@ -133,7 +136,8 @@ class SqliteOutboxRepository implements IOutboxRepository {
 
   @override
   Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) {
-    return SqliteCacheCleaner.pruneToQuota(db, entity, maxCacheRecords: maxCacheRecords);
+    return SqliteCacheCleaner.pruneToQuota(db, entity,
+        maxCacheRecords: maxCacheRecords);
   }
 
   @override

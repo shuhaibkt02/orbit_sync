@@ -29,10 +29,12 @@ class SqliteOutboxDeleter {
     return await db.writeTransaction<String?>((tx) async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
-      final tableExists = knownColumns.contains('$entity:id') || (await tx.getAll(
-        'SELECT 1 FROM sqlite_master WHERE type="table" AND name = ?',
-        [entity],
-      )).isNotEmpty;
+      final tableExists = knownColumns.contains('$entity:id') ||
+          (await tx.getAll(
+            'SELECT 1 FROM sqlite_master WHERE type="table" AND name = ?',
+            [entity],
+          ))
+              .isNotEmpty;
       if (tableExists) {
         knownColumns.add('$entity:id');
       }
@@ -57,12 +59,14 @@ class SqliteOutboxDeleter {
       int baseVersion = 1;
 
       if (tableExists) {
-        final baseline = await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
+        final baseline =
+            await SqliteBaselineManager.readExistingBaseline(tx, entity, id);
         baseSnapshotJson = baseline.snapshot;
         baseVersion = baseline.version;
       }
 
-      final dispatchAfter = effectiveUndo != null ? now + effectiveUndo.inMilliseconds : now;
+      final dispatchAfter =
+          effectiveUndo != null ? now + effectiveUndo.inMilliseconds : now;
       if (tableExists) {
         try {
           final tables = await tx.getAll(
@@ -71,7 +75,8 @@ class SqliteOutboxDeleter {
           for (final t in tables) {
             final childTable = t['name'] as String;
             if (childTable == entity) continue;
-            final fks = await tx.getAll('PRAGMA foreign_key_list("$childTable");');
+            final fks =
+                await tx.getAll('PRAGMA foreign_key_list("$childTable");');
             for (final fk in fks) {
               if (fk['table'] == entity) {
                 final childFkCol = fk['from'] as String;

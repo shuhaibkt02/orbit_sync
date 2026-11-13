@@ -5,8 +5,10 @@ import 'package:orbit_sync/orbit_sync.dart';
 import '../storage/storage_test_helpers.dart';
 
 class _HookableTransport implements SyncTransport {
-  final Future<void> Function(List<Map<String, dynamic>> mutations)? onPushBatch;
-  final Future<TransportResponse?> Function(String url, String mutationId)? onPushCustom;
+  final Future<void> Function(List<Map<String, dynamic>> mutations)?
+      onPushBatch;
+  final Future<TransportResponse?> Function(String url, String mutationId)?
+      onPushCustom;
 
   _HookableTransport({this.onPushBatch, this.onPushCustom});
 
@@ -63,7 +65,8 @@ class _HookableTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    return TransportResponse(statusCode: 200, body: '{"changes":[],"next_cursor":0}');
+    return TransportResponse(
+        statusCode: 200, body: '{"changes":[],"next_cursor":0}');
   }
 
   @override
@@ -74,7 +77,9 @@ class _HookableTransport implements SyncTransport {
 }
 
 void main() {
-  group('Ticket 09: Outbox Atomic Lease Locking & 60-Second Zombie Crash Recovery', () {
+  group(
+      'Ticket 09: Outbox Atomic Lease Locking & 60-Second Zombie Crash Recovery',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
@@ -91,7 +96,9 @@ void main() {
       }
     });
 
-    test('Test 1: Atomic candidate claiming marks rows in_flight and updates updated_at', () async {
+    test(
+        'Test 1: Atomic candidate claiming marks rows in_flight and updates updated_at',
+        () async {
       final simulatedNow = 1700000000000;
       String? inFlightStatus;
       int? inFlightUpdatedAt;
@@ -140,7 +147,9 @@ void main() {
       expect(rowAfter['status'], 'synced');
     });
 
-    test('Test 2: Safe finally release - when transport throws an unhandled exception, in_flight rows return to pending', () async {
+    test(
+        'Test 2: Safe finally release - when transport throws an unhandled exception, in_flight rows return to pending',
+        () async {
       final simulatedNow = 1700000000000;
       bool shouldThrow = true;
 
@@ -190,7 +199,9 @@ void main() {
       expect(rowFinal['status'], 'synced');
     });
 
-    test('Test 3: 60-second zombie recovery - rows stuck in in_flight for > 60s are reclaimed to pending, while active leases (< 60s) are left untouched', () async {
+    test(
+        'Test 3: 60-second zombie recovery - rows stuck in in_flight for > 60s are reclaimed to pending, while active leases (< 60s) are left untouched',
+        () async {
       int simulatedNow = 1700000000000;
 
       final transport = InMemorySyncTransport();
@@ -212,15 +223,19 @@ void main() {
             ('mut-active-2', 'tasks', 't-a2', 'save', 'in_flight', ?, ?),
             ('mut-zero-3', 'tasks', 't-z3', 'save', 'in_flight', ?, 0);
         ''', [
-          simulatedNow - 70000, simulatedNow - 70000,
-          simulatedNow - 15000, simulatedNow - 15000,
+          simulatedNow - 70000,
+          simulatedNow - 70000,
+          simulatedNow - 15000,
+          simulatedNow - 15000,
           simulatedNow - 100000,
         ]);
       });
 
       // Invoke reclaimZombies()
       final reclaimedCount = await worker.reclaimZombies();
-      expect(reclaimedCount, 2, reason: 'Must reclaim mut-zombie-1 and mut-zero-3, but NOT mut-active-2');
+      expect(reclaimedCount, 2,
+          reason:
+              'Must reclaim mut-zombie-1 and mut-zero-3, but NOT mut-active-2');
 
       final rowZ1 = await storage.db.get(
         'SELECT status, updated_at FROM _sync_outbox WHERE mutation_id = ?',
@@ -257,9 +272,12 @@ void main() {
       expect(rowA2After['status'], 'synced');
     });
 
-    test('Test 4: Startup crash recovery in SqliteSchema.initSystemSchema resets stranded in_flight mutations older than 60s', () async {
+    test(
+        'Test 4: Startup crash recovery in SqliteSchema.initSystemSchema resets stranded in_flight mutations older than 60s',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final temp = Directory.systemTemp.createTempSync('schema_startup_recovery_');
+      final temp =
+          Directory.systemTemp.createTempSync('schema_startup_recovery_');
       try {
         final db = SqliteDatabase(path: '${temp.path}/schema_rec.db');
         await SqliteSchema.initSystemSchema(db);
@@ -271,18 +289,24 @@ void main() {
             ('startup-zombie', 'tasks', 't-sz', 'save', 'in_flight', ?, ?),
             ('startup-active', 'tasks', 't-sa', 'save', 'in_flight', ?, ?);
         ''', [
-          now - 75000, now - 75000,
-          now - 10000, now - 10000,
+          now - 75000,
+          now - 75000,
+          now - 10000,
+          now - 10000,
         ]);
 
         // Simulate app restart by running initSystemSchema again
         await SqliteSchema.initSystemSchema(db);
 
-        final zombieRow = await db.get("SELECT status FROM _sync_outbox WHERE mutation_id = 'startup-zombie'");
-        expect(zombieRow['status'], 'pending', reason: 'Crash recovery on startup must reclaim > 60s zombie');
+        final zombieRow = await db.get(
+            "SELECT status FROM _sync_outbox WHERE mutation_id = 'startup-zombie'");
+        expect(zombieRow['status'], 'pending',
+            reason: 'Crash recovery on startup must reclaim > 60s zombie');
 
-        final activeRow = await db.get("SELECT status FROM _sync_outbox WHERE mutation_id = 'startup-active'");
-        expect(activeRow['status'], 'in_flight', reason: 'Active lease (< 60s) must remain intact');
+        final activeRow = await db.get(
+            "SELECT status FROM _sync_outbox WHERE mutation_id = 'startup-active'");
+        expect(activeRow['status'], 'in_flight',
+            reason: 'Active lease (< 60s) must remain intact');
 
         await db.close();
       } finally {
@@ -290,7 +314,9 @@ void main() {
       }
     });
 
-    test('Test 5: Concurrent sync runs - simultaneous pushBatch triggers do not double-claim or double-push', () async {
+    test(
+        'Test 5: Concurrent sync runs - simultaneous pushBatch triggers do not double-claim or double-push',
+        () async {
       final pushedMutationIds = <String>[];
       final transport = _HookableTransport(
         onPushBatch: (mutations) async {
@@ -324,12 +350,16 @@ void main() {
 
       final results = await Future.wait(futures);
 
-      final totalApplied = results.fold<int>(0, (sum, res) => sum + res.applied);
-      expect(totalApplied, 5, reason: 'Exactly 5 mutations should have been claimed and applied in total');
+      final totalApplied =
+          results.fold<int>(0, (sum, res) => sum + res.applied);
+      expect(totalApplied, 5,
+          reason:
+              'Exactly 5 mutations should have been claimed and applied in total');
 
       // Verify no double-push or duplication
       expect(pushedMutationIds.length, 5);
-      expect(pushedMutationIds.toSet().length, 5, reason: 'No mutation should be pushed more than once');
+      expect(pushedMutationIds.toSet().length, 5,
+          reason: 'No mutation should be pushed more than once');
 
       // All 5 mutations should be synced
       final syncedRows = await storage.db.getAll(
@@ -338,7 +368,9 @@ void main() {
       expect(syncedRows.length, 5);
     });
 
-    test('Test 6: Safe finally release for custom REST endpoints - undispatched batch items return to pending', () async {
+    test(
+        'Test 6: Safe finally release for custom REST endpoints - undispatched batch items return to pending',
+        () async {
       final simulatedNow = 1700000000000;
       final transport = _HookableTransport(
         onPushCustom: (url, mutationId) async {
@@ -384,7 +416,8 @@ void main() {
       );
       expect(row2['status'], 'pending');
       expect(row2['updated_at'], simulatedNow);
-      expect(row2['retry_count'], 0, reason: 'Undispatched mutation must not consume retry budget');
+      expect(row2['retry_count'], 0,
+          reason: 'Undispatched mutation must not consume retry budget');
     });
   });
 }

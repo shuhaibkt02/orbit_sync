@@ -11,7 +11,10 @@ class SqliteTypeSanitizer {
   /// Converts a single Dart value into a native SQLite primitive.
   dynamic sanitizeValue(dynamic value) {
     if (value == null) return null;
-    if (value is int || value is double || value is String || value is Uint8List) {
+    if (value is int ||
+        value is double ||
+        value is String ||
+        value is Uint8List) {
       return value;
     }
     if (value is bool) {
@@ -27,7 +30,8 @@ class SqliteTypeSanitizer {
   }
 
   /// Sanitizes a list of values (e.g. query parameters or whereArgs).
-  List<dynamic> sanitizeList(List<dynamic> list) => list.map(sanitizeValue).toList();
+  List<dynamic> sanitizeList(List<dynamic> list) =>
+      list.map(sanitizeValue).toList();
 
   /// Sanitizes an entire key-value map for SQLite INSERT/UPDATE execution.
   Map<String, dynamic> sanitizeMap(Map<String, dynamic> input) {
@@ -51,7 +55,8 @@ class SqliteTypeSanitizer {
       } catch (_) {}
     }
     for (final entry in row.entries) {
-      if (entry.key == 'data_json' || entry.key == '_base_snapshot_json') continue;
+      if (entry.key == 'data_json' || entry.key == '_base_snapshot_json')
+        continue;
       final val = entry.value;
       if (val is String && val.isNotEmpty) {
         final first = val[0];

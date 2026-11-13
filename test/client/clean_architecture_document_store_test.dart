@@ -9,7 +9,8 @@ void main() {
   late InMemorySyncTransport transport;
 
   setUp(() async {
-    dbPath = '${Directory.systemTemp.path}/clean_arch_test_${DateTime.now().microsecondsSinceEpoch}.db';
+    dbPath =
+        '${Directory.systemTemp.path}/clean_arch_test_${DateTime.now().microsecondsSinceEpoch}.db';
     transport = SyncTransport.inMemory() as InMemorySyncTransport;
 
     client = await OrbitClient.initialize(
@@ -26,7 +27,9 @@ void main() {
   });
 
   group('Clean Architecture Document Store & Zero Metadata Wire', () {
-    test('1. Pure Payload & Auto-generated Tracking ID: zero ID in payload_json', () async {
+    test(
+        '1. Pure Payload & Auto-generated Tracking ID: zero ID in payload_json',
+        () async {
       // Host app registers table once at startup with URL
       final orders = client.collection<Map<String, dynamic>>(
         name: 'orders',
@@ -37,30 +40,37 @@ void main() {
 
       // Host app saves pure JSON with NO ID and NO URL
       final internalId = await orders.save({
-        'items': [{'title': 'MacBook Pro', 'price': 2499.00}],
+        'items': [
+          {'title': 'MacBook Pro', 'price': 2499.00}
+        ],
         'total': 2499.00,
       });
 
       expect(internalId, isNotEmpty);
 
       // Verify _sync_outbox row
-      final rows = await client.query('SELECT * FROM _sync_outbox WHERE entity_name = ?', ['orders']);
+      final rows = await client.query(
+          'SELECT * FROM _sync_outbox WHERE entity_name = ?', ['orders']);
       expect(rows.length, equals(1));
       final outboxRow = rows.first;
 
       expect(outboxRow['entity_id'], equals(internalId));
-      expect(outboxRow['endpoint_url'], endsWith('/api/v1/orders')); // URL auto-inherited!
+      expect(outboxRow['endpoint_url'],
+          endsWith('/api/v1/orders')); // URL auto-inherited!
       expect(outboxRow['status'], equals('pending'));
 
       // Crucial: payload_json must be 100% pure host-app data with ZERO injected 'id' or 'temp_id'!
-      final payload = jsonDecode(outboxRow['payload_json'] as String) as Map<String, dynamic>;
+      final payload = jsonDecode(outboxRow['payload_json'] as String)
+          as Map<String, dynamic>;
       expect(payload.containsKey('id'), isFalse);
       expect(payload.containsKey('temp_id'), isFalse);
       expect(payload.containsKey('_offline_meta'), isFalse);
       expect(payload['total'], equals(2499.00));
     });
 
-    test('2. Zero Relational Columns: table stores pure JSON in data_json without ALTER TABLE bloat', () async {
+    test(
+        '2. Zero Relational Columns: table stores pure JSON in data_json without ALTER TABLE bloat',
+        () async {
       client.collection<Map<String, dynamic>>(
         name: 'invoices',
         endpoint: '/api/v1/invoices',
@@ -103,7 +113,9 @@ void main() {
 
       // 1. Initial creation with grace window (coalescing enabled)
       final orderId = await orders.save({
-        'items': [{'title': 'MacBook Pro', 'price': 2499.00}],
+        'items': [
+          {'title': 'MacBook Pro', 'price': 2499.00}
+        ],
         'total': 2499.00,
       }, holdFor: const Duration(minutes: 5));
 
@@ -117,22 +129,27 @@ void main() {
       }, id: orderId);
 
       // Verify outbox STILL has only 1 row (coalesced!)
-      final rows = await client.query('SELECT * FROM _sync_outbox WHERE entity_name = ?', ['orders']);
+      final rows = await client.query(
+          'SELECT * FROM _sync_outbox WHERE entity_name = ?', ['orders']);
       expect(rows.length, equals(1));
 
       final outboxRow = rows.first;
-      final payload = jsonDecode(outboxRow['payload_json'] as String) as Map<String, dynamic>;
+      final payload = jsonDecode(outboxRow['payload_json'] as String)
+          as Map<String, dynamic>;
       expect(payload['total'], equals(2598.00)); // Latest state
 
       // Verify revision_history_json holds original snapshot
       expect(outboxRow['revision_history_json'], isNotNull);
-      final history = jsonDecode(outboxRow['revision_history_json'] as String) as List<dynamic>;
+      final history = jsonDecode(outboxRow['revision_history_json'] as String)
+          as List<dynamic>;
       expect(history.length, equals(1));
-      final previousSnapshot = history.first['snapshot'] as Map<String, dynamic>;
+      final previousSnapshot =
+          history.first['snapshot'] as Map<String, dynamic>;
       expect(previousSnapshot['total'], equals(2499.00)); // Original snapshot
     });
 
-    test('4. Transparent WHERE Rewriting on data_json and Pagination', () async {
+    test('4. Transparent WHERE Rewriting on data_json and Pagination',
+        () async {
       final orders = client.collection<Map<String, dynamic>>(
         name: 'orders',
         endpoint: '/api/v1/orders',
@@ -141,9 +158,12 @@ void main() {
       );
 
       // Insert 3 orders
-      await orders.save({'title': 'Order A', 'total': 50.00, 'status': 'completed'});
-      await orders.save({'title': 'Order B', 'total': 500.00, 'status': 'pending'});
-      await orders.save({'title': 'Order C', 'total': 1200.00, 'status': 'pending'});
+      await orders
+          .save({'title': 'Order A', 'total': 50.00, 'status': 'completed'});
+      await orders
+          .save({'title': 'Order B', 'total': 500.00, 'status': 'pending'});
+      await orders
+          .save({'title': 'Order C', 'total': 1200.00, 'status': 'pending'});
 
       // Query using simple Dart where syntax (auto-rewritten to json_extract)
       final pendingOrders = await orders.query(
@@ -165,7 +185,9 @@ void main() {
       expect(paginated.length, equals(1));
     });
 
-    test('5. Zero Guessing Server ID Swap: custom idExtractor harvests canonical ID', () async {
+    test(
+        '5. Zero Guessing Server ID Swap: custom idExtractor harvests canonical ID',
+        () async {
       // Configure with custom backend ID key: 'invoice_number'
       final invoices = client.collection<Map<String, dynamic>>(
         name: 'invoices',
@@ -197,7 +219,9 @@ void main() {
       expect(invoiceInDb!['client'], equals('Acme'));
 
       // Outbox marked synced
-      final outboxRows = await client.query('SELECT status, entity_id FROM _sync_outbox WHERE entity_name = ?', ['invoices']);
+      final outboxRows = await client.query(
+          'SELECT status, entity_id FROM _sync_outbox WHERE entity_name = ?',
+          ['invoices']);
       expect(outboxRows.first['status'], equals('synced'));
       expect(outboxRows.first['entity_id'], equals('INV-2026-9999'));
     });

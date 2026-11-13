@@ -43,18 +43,26 @@ class TaskListView extends StatelessWidget {
         final uniqueMap = <String, OrbitRecord<Task>>{};
         for (final r in raw) {
           final id = r.data.id ?? r.data.title;
-          if (!uniqueMap.containsKey(id) || r.status != OrbitSyncStatus.synced) uniqueMap[id] = r;
+          if (!uniqueMap.containsKey(id) || r.status != OrbitSyncStatus.synced)
+            uniqueMap[id] = r;
         }
-        final all = uniqueMap.values.toList()..sort((a, b) => a.data.isDone != b.data.isDone ? (a.data.isDone ? 1 : -1) : b.data.createdAt.compareTo(a.data.createdAt));
+        final all = uniqueMap.values.toList()
+          ..sort((a, b) => a.data.isDone != b.data.isDone
+              ? (a.data.isDone ? 1 : -1)
+              : b.data.createdAt.compareTo(a.data.createdAt));
         final active = all.where((r) => !r.data.isDone).length;
         final filtered = all.where((r) {
-          if (selectedFilter == TaskFilter.active && r.data.isDone) return false;
-          if (selectedFilter == TaskFilter.completed && !r.data.isDone) return false;
-          return searchQuery.isEmpty || r.data.title.toLowerCase().contains(searchQuery.toLowerCase());
+          if (selectedFilter == TaskFilter.active && r.data.isDone)
+            return false;
+          if (selectedFilter == TaskFilter.completed && !r.data.isDone)
+            return false;
+          return searchQuery.isEmpty ||
+              r.data.title.toLowerCase().contains(searchQuery.toLowerCase());
         }).toList();
 
         return CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics()),
           slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: 120)),
             SliverToBoxAdapter(
@@ -62,11 +70,22 @@ class TaskListView extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
-                    AppleSearchBar(controller: searchController, onChanged: onSearchChanged, onClear: onSearchCleared),
+                    AppleSearchBar(
+                        controller: searchController,
+                        onChanged: onSearchChanged,
+                        onClear: onSearchCleared),
                     const SizedBox(height: 12),
                     AppleSegmentedControl<TaskFilter>(
-                      items: const {TaskFilter.all: 'All', TaskFilter.active: 'Active', TaskFilter.completed: 'Done'},
-                      counts: {TaskFilter.all: all.length, TaskFilter.active: active, TaskFilter.completed: all.length - active},
+                      items: const {
+                        TaskFilter.all: 'All',
+                        TaskFilter.active: 'Active',
+                        TaskFilter.completed: 'Done'
+                      },
+                      counts: {
+                        TaskFilter.all: all.length,
+                        TaskFilter.active: active,
+                        TaskFilter.completed: all.length - active
+                      },
                       selected: selectedFilter,
                       onSelected: onFilterChanged,
                     ),
@@ -76,16 +95,30 @@ class TaskListView extends StatelessWidget {
               ),
             ),
             if (filtered.isEmpty)
-              SliverFillRemaining(hasScrollBody: false, child: TaskEmptyState(hasAnyTasks: all.isNotEmpty, isSearching: searchQuery.isNotEmpty, onSelectSuggestion: onSelectSuggestion))
+              SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: TaskEmptyState(
+                      hasAnyTasks: all.isNotEmpty,
+                      isSearching: searchQuery.isNotEmpty,
+                      onSelectSuggestion: onSelectSuggestion))
             else
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    decoration: BoxDecoration(color: AppleTheme.secondaryBg(context), borderRadius: BorderRadius.circular(AppleTheme.radiusLarge)),
+                    decoration: BoxDecoration(
+                        color: AppleTheme.secondaryBg(context),
+                        borderRadius:
+                            BorderRadius.circular(AppleTheme.radiusLarge)),
                     clipBehavior: Clip.antiAlias,
                     child: Column(
-                      children: List.generate(filtered.length, (i) => TaskCard(record: filtered[i], isLast: i == filtered.length - 1, onToggle: (v) => onToggle(filtered[i].data, v), onDelete: () => onDelete(filtered[i].data))),
+                      children: List.generate(
+                          filtered.length,
+                          (i) => TaskCard(
+                              record: filtered[i],
+                              isLast: i == filtered.length - 1,
+                              onToggle: (v) => onToggle(filtered[i].data, v),
+                              onDelete: () => onDelete(filtered[i].data))),
                     ),
                   ),
                 ),

@@ -48,7 +48,9 @@ void main() {
       }
     });
 
-    test('Test 3: Large retry_count (10^6) does not cause integer overflow or negative duration', () {
+    test(
+        'Test 3: Large retry_count (10^6) does not cause integer overflow or negative duration',
+        () {
       final policy = BackoffPolicy(
         base: const Duration(seconds: 1),
         max: const Duration(minutes: 15),
@@ -56,7 +58,8 @@ void main() {
       );
 
       final delay = policy.delayFor(1000000);
-      expect(delay, equals(const Duration(minutes: 15)), reason: 'Exponential shift clamped without overflow');
+      expect(delay, equals(const Duration(minutes: 15)),
+          reason: 'Exponential shift clamped without overflow');
       expect(delay.isNegative, isFalse);
     });
   });

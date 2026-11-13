@@ -37,7 +37,9 @@ class SqliteIdMapRepository implements IIdMapRepository {
       'SELECT canonical_server_id FROM _sync_id_map WHERE entity_name = ? AND local_temp_id = ?',
       [entity, localTempId],
     );
-    return rows.isNotEmpty ? rows.first['canonical_server_id'] as String? : null;
+    return rows.isNotEmpty
+        ? rows.first['canonical_server_id'] as String?
+        : null;
   }
 
   @override

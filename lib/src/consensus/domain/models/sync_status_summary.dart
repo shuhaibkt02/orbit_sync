@@ -27,8 +27,9 @@ class SyncStatusSummary {
   bool get hasFailures => failed > 0;
 
   /// Age of the oldest unsynced mutation, or null if outbox has no pending items.
-  Duration? get oldestPendingAge =>
-      oldestPendingAt != null ? DateTime.now().difference(oldestPendingAt!) : null;
+  Duration? get oldestPendingAge => oldestPendingAt != null
+      ? DateTime.now().difference(oldestPendingAt!)
+      : null;
 
   @override
   String toString() =>
@@ -68,7 +69,8 @@ class OutboxRecord {
   bool isStale(Duration maxAge) => age > maxAge;
 
   /// True if this mutation is in a terminal error state (DLQ or validation failure).
-  bool get isFailed => status == 'failed' || status == 'dlq' || status == 'validation_error';
+  bool get isFailed =>
+      status == 'failed' || status == 'dlq' || status == 'validation_error';
 
   /// Constructs an [OutboxRecord] from a SQLite outbox row.
   factory OutboxRecord.fromRow(Row row) {

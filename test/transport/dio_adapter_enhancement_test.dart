@@ -6,7 +6,8 @@ import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
-  group('Ticket 07: Dio as First-Class Default Adapter & Wire Sanitization', () {
+  group('Ticket 07: Dio as First-Class Default Adapter & Wire Sanitization',
+      () {
     late Directory tempDir;
 
     setUp(() async {
@@ -20,7 +21,9 @@ void main() {
     });
 
     group('1. Wire Sanitization (sanitizePayload)', () {
-      test('strictly strips all internal flags (_sync_, _offline_, expires_at, updated_at, _base_snapshot_json)', () {
+      test(
+          'strictly strips all internal flags (_sync_, _offline_, expires_at, updated_at, _base_snapshot_json)',
+          () {
         final dirtyPayload = {
           'id': 'rec-123',
           'title': 'Enterprise Task',
@@ -126,14 +129,20 @@ void main() {
     });
 
     group('2. DioHttpAdapter Construction & Split Timeout Anatomy', () {
-      test('fallback internal Dio instance has standard split timeouts (3s connect, 15s receive)', () {
+      test(
+          'fallback internal Dio instance has standard split timeouts (3s connect, 15s receive)',
+          () {
         final adapter = DioHttpAdapter();
-        expect(adapter.dio.options.connectTimeout, equals(const Duration(seconds: 3)));
-        expect(adapter.dio.options.receiveTimeout, equals(const Duration(seconds: 15)));
+        expect(adapter.dio.options.connectTimeout,
+            equals(const Duration(seconds: 3)));
+        expect(adapter.dio.options.receiveTimeout,
+            equals(const Duration(seconds: 15)));
         adapter.dispose();
       });
 
-      test('adopts host pre-configured Dio instance without overriding custom options', () {
+      test(
+          'adopts host pre-configured Dio instance without overriding custom options',
+          () {
         final hostDio = Dio(
           BaseOptions(
             baseUrl: 'https://custom.corp.net',
@@ -145,8 +154,10 @@ void main() {
 
         expect(adapter.dio, same(hostDio));
         expect(adapter.dio.options.baseUrl, equals('https://custom.corp.net'));
-        expect(adapter.dio.options.connectTimeout, equals(const Duration(seconds: 7)));
-        expect(adapter.dio.options.receiveTimeout, equals(const Duration(seconds: 25)));
+        expect(adapter.dio.options.connectTimeout,
+            equals(const Duration(seconds: 7)));
+        expect(adapter.dio.options.receiveTimeout,
+            equals(const Duration(seconds: 25)));
 
         // Disposing does not close the host app's owned Dio instance
         adapter.dispose();
@@ -155,7 +166,9 @@ void main() {
     });
 
     group('3. OrbitClient.initialize Integration & Adapter Selection', () {
-      test('defaults to DioHttpAdapter when dio is omitted and no custom transport is provided', () async {
+      test(
+          'defaults to DioHttpAdapter when dio is omitted and no custom transport is provided',
+          () async {
         final dbPath = '${tempDir.path}/dio_default.db';
         final client = await OrbitClient.initialize(
           databasePath: dbPath,
@@ -166,13 +179,17 @@ void main() {
         final httpTransport = client.transport as HttpSyncTransport;
         expect(httpTransport.adapter, isA<DioHttpAdapter>());
         final dioAdapter = httpTransport.adapter as DioHttpAdapter;
-        expect(dioAdapter.dio.options.connectTimeout, equals(const Duration(seconds: 3)));
-        expect(dioAdapter.dio.options.receiveTimeout, equals(const Duration(seconds: 15)));
+        expect(dioAdapter.dio.options.connectTimeout,
+            equals(const Duration(seconds: 3)));
+        expect(dioAdapter.dio.options.receiveTimeout,
+            equals(const Duration(seconds: 15)));
 
         await client.close();
       });
 
-      test('accepts host pre-configured Dio client and uses it as transport engine', () async {
+      test(
+          'accepts host pre-configured Dio client and uses it as transport engine',
+          () async {
         final dbPath = '${tempDir.path}/dio_custom.db';
         final hostDio = Dio(BaseOptions(baseUrl: 'https://api.enterprise.com'));
         bool interceptorCalled = false;
@@ -217,7 +234,9 @@ void main() {
         await client.close();
       });
 
-      test('preserves DefaultHttpAdapter (package:http) when explicitly configured via httpClient', () async {
+      test(
+          'preserves DefaultHttpAdapter (package:http) when explicitly configured via httpClient',
+          () async {
         final dbPath = '${tempDir.path}/http_default.db';
         final mockHttpClient = http.Client();
         final client = await OrbitClient.initialize(
@@ -249,7 +268,9 @@ void main() {
     });
 
     group('4. Automatic Idempotency-Key & Authorization Injection', () {
-      test('injects Idempotency-Key and Authorization on mutating HTTP calls (POST, PUT, PATCH, DELETE)', () async {
+      test(
+          'injects Idempotency-Key and Authorization on mutating HTTP calls (POST, PUT, PATCH, DELETE)',
+          () async {
         final dio = Dio();
         final capturedRequests = <RequestOptions>[];
 
@@ -282,8 +303,10 @@ void main() {
           createdAtMs: 1700000000,
           payload: {'product': 'Laptop'},
         );
-        expect(capturedRequests.last.headers['Idempotency-Key'], equals('mut-post-1'));
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers['Idempotency-Key'],
+            equals('mut-post-1'));
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         // 2. PUT (Mutating)
         await transport.pushCustom(
@@ -293,8 +316,10 @@ void main() {
           createdAtMs: 1700000001,
           payload: {'product': 'Laptop Pro'},
         );
-        expect(capturedRequests.last.headers['Idempotency-Key'], equals('mut-put-2'));
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers['Idempotency-Key'],
+            equals('mut-put-2'));
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         // 3. PATCH (Mutating)
         await transport.pushCustom(
@@ -304,8 +329,10 @@ void main() {
           createdAtMs: 1700000002,
           payload: {'status': 'shipped'},
         );
-        expect(capturedRequests.last.headers['Idempotency-Key'], equals('mut-patch-3'));
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers['Idempotency-Key'],
+            equals('mut-patch-3'));
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         // 4. DELETE (Mutating)
         await transport.pushCustom(
@@ -314,28 +341,40 @@ void main() {
           mutationId: 'mut-del-4',
           createdAtMs: 1700000003,
         );
-        expect(capturedRequests.last.headers['Idempotency-Key'], equals('mut-del-4'));
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers['Idempotency-Key'],
+            equals('mut-del-4'));
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         // 5. Batch Push (Mutating POST)
         await transport.pushBatch(
           mutations: [
-            {'entity': 'orders', 'id': 'ord-100', 'op': 'create', 'payload': {'item': 'Desk'}},
+            {
+              'entity': 'orders',
+              'id': 'ord-100',
+              'op': 'create',
+              'payload': {'item': 'Desk'}
+            },
           ],
           idempotencyKey: 'batch-mut-999',
         );
-        expect(capturedRequests.last.headers['Idempotency-Key'], equals('batch-mut-999'));
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers['Idempotency-Key'],
+            equals('batch-mut-999'));
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         // 6. GET / Pull (Non-mutating: MUST NOT inject Idempotency-Key)
         await transport.pull(sinceCursor: 0, limit: 10);
-        expect(capturedRequests.last.headers.containsKey('Idempotency-Key'), isFalse);
-        expect(capturedRequests.last.headers['Authorization'], equals('Bearer jwt-token-xyz'));
+        expect(capturedRequests.last.headers.containsKey('Idempotency-Key'),
+            isFalse);
+        expect(capturedRequests.last.headers['Authorization'],
+            equals('Bearer jwt-token-xyz'));
 
         transport.dispose();
       });
 
-      test('preserves developer-provided custom Idempotency-Key and headers', () async {
+      test('preserves developer-provided custom Idempotency-Key and headers',
+          () async {
         final dio = Dio();
         RequestOptions? capturedOption;
 
@@ -371,7 +410,8 @@ void main() {
           },
         );
 
-        expect(capturedOption!.headers['Idempotency-Key'], equals('developer-custom-key-777'));
+        expect(capturedOption!.headers['Idempotency-Key'],
+            equals('developer-custom-key-777'));
         expect(capturedOption!.headers['X-Tenant-ID'], equals('tenant-acme'));
 
         transport.dispose();
@@ -379,7 +419,8 @@ void main() {
     });
 
     group('5. Request Dispatch & Error Mapping via Dio', () {
-      test('dispatches clean domain body with all internal flags stripped', () async {
+      test('dispatches clean domain body with all internal flags stripped',
+          () async {
         final dio = Dio();
         String? capturedBodyStr;
 
@@ -431,7 +472,9 @@ void main() {
         transport.dispose();
       });
 
-      test('maps Dio HTTP 400 and 500 error responses cleanly to TransportResponse', () async {
+      test(
+          'maps Dio HTTP 400 and 500 error responses cleanly to TransportResponse',
+          () async {
         final dio = Dio();
         dio.interceptors.add(
           InterceptorsWrapper(

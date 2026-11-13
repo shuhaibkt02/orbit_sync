@@ -43,7 +43,8 @@ class SyncLogger {
 
   void debug(String message) => log(LogLevel.debug, message);
   void info(String message) => log(LogLevel.info, message);
-  void warn(String message, [Object? error]) => log(LogLevel.warn, message, error: error);
+  void warn(String message, [Object? error]) =>
+      log(LogLevel.warn, message, error: error);
   void error(String message, [Object? error, StackTrace? stackTrace]) =>
       log(LogLevel.error, message, error: error, stackTrace: stackTrace);
 
@@ -52,17 +53,27 @@ class SyncLogger {
     switch (event) {
       case SlaBreachedEvent(:final entity, :final mutationId, :final age):
         error('SLA Breached: $entity/$mutationId after ${age.inMinutes}m');
-      case PoisonPillQuarantinedEvent(:final entity, :final mutationId, :final reason):
+      case PoisonPillQuarantinedEvent(
+          :final entity,
+          :final mutationId,
+          :final reason
+        ):
         error('Poison Pill Quarantined: $entity/$mutationId - $reason');
       case CascadeFailureEvent(:final parentMutationId, :final childMutationId):
-        error('Cascade Failure: Child $childMutationId held due to parent $parentMutationId');
+        error(
+            'Cascade Failure: Child $childMutationId held due to parent $parentMutationId');
       case SlaWarningEvent(:final entity, :final mutationId, :final age):
-        warn('SLA Warning: $entity/$mutationId approaching deadline (${age.inMinutes}m)');
+        warn(
+            'SLA Warning: $entity/$mutationId approaching deadline (${age.inMinutes}m)');
       case StorageWarningEvent(:final message):
         warn('Storage Warning: $message');
       case RateLimitedEvent(:final retryAfterSeconds):
         warn('Rate Limited: HTTP 429 active for ${retryAfterSeconds}s');
-      case SyncRejectedEvent(:final entity, :final entityId, :final errorMessage):
+      case SyncRejectedEvent(
+          :final entity,
+          :final entityId,
+          :final errorMessage
+        ):
         warn('Sync Rejected: $entity/$entityId - $errorMessage');
       case ConflictDetectedEvent(:final entity, :final entityId):
         warn('Conflict Detected: $entity/$entityId resolved');

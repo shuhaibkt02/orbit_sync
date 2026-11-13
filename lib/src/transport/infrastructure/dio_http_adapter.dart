@@ -31,11 +31,15 @@ class DioHttpAdapter implements SyncHttpAdapter {
   @override
   Future<TransportResponse> send(TransportRequest request) async {
     try {
-      final reqHeaders = CanonicalizedMap<String, String, dynamic>((k) => k.toLowerCase());
+      final reqHeaders =
+          CanonicalizedMap<String, String, dynamic>((k) => k.toLowerCase());
       reqHeaders.addAll(request.headers);
 
-      final isMutating = const {'POST', 'PUT', 'PATCH', 'DELETE'}.contains(request.method.toUpperCase());
-      if (isMutating && request.mutationId != null && !reqHeaders.containsKey('Idempotency-Key')) {
+      final isMutating = const {'POST', 'PUT', 'PATCH', 'DELETE'}
+          .contains(request.method.toUpperCase());
+      if (isMutating &&
+          request.mutationId != null &&
+          !reqHeaders.containsKey('Idempotency-Key')) {
         reqHeaders['Idempotency-Key'] = request.mutationId;
       }
 
@@ -54,7 +58,8 @@ class DioHttpAdapter implements SyncHttpAdapter {
         options: options,
       );
 
-      final headersMap = CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
+      final headersMap =
+          CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
       response.headers.forEach((key, values) {
         headersMap[key] = values.join(',');
       });
@@ -65,7 +70,8 @@ class DioHttpAdapter implements SyncHttpAdapter {
         headers: headersMap,
       );
     } on DioException catch (e) {
-      final headersMap = CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
+      final headersMap =
+          CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
       e.response?.headers.forEach((key, values) {
         headersMap[key] = values.join(',');
       });
@@ -97,7 +103,8 @@ class DioHttpAdapter implements SyncHttpAdapter {
     void Function(int sent, int total)? onSendProgress,
   }) async {
     try {
-      final reqHeaders = CanonicalizedMap<String, String, dynamic>((k) => k.toLowerCase());
+      final reqHeaders =
+          CanonicalizedMap<String, String, dynamic>((k) => k.toLowerCase());
       if (headers != null) {
         reqHeaders.addAll(headers);
       }
@@ -137,7 +144,8 @@ class DioHttpAdapter implements SyncHttpAdapter {
         onSendProgress: onSendProgress,
       );
 
-      final headersMap = CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
+      final headersMap =
+          CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
       response.headers.forEach((key, values) {
         headersMap[key] = values.join(',');
       });
@@ -148,7 +156,8 @@ class DioHttpAdapter implements SyncHttpAdapter {
         headers: headersMap,
       );
     } on DioException catch (e) {
-      final headersMap = CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
+      final headersMap =
+          CanonicalizedMap<String, String, String>((key) => key.toLowerCase());
       e.response?.headers.forEach((key, values) {
         headersMap[key] = values.join(',');
       });

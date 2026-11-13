@@ -20,7 +20,8 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Test Case 11: Static System Field Validation & Injection Defense', () async {
+    test('Test Case 11: Static System Field Validation & Injection Defense',
+        () async {
       // 1. SQL Injection attempt in entity name rejected
       expect(
         () => storage.save(
@@ -101,8 +102,10 @@ void main() {
         },
       );
       expect(reservedMutId, isNotEmpty);
-      final reservedRow = await storage.db.get('SELECT * FROM "order" WHERE "id" = ?;', ['ord-reserved-1']);
-      final storedData = jsonDecode(reservedRow['data_json'] as String) as Map<String, dynamic>;
+      final reservedRow = await storage.db
+          .get('SELECT * FROM "order" WHERE "id" = ?;', ['ord-reserved-1']);
+      final storedData = jsonDecode(reservedRow['data_json'] as String)
+          as Map<String, dynamic>;
       expect(storedData['group'], 'vip_customers');
       expect(storedData['where'], 'warehouse_north');
     });

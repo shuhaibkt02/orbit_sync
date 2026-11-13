@@ -15,14 +15,16 @@ class OrbitSyncExampleApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF2F2F7),
-        colorScheme: const ColorScheme.light(primary: AppleTheme.systemBlue, surface: Colors.white),
+        colorScheme: const ColorScheme.light(
+            primary: AppleTheme.systemBlue, surface: Colors.white),
         fontFamily: '.SF Pro Text',
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
-        colorScheme: const ColorScheme.dark(primary: AppleTheme.systemBlueDark, surface: Color(0xFF1C1C1E)),
+        colorScheme: const ColorScheme.dark(
+            primary: AppleTheme.systemBlueDark, surface: Color(0xFF1C1C1E)),
         fontFamily: '.SF Pro Text',
         useMaterial3: true,
       ),

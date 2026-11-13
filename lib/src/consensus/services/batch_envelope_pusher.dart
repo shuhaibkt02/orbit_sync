@@ -39,11 +39,14 @@ class BatchEnvelopePusher {
     for (final r in pending) {
       final fromVersion = (r['schema_version'] as int?) ?? 1;
       final payloadJson = r['payload_json'] as String?;
-      var payload = payloadJson != null ? (jsonDecode(payloadJson) as Map<String, dynamic>) : <String, dynamic>{};
+      var payload = payloadJson != null
+          ? (jsonDecode(payloadJson) as Map<String, dynamic>)
+          : <String, dynamic>{};
       var targetVersion = fromVersion;
 
       if (fromVersion < currentSchemaVersion && migrator != null) {
-        payload = migrator!(fromVersion, currentSchemaVersion, r['entity_name'] as String, payload);
+        payload = migrator!(fromVersion, currentSchemaVersion,
+            r['entity_name'] as String, payload);
         targetVersion = currentSchemaVersion;
         await storage.db.execute(
           'UPDATE _sync_outbox SET payload_json = ?, schema_version = ? WHERE mutation_id = ?',
@@ -78,29 +81,41 @@ class BatchEnvelopePusher {
 
     try {
       if (resp.error != null) {
-        throw resp.error is Exception ? resp.error as Exception : Exception(resp.error.toString());
+        throw resp.error is Exception
+            ? resp.error as Exception
+            : Exception(resp.error.toString());
       }
 
       final respBody = resp.body;
-      final bodyJson = respBody.isNotEmpty ? (jsonDecode(respBody) as Map<String, dynamic>) : <String, dynamic>{};
+      final bodyJson = respBody.isNotEmpty
+          ? (jsonDecode(respBody) as Map<String, dynamic>)
+          : <String, dynamic>{};
 
       if (resp.statusCode == HttpStatus.upgradeRequired) {
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)", mutationIds);
-        return SyncPushResult(status: SyncPushStatus.needsUpgrade, errorMessage: respBody);
+        await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
+            mutationIds);
+        return SyncPushResult(
+            status: SyncPushStatus.needsUpgrade, errorMessage: respBody);
       }
       if (resp.statusCode == HttpStatus.unauthorized) {
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)", mutationIds);
+        await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
+            mutationIds);
         await onAuthExpired?.call();
         return const SyncPushResult(status: SyncPushStatus.unauthorized);
       }
       if (resp.statusCode == HttpStatus.tooManyRequests) {
         final retryHeader = CustomRestPusher.getRetryAfterHeader(resp.headers);
-        final nextRetry = CustomRestPusher.parseNextRetryAfter(retryHeader, nowMs, backoffPolicy);
+        final nextRetry = CustomRestPusher.parseNextRetryAfter(
+            retryHeader, nowMs, backoffPolicy);
         await storage.db.execute(
           "UPDATE _sync_outbox SET status = 'pending', next_retry_at = ? WHERE mutation_id IN ($placeholders)",
           [nextRetry, ...mutationIds],
         );
-        return const SyncPushResult(status: SyncPushStatus.networkError, errorMessage: 'Rate limited (HTTP 429)');
+        return const SyncPushResult(
+            status: SyncPushStatus.networkError,
+            errorMessage: 'Rate limited (HTTP 429)');
       }
       if (resp.statusCode == HttpStatus.badRequest) {
         final targetStatus = (profile == SyncProfile.basic) ? 'failed' : 'dlq';
@@ -115,19 +130,26 @@ class BatchEnvelopePusher {
         final rem = mutationIds.where((id) => !targetIds.contains(id)).toList();
         if (rem.isNotEmpty) {
           final remPh = List.filled(rem.length, '?').join(', ');
-          await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)", rem);
+          await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)",
+              rem);
         }
-        return SyncPushResult(status: SyncPushStatus.poisonPill, errorMessage: respBody);
+        return SyncPushResult(
+            status: SyncPushStatus.poisonPill, errorMessage: respBody);
       }
       if (resp.statusCode == HttpStatus.conflict) {
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)", mutationIds);
-        return SyncPushResult(status: SyncPushStatus.conflict, details: bodyJson);
+        await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($placeholders)",
+            mutationIds);
+        return SyncPushResult(
+            status: SyncPushStatus.conflict, details: bodyJson);
       }
       if (resp.statusCode == HttpStatus.unprocessableEntity) {
         final targets = _extractFailingMutationIds(bodyJson, mutationIds);
         final targetIds = targets.isNotEmpty ? targets : {mutationIds.first};
         for (final targetId in targetIds) {
-          await storage.rollbackOptimistic(targetId, status: 'validation_error');
+          await storage.rollbackOptimistic(targetId,
+              status: 'validation_error');
           await storage.db.execute(
             'UPDATE _sync_outbox SET next_retry_at = NULL, error_details_json = ? WHERE mutation_id = ?',
             [respBody, targetId],
@@ -136,19 +158,25 @@ class BatchEnvelopePusher {
         final rem = mutationIds.where((id) => !targetIds.contains(id)).toList();
         if (rem.isNotEmpty) {
           final remPh = List.filled(rem.length, '?').join(', ');
-          await storage.db.execute("UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)", rem);
+          await storage.db.execute(
+              "UPDATE _sync_outbox SET status = 'pending' WHERE mutation_id IN ($remPh)",
+              rem);
         }
-        return SyncPushResult(status: SyncPushStatus.validationError, details: bodyJson);
+        return SyncPushResult(
+            status: SyncPushStatus.validationError, details: bodyJson);
       }
       if (resp.statusCode == HttpStatus.ok) {
-        await storage.db.execute("UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL, updated_at = ? WHERE mutation_id IN ($placeholders)", [nowMs, ...mutationIds]);
+        await storage.db.execute(
+            "UPDATE _sync_outbox SET status = 'synced', next_retry_at = NULL, updated_at = ? WHERE mutation_id IN ($placeholders)",
+            [nowMs, ...mutationIds]);
         await storage.db.execute('''
           UPDATE _sync_outbox 
           SET status = 'pending', updated_at = ? 
           WHERE status = 'held' 
             AND depends_on_mutation_id IN ($placeholders)
         ''', [nowMs, ...mutationIds]);
-        return SyncPushResult(status: SyncPushStatus.success, applied: mutations.length);
+        return SyncPushResult(
+            status: SyncPushStatus.success, applied: mutations.length);
       }
 
       throw HttpException('HTTP ${resp.statusCode}: $respBody');
@@ -157,26 +185,33 @@ class BatchEnvelopePusher {
         final mutId = r['mutation_id'] as String;
         final currentRetry = (r['retry_count'] as int?) ?? 0;
         final newRetry = currentRetry + 1;
-        final targetStatus = (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
-        final nextRetry = (targetStatus == 'dlq') ? null : backoffPolicy.nextRetryAt(newRetry, nowMs);
+        final targetStatus =
+            (newRetry >= backoffPolicy.maxRetries) ? 'dlq' : 'pending';
+        final nextRetry = (targetStatus == 'dlq')
+            ? null
+            : backoffPolicy.nextRetryAt(newRetry, nowMs);
         await storage.db.execute(
           'UPDATE _sync_outbox SET status = ?, retry_count = ?, next_retry_at = ? WHERE mutation_id = ?',
           [targetStatus, newRetry, nextRetry, mutId],
         );
       }
-      return SyncPushResult(status: SyncPushStatus.networkError, errorMessage: e.toString());
+      return SyncPushResult(
+          status: SyncPushStatus.networkError, errorMessage: e.toString());
     }
   }
 }
 
-Set<String> _extractFailingMutationIds(Map<String, dynamic> bodyJson, List<String> batchIds) {
+Set<String> _extractFailingMutationIds(
+    Map<String, dynamic> bodyJson, List<String> batchIds) {
   final result = <String>{};
   void check(dynamic val) {
     if (val is String && batchIds.contains(val)) result.add(val);
   }
+
   check(bodyJson['mutation_id']);
   check(bodyJson['mutationId']);
-  final list = bodyJson['errors'] ?? bodyJson['rejected'] ?? bodyJson['failures'];
+  final list =
+      bodyJson['errors'] ?? bodyJson['rejected'] ?? bodyJson['failures'];
   if (list is List) {
     for (final item in list) {
       if (item is Map) {

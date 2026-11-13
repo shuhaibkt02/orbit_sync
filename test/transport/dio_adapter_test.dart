@@ -5,7 +5,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 
 void main() {
   group('Layer 4 Transport: Enterprise Dio Adapter', () {
-    test('SyncTransport.dio sends requests through Dio interceptors cleanly', () async {
+    test('SyncTransport.dio sends requests through Dio interceptors cleanly',
+        () async {
       final dio = Dio();
       String? interceptedAuthHeader;
       String? capturedBody;
@@ -37,7 +38,8 @@ void main() {
         url: 'https://enterprise.example.com/v1/assets',
         method: 'POST',
         mutationId: 'mut-dio-1',
-        createdAtMs: DateTime.utc(2026, 10, 25, 12, 0, 0).millisecondsSinceEpoch,
+        createdAtMs:
+            DateTime.utc(2026, 10, 25, 12, 0, 0).millisecondsSinceEpoch,
         payload: {'asset_tag': 'ASSET-999', 'model': 'Dell XPS'},
         entityId: 'dio-101',
       );
@@ -79,7 +81,8 @@ void main() {
         dio: dio,
       );
 
-      final resp = await transport.pushBatch(mutations: [], idempotencyKey: 'k-1');
+      final resp =
+          await transport.pushBatch(mutations: [], idempotencyKey: 'k-1');
       expect(resp.isSuccess, isFalse);
       expect(resp.statusCode, equals(401));
       expect(resp.body, contains('Unauthorized'));

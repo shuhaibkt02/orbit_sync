@@ -45,13 +45,15 @@ class HttpNetworkProbe implements INetworkProbe {
             statusCode: statusCode,
             redirectUrl: redirectUri,
             latencyMs: stopwatch.elapsedMilliseconds,
-            errorMessage: 'Captive portal detected: unexpected redirect to $location',
+            errorMessage:
+                'Captive portal detected: unexpected redirect to $location',
           );
         }
       }
 
       // 2. Captive Portal HTML Detection (Content-Type header or HTML body snippet)
-      final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
+      final contentType =
+          streamedResponse.headers['content-type']?.toLowerCase() ?? '';
       final isHtmlHeader = contentType.contains('text/html') ||
           contentType.contains('application/xhtml+xml');
 
@@ -59,7 +61,8 @@ class HttpNetworkProbe implements INetworkProbe {
           .expand((chunk) => chunk)
           .take(2048)
           .toList();
-      final bodyPrefix = String.fromCharCodes(bodyBytes).trimLeft().toLowerCase();
+      final bodyPrefix =
+          String.fromCharCodes(bodyBytes).trimLeft().toLowerCase();
       final isHtmlBody = bodyPrefix.startsWith('<!doctype html') ||
           bodyPrefix.startsWith('<html') ||
           bodyPrefix.contains('<head>') ||

@@ -96,7 +96,8 @@ class TaskCard extends StatelessWidget {
                           duration: const Duration(milliseconds: 180),
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: isDone ? FontWeight.w400 : FontWeight.w500,
+                            fontWeight:
+                                isDone ? FontWeight.w400 : FontWeight.w500,
                             letterSpacing: -0.2,
                             color: isDone
                                 ? AppleTheme.secondaryLabel(context)
@@ -126,7 +127,8 @@ class TaskCard extends StatelessWidget {
                     ),
                     padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppleTheme.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppleTheme.radiusMedium),
                     ),
                     color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
                     itemBuilder: (ctx) => [
@@ -135,7 +137,9 @@ class TaskCard extends StatelessWidget {
                         child: Row(
                           children: [
                             Icon(
-                              isDone ? CupertinoIcons.circle : CupertinoIcons.checkmark_circle,
+                              isDone
+                                  ? CupertinoIcons.circle
+                                  : CupertinoIcons.checkmark_circle,
                               size: 16,
                               color: AppleTheme.label(context),
                             ),
@@ -242,7 +246,8 @@ class TaskCard extends StatelessWidget {
                 height: 10,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
-                  valueColor: AlwaysStoppedAnimation(AppleTheme.accent(context)),
+                  valueColor:
+                      AlwaysStoppedAnimation(AppleTheme.accent(context)),
                 ),
               ),
               const SizedBox(width: 5),

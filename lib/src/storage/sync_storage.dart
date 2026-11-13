@@ -66,7 +66,8 @@ class SyncStorage {
     Map<String, String> columnTypes, {
     String? foreignKeyClause,
   }) =>
-      _outboxRepo.registerEntityTable(entityName, columnTypes, foreignKeyClause: foreignKeyClause);
+      _outboxRepo.registerEntityTable(entityName, columnTypes,
+          foreignKeyClause: foreignKeyClause);
 
   /// Atomically commits domain entity record and outbox mutation envelope.
   Future<String> save({
@@ -90,11 +91,24 @@ class SyncStorage {
     String? mediaPath,
   }) =>
       _outboxRepo.save(
-        entity: entity, id: id, data: data, version: version, dependsOnMutationId: dependsOnMutationId,
-        schemaVersion: schemaVersion, endpointUrl: endpointUrl, httpMethod: httpMethod,
-        holdFor: holdFor, coolingTime: coolingTime,
-        sla: sla, ttl: ttl, priority: priority, correlationTag: correlationTag, headers: headers,
-        authorId: authorId, userId: userId, mediaPath: mediaPath,
+        entity: entity,
+        id: id,
+        data: data,
+        version: version,
+        dependsOnMutationId: dependsOnMutationId,
+        schemaVersion: schemaVersion,
+        endpointUrl: endpointUrl,
+        httpMethod: httpMethod,
+        holdFor: holdFor,
+        coolingTime: coolingTime,
+        sla: sla,
+        ttl: ttl,
+        priority: priority,
+        correlationTag: correlationTag,
+        headers: headers,
+        authorId: authorId,
+        userId: userId,
+        mediaPath: mediaPath,
       );
 
   /// Atomically marks domain entity deleted and appends delete envelope to outbox.
@@ -133,18 +147,25 @@ class SyncStorage {
     required String localTempId,
     required String canonicalServerId,
   }) =>
-      _idMapRepo.registerServerId(entity: entity, localTempId: localTempId, canonicalServerId: canonicalServerId);
+      _idMapRepo.registerServerId(
+          entity: entity,
+          localTempId: localTempId,
+          canonicalServerId: canonicalServerId);
 
   /// Resolves the canonical server ID for a local temporary ID.
-  Future<String?> getCanonicalServerId({required String entity, required String localTempId}) =>
+  Future<String?> getCanonicalServerId(
+          {required String entity, required String localTempId}) =>
       _idMapRepo.getCanonicalServerId(entity: entity, localTempId: localTempId);
 
   /// Resolves the local temporary ID for a canonical server ID.
-  Future<String?> getLocalTempId({required String entity, required String canonicalServerId}) =>
-      _idMapRepo.getLocalTempId(entity: entity, canonicalServerId: canonicalServerId);
+  Future<String?> getLocalTempId(
+          {required String entity, required String canonicalServerId}) =>
+      _idMapRepo.getLocalTempId(
+          entity: entity, canonicalServerId: canonicalServerId);
 
   /// Prunes completed synced outbox records older than [retention].
-  Future<int> pruneSyncedOutbox({Duration retention = const Duration(days: 7)}) =>
+  Future<int> pruneSyncedOutbox(
+          {Duration retention = const Duration(days: 7)}) =>
       _outboxRepo.pruneSyncedOutbox(retention: retention);
 
   /// Prunes completed synced outbox records older than [olderThan].
@@ -152,26 +173,31 @@ class SyncStorage {
       _outboxRepo.pruneSynced(olderThan: olderThan);
 
   /// Prunes expired local domain cache records where `expires_at < now`.
-  Future<int> pruneExpiredCache(String entity) => _outboxRepo.pruneExpiredCache(entity);
+  Future<int> pruneExpiredCache(String entity) =>
+      _outboxRepo.pruneExpiredCache(entity);
 
   /// Prunes oldest records (LRU) when cached entity count exceeds [maxCacheRecords].
   Future<int> pruneToQuota(String entity, {required int maxCacheRecords}) =>
       _outboxRepo.pruneToQuota(entity, maxCacheRecords: maxCacheRecords);
 
   /// Rolls back an optimistic mutation using its stored base snapshot.
-  Future<void> rollbackOptimistic(String mutationId, {String status = 'conflict'}) =>
+  Future<void> rollbackOptimistic(String mutationId,
+          {String status = 'conflict'}) =>
       _outboxRepo.rollbackOptimistic(mutationId, status: status);
 
   /// Executes an asynchronous query against SQLite and returns the result set.
-  Future<ResultSet> query(String query, [List<dynamic> parameters = const []]) =>
+  Future<ResultSet> query(String query,
+          [List<dynamic> parameters = const []]) =>
       _outboxRepo.query(query, parameters);
 
   /// Streams reactive updates on any SQL query without requiring codegen TableInfo.
-  Stream<ResultSet> watch(String query, {List<dynamic> parameters = const []}) =>
+  Stream<ResultSet> watch(String query,
+          {List<dynamic> parameters = const []}) =>
       _outboxRepo.watch(query, parameters: parameters);
 
   /// Triggers a WAL checkpoint. If [truncate] is true, shrinks WAL file to 0 bytes.
-  Future<void> checkpoint({bool truncate = false}) => _outboxRepo.checkpoint(truncate: truncate);
+  Future<void> checkpoint({bool truncate = false}) =>
+      _outboxRepo.checkpoint(truncate: truncate);
 
   /// Slices [items] into safe chunks below SQLite's variable limit (default 250).
   static Future<void> batchChunked<T>(

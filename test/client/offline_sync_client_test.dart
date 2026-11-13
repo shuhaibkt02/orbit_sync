@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 void main() {
   late Directory tempDir;
@@ -33,7 +33,8 @@ void main() {
   });
 
   group('Issue 07: Unified Developer Client Facade (OrbitClient)', () {
-    test('Test Case 1: Integrated CRUD & Zero-Codegen Stream Reactivity', () async {
+    test('Test Case 1: Integrated CRUD & Zero-Codegen Stream Reactivity',
+        () async {
       final emissions = <int>[];
       final completer = Completer<void>();
 
@@ -83,7 +84,10 @@ void main() {
 
     test('Test Case 2: Coordinated Bidirectional Sync (push + pull)', () async {
       // 1. Seed server with a remote task
-      server.records['tasks:remote-1'] = {'title': 'Server Created Task', 'priority': 'medium'};
+      server.records['tasks:remote-1'] = {
+        'title': 'Server Created Task',
+        'priority': 'medium'
+      };
       server.cursor++;
       server.changelog.add({
         'cursor': server.cursor,
@@ -111,7 +115,8 @@ void main() {
       expect(server.records['tasks:$localId']!['title'], 'Client Created Task');
 
       // Assert client pulled remote-1 into local database
-      final localRows = await client.query("SELECT data_json FROM tasks WHERE id = 'remote-1';");
+      final localRows = await client
+          .query("SELECT data_json FROM tasks WHERE id = 'remote-1';");
       expect(localRows, isNotEmpty);
       final decodedRemote = jsonDecode(localRows.first['data_json'] as String);
       expect(decodedRemote['title'], 'Server Created Task');
@@ -170,7 +175,8 @@ void main() {
       await client.close();
     });
 
-    test('Test Case 5: attachConnectivity triggers sync and logs are captured', () async {
+    test('Test Case 5: attachConnectivity triggers sync and logs are captured',
+        () async {
       final logs = <String>[];
       final loggedClient = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/logged.db',
@@ -180,11 +186,13 @@ void main() {
       await loggedClient.registerTable('tasks', {'title': 'TEXT'});
 
       final connectivityController = StreamController<bool>.broadcast();
-      final sub = loggedClient.attachConnectivity(connectivityController.stream);
+      final sub =
+          loggedClient.attachConnectivity(connectivityController.stream);
 
       // Save an item locally while offline
       final id = UuidV7.generate();
-      await loggedClient.save(entity: 'tasks', id: id, data: {'title': 'Online trigger task'});
+      await loggedClient.save(
+          entity: 'tasks', id: id, data: {'title': 'Online trigger task'});
 
       expect(server.records.containsKey('tasks:$id'), isFalse);
 
@@ -201,7 +209,9 @@ void main() {
       await loggedClient.close();
     });
 
-    test('Test Case 6: Developer provides exact full URL, store and restore work offline, sync sends offline headers', () async {
+    test(
+        'Test Case 6: Developer provides exact full URL, store and restore work offline, sync sends offline headers',
+        () async {
       // 1. Spin up a standard REST endpoint simulator
       late String receivedMethod;
       late String receivedPath;
@@ -222,7 +232,8 @@ void main() {
         await request.response.close();
       });
 
-      final fullEndpointUrl = 'http://${restServer.address.host}:${restServer.port}/api/v1/custom-tasks';
+      final fullEndpointUrl =
+          'http://${restServer.address.host}:${restServer.port}/api/v1/custom-tasks';
 
       // 2. Initialize client as an outsider: developer supplies exact full URL
       final universalClient = await OrbitClient.initialize(
@@ -270,11 +281,13 @@ void main() {
       await restServer.close(force: true);
     });
 
-    test('Test Case 7: Real-world Dead-Zone Entry and Auto-Drain on Reconnect', () async {
+    test('Test Case 7: Real-world Dead-Zone Entry and Auto-Drain on Reconnect',
+        () async {
       final monitor = ConnectivityMonitor(
         timeout: const Duration(milliseconds: 100),
         heartbeatInterval: const Duration(milliseconds: 100),
-        defaultProbeUrl: 'http://127.0.0.1:59999', // Non-existent dead zone port
+        defaultProbeUrl:
+            'http://127.0.0.1:59999', // Non-existent dead zone port
       );
 
       // Probe dead zone
@@ -302,7 +315,8 @@ void main() {
         baseUrl: 'http://${liveServer.address.host}:${liveServer.port}',
         connectivityTimeout: const Duration(milliseconds: 100),
       );
-      await client.registerEntity('tasks', url: 'http://${liveServer.address.host}:${liveServer.port}/tasks');
+      await client.registerEntity('tasks',
+          url: 'http://${liveServer.address.host}:${liveServer.port}/tasks');
 
       // User creates item while in dead zone
       await client.store('tasks', {'title': 'Basement task'});
@@ -314,7 +328,8 @@ void main() {
       expect(syncedItems, isEmpty);
 
       // Now reconnect: update probe URL to live server
-      client.connectivity.defaultProbeUrl = 'http://${liveServer.address.host}:${liveServer.port}';
+      client.connectivity.defaultProbeUrl =
+          'http://${liveServer.address.host}:${liveServer.port}';
       final reconnected = await client.connectivity.checkReachability();
       expect(reconnected, isTrue);
 
@@ -327,8 +342,11 @@ void main() {
       await liveServer.close(force: true);
     });
 
-    test('Test Case 8: Strict Status Invariant and Rich Failure Details on HTTP 422 Rejection', () async {
-      final errorServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    test(
+        'Test Case 8: Strict Status Invariant and Rich Failure Details on HTTP 422 Rejection',
+        () async {
+      final errorServer =
+          await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       errorServer.listen((request) async {
         request.response.statusCode = HttpStatus.unprocessableEntity;
         request.response.headers.contentType = ContentType.json;
@@ -344,7 +362,8 @@ void main() {
       );
       await client.registerEntity(
         'orders',
-        url: 'http://${errorServer.address.host}:${errorServer.port}/api/orders',
+        url:
+            'http://${errorServer.address.host}:${errorServer.port}/api/orders',
       );
 
       // Store record locally
@@ -357,21 +376,25 @@ void main() {
       await client.sync();
 
       // Assert status is NOT synced
-      final rows = await client.query("SELECT status FROM _sync_outbox WHERE entity_id = ?", [orderId]);
+      final rows = await client.query(
+          "SELECT status FROM _sync_outbox WHERE entity_id = ?", [orderId]);
       expect(rows.first['status'], equals('validation_error'));
 
       // Assert typed SyncFailure returns structured reason
       final failures = await client.getFailures();
       expect(failures.length, equals(1));
       expect(failures.first.statusCode, equals(422));
-      expect(failures.first.errorMessage, contains('Warehouse ID 49 is closed'));
+      expect(
+          failures.first.errorMessage, contains('Warehouse ID 49 is closed'));
       expect(failures.first.endpointUrl, contains('/api/orders'));
 
       await client.close();
       await errorServer.close(force: true);
     });
 
-    test('Test Case 9: Remote Data Hydration from Standard REST API (fetchAndStore)', () async {
+    test(
+        'Test Case 9: Remote Data Hydration from Standard REST API (fetchAndStore)',
+        () async {
       final restServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       restServer.listen((request) async {
         request.response.statusCode = HttpStatus.ok;
@@ -386,7 +409,8 @@ void main() {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/hydrate.db',
       );
-      await client.registerEntity('notes', url: 'http://${restServer.address.host}:${restServer.port}/notes');
+      await client.registerEntity('notes',
+          url: 'http://${restServer.address.host}:${restServer.port}/notes');
 
       // Hydrate from server
       final count = await client.fetchAndStore(
@@ -398,18 +422,23 @@ void main() {
       // Assert 100% available offline via restore()
       final offlineNotes = await client.restore('notes');
       expect(offlineNotes.length, equals(2));
-      expect(offlineNotes.any((n) => n['title'] == 'First server note'), isTrue);
-      expect(offlineNotes.any((n) => n['title'] == 'Second server note'), isTrue);
+      expect(
+          offlineNotes.any((n) => n['title'] == 'First server note'), isTrue);
+      expect(
+          offlineNotes.any((n) => n['title'] == 'Second server note'), isTrue);
 
       // Assert zero outbox push mutations were created (since data originated from server)
-      final outboxRows = await client.query("SELECT COUNT(*) as count FROM _sync_outbox");
+      final outboxRows =
+          await client.query("SELECT COUNT(*) as count FROM _sync_outbox");
       expect(outboxRows.first['count'], equals(0));
 
       await client.close();
       await restServer.close(force: true);
     });
 
-    test('Test Case 10: Headless Worker Background Sync (Alarm/WorkManager simulation)', () async {
+    test(
+        'Test Case 10: Headless Worker Background Sync (Alarm/WorkManager simulation)',
+        () async {
       final dbPath = '${tempDir.path}/headless.db';
 
       // 1. Simulate UI storing a task before app is closed
@@ -425,12 +454,15 @@ void main() {
 
       // Verify that headless sync safely drained the queue without UI running
       final checkClient = await OrbitClient.initialize(databasePath: dbPath);
-      final outboxPending = await checkClient.query("SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
+      final outboxPending = await checkClient.query(
+          "SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
       expect(outboxPending.first['count'], equals(0));
       await checkClient.close();
     });
 
-    test('Test Case 11: client.storage.db.execute works for _sync_metadata and phase management', () async {
+    test(
+        'Test Case 11: client.storage.db.execute works for _sync_metadata and phase management',
+        () async {
       await client.storage.db.execute(
         "INSERT OR REPLACE INTO _sync_metadata (key, value) VALUES ('test_key', 'test_val')",
       );

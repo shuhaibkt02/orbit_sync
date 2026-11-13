@@ -6,7 +6,8 @@ import 'package:orbit_sync/src/storage/infrastructure/sqlite/sqlite_baseline_man
 import 'storage_test_helpers.dart';
 
 void main() {
-  group('Ticket 02: Universal 5-Column Storage A Schema & Zero-DDL Cleanup', () {
+  group('Ticket 02: Universal 5-Column Storage A Schema & Zero-DDL Cleanup',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
@@ -21,7 +22,8 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('1. Every registered collection table creates strictly 5 columns', () async {
+    test('1. Every registered collection table creates strictly 5 columns',
+        () async {
       // Register entity with pseudo columnTypes (should be ignored for physical DDL)
       await storage.registerEntityTable('products', {
         'name': 'TEXT',
@@ -29,7 +31,8 @@ void main() {
         'is_available': 'INTEGER',
       });
 
-      final tableInfo = await storage.db.getAll('PRAGMA table_info("products");');
+      final tableInfo =
+          await storage.db.getAll('PRAGMA table_info("products");');
       final columnNames = tableInfo.map((row) => row['name'] as String).toSet();
 
       // Must have strictly the 5 universal columns
@@ -69,7 +72,9 @@ void main() {
       expect(columnNames.contains('is_available'), isFalse);
     });
 
-    test('2. Dynamic table auto-creation via ensureEntityTableExists creates 5 columns', () async {
+    test(
+        '2. Dynamic table auto-creation via ensureEntityTableExists creates 5 columns',
+        () async {
       // Saving to an unregistered table triggers ensureEntityTableExists
       await storage.save(
         entity: 'categories',
@@ -77,7 +82,8 @@ void main() {
         data: {'title': 'Electronics', 'department': 'Retail'},
       );
 
-      final tableInfo = await storage.db.getAll('PRAGMA table_info("categories");');
+      final tableInfo =
+          await storage.db.getAll('PRAGMA table_info("categories");');
       final columnNames = tableInfo.map((row) => row['name'] as String).toSet();
 
       expect(
@@ -88,7 +94,8 @@ void main() {
       expect(columnNames.contains('title'), isFalse);
     });
 
-    test('3. Verify the 2 system indexes exist and are query-plannable', () async {
+    test('3. Verify the 2 system indexes exist and are query-plannable',
+        () async {
       await storage.registerEntityTable('inventory', {});
 
       final indexes = await storage.db.getAll(
@@ -103,18 +110,22 @@ void main() {
       final qpUpdated = await storage.db.getAll(
         'EXPLAIN QUERY PLAN SELECT * FROM "inventory" ORDER BY updated_at DESC;',
       );
-      final detailUpdated = qpUpdated.map((r) => r['detail'].toString()).join(' ');
+      final detailUpdated =
+          qpUpdated.map((r) => r['detail'].toString()).join(' ');
       expect(detailUpdated, contains('idx_inventory_updated'));
 
       // Verify query plan on idx_inventory_expires (Partial TTL Eviction Index)
       final qpExpires = await storage.db.getAll(
         'EXPLAIN QUERY PLAN SELECT id FROM "inventory" WHERE expires_at IS NOT NULL AND expires_at < 999999999;',
       );
-      final detailExpires = qpExpires.map((r) => r['detail'].toString()).join(' ');
+      final detailExpires =
+          qpExpires.map((r) => r['detail'].toString()).join(' ');
       expect(detailExpires, contains('idx_inventory_expires'));
     });
 
-    test('4. Saving complex nested JSON documents stores them purely into data_json', () async {
+    test(
+        '4. Saving complex nested JSON documents stores them purely into data_json',
+        () async {
       await storage.registerEntityTable('complex_orders', {});
 
       final nestedPayload = {
@@ -143,13 +154,16 @@ void main() {
       );
       expect(mutId, isNotEmpty);
 
-      final row = await storage.db.get('SELECT * FROM "complex_orders" WHERE "id" = ?;', ['ord-nested-1']);
-      expect(row.keys.toSet(), equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}));
+      final row = await storage.db.get(
+          'SELECT * FROM "complex_orders" WHERE "id" = ?;', ['ord-nested-1']);
+      expect(row.keys.toSet(),
+          equals({'id', 'version', 'updated_at', 'expires_at', 'data_json'}));
       expect(row['id'], equals('ord-nested-1'));
       expect(row['version'], equals(1));
       expect(row['expires_at'], isNull);
 
-      final decoded = jsonDecode(row['data_json'] as String) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(row['data_json'] as String) as Map<String, dynamic>;
       expect(decoded['order_number'], equals('ORD-2026-X'));
       expect(decoded['customer']['profile']['firstName'], equals('Jane'));
       expect((decoded['customer']['addresses'] as List).length, equals(2));
@@ -162,12 +176,14 @@ void main() {
         'SELECT payload_json, base_snapshot_json FROM _sync_outbox WHERE mutation_id = ?;',
         [mutId],
       );
-      final outboxPayload = jsonDecode(outboxRow['payload_json'] as String) as Map<String, dynamic>;
+      final outboxPayload = jsonDecode(outboxRow['payload_json'] as String)
+          as Map<String, dynamic>;
       expect(outboxPayload['order_number'], equals('ORD-2026-X'));
       expect(outboxRow['base_snapshot_json'], isNull);
     });
 
-    test('5. Baseline manager and optimistic rollback read from data_json', () async {
+    test('5. Baseline manager and optimistic rollback read from data_json',
+        () async {
       await storage.registerEntityTable('documents', {});
 
       final initialDoc = {
@@ -187,9 +203,11 @@ void main() {
 
       // Verify readExistingBaseline reads directly from data_json
       await storage.db.writeTransaction((tx) async {
-        final baseline = await SqliteBaselineManager.readExistingBaseline(tx, 'documents', 'doc-1');
+        final baseline = await SqliteBaselineManager.readExistingBaseline(
+            tx, 'documents', 'doc-1');
         expect(baseline.version, equals(1));
-        final baselineData = jsonDecode(baseline.snapshot!) as Map<String, dynamic>;
+        final baselineData =
+            jsonDecode(baseline.snapshot!) as Map<String, dynamic>;
         expect(baselineData['title'], equals('Original Doc'));
         expect(baselineData['sections'][0]['header'], equals('Intro'));
       });
@@ -212,24 +230,30 @@ void main() {
       );
 
       // Verify domain row reflects update
-      final modifiedRow = await storage.db.get('SELECT * FROM "documents" WHERE "id" = ?;', ['doc-1']);
+      final modifiedRow = await storage.db
+          .get('SELECT * FROM "documents" WHERE "id" = ?;', ['doc-1']);
       expect(modifiedRow['version'], equals(2));
-      final modData = jsonDecode(modifiedRow['data_json'] as String) as Map<String, dynamic>;
+      final modData = jsonDecode(modifiedRow['data_json'] as String)
+          as Map<String, dynamic>;
       expect(modData['title'], equals('Updated Doc'));
 
       // Rollback optimistic mutation
       await storage.rollbackOptimistic(mut2, status: 'conflict');
 
       // Verify restored domain row matches original baseline from data_json
-      final restoredRow = await storage.db.get('SELECT * FROM "documents" WHERE "id" = ?;', ['doc-1']);
+      final restoredRow = await storage.db
+          .get('SELECT * FROM "documents" WHERE "id" = ?;', ['doc-1']);
       expect(restoredRow['version'], equals(1));
-      final restoredData = jsonDecode(restoredRow['data_json'] as String) as Map<String, dynamic>;
+      final restoredData = jsonDecode(restoredRow['data_json'] as String)
+          as Map<String, dynamic>;
       expect(restoredData['title'], equals('Original Doc'));
       expect(restoredData['sections'][0]['body'], equals('Hello world'));
       expect((restoredData['sections'] as List).length, equals(1));
     });
 
-    test('6. Zero-DDL: saving arbitrary dynamic fields never alters table schema', () async {
+    test(
+        '6. Zero-DDL: saving arbitrary dynamic fields never alters table schema',
+        () async {
       await storage.registerEntityTable('flexible_records', {});
 
       // Step 1: Save first shape
@@ -252,7 +276,8 @@ void main() {
       );
 
       // Table schema must remain strictly 5 columns without schema drift
-      final tableInfo = await storage.db.getAll('PRAGMA table_info("flexible_records");');
+      final tableInfo =
+          await storage.db.getAll('PRAGMA table_info("flexible_records");');
       expect(tableInfo.length, equals(5));
       final columnNames = tableInfo.map((r) => r['name'] as String).toSet();
       expect(

@@ -19,8 +19,11 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  group('Layer 5 Facade: Challenge 8 Teardown Drain Protocol & Timeout Budget', () {
-    test('close() is idempotent and safely callable multiple times concurrently', () async {
+  group('Layer 5 Facade: Challenge 8 Teardown Drain Protocol & Timeout Budget',
+      () {
+    test(
+        'close() is idempotent and safely callable multiple times concurrently',
+        () async {
       await Future.wait([
         client.close(),
         client.close(),
@@ -30,7 +33,9 @@ void main() {
       expect(client.isClosed, isTrue);
     });
 
-    test('Inbound operations are rejected immediately with ClientClosedException once closed', () async {
+    test(
+        'Inbound operations are rejected immediately with ClientClosedException once closed',
+        () async {
       await client.close();
 
       expect(
@@ -44,7 +49,8 @@ void main() {
       );
     });
 
-    test('Teardown drain safely reverts in_flight mutations back to pending', () async {
+    test('Teardown drain safely reverts in_flight mutations back to pending',
+        () async {
       // Simulate an unacknowledged in-flight mutation
       await client.storage.db.execute('''
         INSERT INTO _sync_outbox (
@@ -56,8 +62,10 @@ void main() {
       await client.close(drainTimeout: const Duration(milliseconds: 50));
 
       // Re-open DB to inspect outbox
-      final reopenStorage = await SyncStorage.open(path: '${tempDir.path}/test.db');
-      final rows = await reopenStorage.db.getAll("SELECT status FROM _sync_outbox WHERE mutation_id = 'mut-inflight'");
+      final reopenStorage =
+          await SyncStorage.open(path: '${tempDir.path}/test.db');
+      final rows = await reopenStorage.db.getAll(
+          "SELECT status FROM _sync_outbox WHERE mutation_id = 'mut-inflight'");
       expect(rows.first['status'], equals('pending'));
       await reopenStorage.close();
     });

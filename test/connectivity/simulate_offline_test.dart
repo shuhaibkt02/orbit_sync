@@ -22,7 +22,9 @@ class _SpyNetworkProbe implements INetworkProbe {
 
 void main() {
   group('Layer 3 Connectivity: Simulated Offline Mode', () {
-    test('simulateOffline = true instantly transitions offline without making network calls', () async {
+    test(
+        'simulateOffline = true instantly transitions offline without making network calls',
+        () async {
       final spyProbe = _SpyNetworkProbe();
       final monitor = ConnectivityMonitor(
         probe: spyProbe,
@@ -67,7 +69,9 @@ void main() {
       monitor.dispose();
     });
 
-    test('state property and onStateChanged stream reflect rich state transitions', () async {
+    test(
+        'state property and onStateChanged stream reflect rich state transitions',
+        () async {
       final spyProbe = _SpyNetworkProbe();
       final monitor = ConnectivityMonitor(
         probe: spyProbe,

@@ -32,10 +32,12 @@ class CausalHorizonGuard {
     SyncValidator.validateEntity(entity);
     SyncValidator.validateId(id);
     try {
-      await storage.db.execute('ALTER TABLE "$entity" ADD COLUMN _sync_status TEXT');
+      await storage.db
+          .execute('ALTER TABLE "$entity" ADD COLUMN _sync_status TEXT');
     } catch (_) {}
     try {
-      await storage.db.execute('ALTER TABLE "$entity" ADD COLUMN _sync_error TEXT');
+      await storage.db
+          .execute('ALTER TABLE "$entity" ADD COLUMN _sync_error TEXT');
     } catch (_) {}
 
     await storage.db.execute(

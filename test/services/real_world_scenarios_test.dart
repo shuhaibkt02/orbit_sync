@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
-void seedServer(FakeSyncServer server, String entity, String id, Map<String, dynamic> data, {int version = 1}) {
+void seedServer(
+    FakeSyncServer server, String entity, String id, Map<String, dynamic> data,
+    {int version = 1}) {
   server.records['$entity:$id'] = data;
   server.cursor++;
   server.changelog.add({
@@ -17,7 +19,8 @@ void seedServer(FakeSyncServer server, String entity, String id, Map<String, dyn
   });
 }
 
-void deleteOnServer(FakeSyncServer server, String entity, String id, {int version = 2}) {
+void deleteOnServer(FakeSyncServer server, String entity, String id,
+    {int version = 2}) {
   server.records.remove('$entity:$id');
   server.cursor++;
   server.changelog.add({
@@ -29,7 +32,9 @@ void deleteOnServer(FakeSyncServer server, String entity, String id, {int versio
   });
 }
 
-void updateOnServer(FakeSyncServer server, String entity, String id, Map<String, dynamic> data, {int version = 2}) {
+void updateOnServer(
+    FakeSyncServer server, String entity, String id, Map<String, dynamic> data,
+    {int version = 2}) {
   server.records['$entity:$id'] = data;
   server.cursor++;
   server.changelog.add({
@@ -53,7 +58,9 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('Scenario 1: HTTP 429 Rate Limiting with Retry-After Header (Worker pauses without burning retries)', () async {
+    test(
+        'Scenario 1: HTTP 429 Rate Limiting with Retry-After Header (Worker pauses without burning retries)',
+        () async {
       int requestCount = 0;
       bool isRateLimited = true;
 
@@ -65,7 +72,8 @@ void main() {
           req.response.statusCode = HttpStatus.tooManyRequests;
           req.response.headers.set('Retry-After', '2');
           req.response.headers.contentType = ContentType.json;
-          req.response.write(jsonEncode({'error': 'Rate limit exceeded, slow down.'}));
+          req.response
+              .write(jsonEncode({'error': 'Rate limit exceeded, slow down.'}));
           await req.response.close();
         } else {
           req.response.statusCode = HttpStatus.ok;
@@ -75,7 +83,8 @@ void main() {
         }
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/orders';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/orders';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario1.db',
       );
@@ -91,7 +100,9 @@ void main() {
       await client.sync();
 
       // Check status: Outbox MUST remain 'pending' and NOT 'failed' or 'dlq'
-      var rows = await client.query('SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+      var rows = await client.query(
+          'SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?',
+          [orderId]);
       expect(rows.first['status'], equals('pending'));
       expect(requestCount, equals(1));
 
@@ -100,14 +111,17 @@ void main() {
       await client.sync(force: true);
 
       // Check status: Now successfully 'synced'
-      rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
+      rows = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', [orderId]);
       expect(rows.first['status'], equals('synced'));
 
       await client.close();
       await server.close();
     });
 
-    test('Scenario 2: Server 500/502/503 Transient Outage (Preserves pending status with backoff; recovers on restore)', () async {
+    test(
+        'Scenario 2: Server 500/502/503 Transient Outage (Preserves pending status with backoff; recovers on restore)',
+        () async {
       bool serverDown = true;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
@@ -123,7 +137,8 @@ void main() {
         }
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/invoices';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/invoices';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario2.db',
       );
@@ -139,7 +154,9 @@ void main() {
       await client.sync();
 
       // Outbox status MUST remain pending with incremented retry_count
-      var rows = await client.query('SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?', [invId]);
+      var rows = await client.query(
+          'SELECT status, retry_count FROM _sync_outbox WHERE entity_id = ?',
+          [invId]);
       expect(rows.first['status'], equals('pending'));
       expect(rows.first['retry_count'], equals(1));
 
@@ -152,14 +169,17 @@ void main() {
       serverDown = false;
       await client.sync(force: true);
 
-      rows = await client.query('SELECT status FROM _sync_outbox WHERE entity_id = ?', [invId]);
+      rows = await client.query(
+          'SELECT status FROM _sync_outbox WHERE entity_id = ?', [invId]);
       expect(rows.first['status'], equals('synced'));
 
       await client.close();
       await server.close();
     });
 
-    test('Scenario 3: Update vs Delete Conflict Across Devices (Remote deletion evicts local record, preserves draft as conflict)', () async {
+    test(
+        'Scenario 3: Update vs Delete Conflict Across Devices (Remote deletion evicts local record, preserves draft as conflict)',
+        () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario3.db',
@@ -170,7 +190,8 @@ void main() {
       final noteId = UuidV7.generate();
 
       // 1. Initial state: record exists on server and synced to client
-      seedServer(fakeServer, 'notes', noteId, {'title': 'Original Note'}, version: 1);
+      seedServer(fakeServer, 'notes', noteId, {'title': 'Original Note'},
+          version: 1);
       await client.sync(pull: true);
 
       var note = await client.restoreById('notes', noteId);
@@ -192,7 +213,8 @@ void main() {
       await client.sync(pull: true);
 
       // Active table: local record must be evicted
-      final activeRows = await client.query('SELECT * FROM notes WHERE id = ?', [noteId]);
+      final activeRows =
+          await client.query('SELECT * FROM notes WHERE id = ?', [noteId]);
       expect(activeRows, isEmpty);
 
       // Outbox: pending edit must be marked as 'conflict' with structured explanation
@@ -202,14 +224,17 @@ void main() {
       );
       expect(outboxRows.isNotEmpty, isTrue);
       expect(outboxRows.first['status'], equals('conflict'));
-      final errorJson = jsonDecode(outboxRows.first['error_details_json'] as String);
+      final errorJson =
+          jsonDecode(outboxRows.first['error_details_json'] as String);
       expect(errorJson['title'], contains('Update vs Delete'));
 
       await client.close();
       await fakeServer.stop();
     });
 
-    test('Scenario 4: Delete vs Update Conflict Across Devices (Local delete prevents ghost resurrection)', () async {
+    test(
+        'Scenario 4: Delete vs Update Conflict Across Devices (Local delete prevents ghost resurrection)',
+        () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario4.db',
@@ -227,20 +252,25 @@ void main() {
       await client.delete(entity: 'tasks', id: taskId);
 
       // Meanwhile, server updated task to version 2
-      updateOnServer(fakeServer, 'tasks', taskId, {'title': 'Server edited title'}, version: 2);
+      updateOnServer(
+          fakeServer, 'tasks', taskId, {'title': 'Server edited title'},
+          version: 2);
 
       // Device pulls server changes: task MUST NOT be resurrected locally!
       final pullRes = await client.worker.pullPage();
       expect(pullRes.status, equals(SyncPullStatus.success));
 
       final active = await client.restoreById('tasks', taskId);
-      expect(active, isNull, reason: 'Deleted task must not be resurrected while pending delete exists');
+      expect(active, isNull,
+          reason:
+              'Deleted task must not be resurrected while pending delete exists');
 
       await client.close();
       await fakeServer.stop();
     });
 
-    test('Scenario 5: Multi-Device 3-Way Concurrent Field Convergence', () async {
+    test('Scenario 5: Multi-Device 3-Way Concurrent Field Convergence',
+        () async {
       final fakeServer = await FakeSyncServer.start(port: 0);
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/scenario5.db',
@@ -255,27 +285,41 @@ void main() {
       final docId = UuidV7.generate();
 
       // Initial state
-      seedServer(fakeServer, 'articles', docId, {
-        'title': 'Draft 1',
-        'content': 'Initial body',
-        'author': 'Alice',
-      }, version: 1);
+      seedServer(
+          fakeServer,
+          'articles',
+          docId,
+          {
+            'title': 'Draft 1',
+            'content': 'Initial body',
+            'author': 'Alice',
+          },
+          version: 1);
       await client.sync(pull: true);
 
       // Device modifies 'title' offline
       await client.save(
         entity: 'articles',
         id: docId,
-        data: {'title': 'Draft 1 Final', 'content': 'Initial body', 'author': 'Alice'},
+        data: {
+          'title': 'Draft 1 Final',
+          'content': 'Initial body',
+          'author': 'Alice'
+        },
         version: 1,
       );
 
       // Server concurrently receives update from another device modifying 'content'
-      updateOnServer(fakeServer, 'articles', docId, {
-        'title': 'Draft 1',
-        'content': 'Peer reviewed body by Bob',
-        'author': 'Alice',
-      }, version: 2);
+      updateOnServer(
+          fakeServer,
+          'articles',
+          docId,
+          {
+            'title': 'Draft 1',
+            'content': 'Peer reviewed body by Bob',
+            'author': 'Alice',
+          },
+          version: 2);
 
       // Sync: 3-way merge should converge non-conflicting columns
       await client.sync(pull: true);
@@ -289,7 +333,9 @@ void main() {
       await fakeServer.stop();
     });
 
-    test('Scenario 6: High Concurrency Write Storm (100 concurrent async writes without SQLITE_BUSY)', () async {
+    test(
+        'Scenario 6: High Concurrency Write Storm (100 concurrent async writes without SQLITE_BUSY)',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/concurrency.db',
         maxReaders: 4,
@@ -311,20 +357,25 @@ void main() {
 
       final ids = await Future.wait(futures);
       expect(ids.length, equals(writeCount));
-      expect(ids.toSet().length, equals(writeCount), reason: 'Every generated ID must be unique');
+      expect(ids.toSet().length, equals(writeCount),
+          reason: 'Every generated ID must be unique');
 
       // Verify active table count
-      final activeRows = await client.query('SELECT COUNT(*) as count FROM logs');
+      final activeRows =
+          await client.query('SELECT COUNT(*) as count FROM logs');
       expect(activeRows.first['count'], equals(writeCount));
 
       // Verify outbox count
-      final outboxRows = await client.query("SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
+      final outboxRows = await client.query(
+          "SELECT COUNT(*) as count FROM _sync_outbox WHERE status = 'pending'");
       expect(outboxRows.first['count'], equals(writeCount));
 
       await client.close();
     });
 
-    test('Scenario 7: Token Refresh Race (Thundering herd deduplication to single refresh)', () async {
+    test(
+        'Scenario 7: Token Refresh Race (Thundering herd deduplication to single refresh)',
+        () async {
       int authRefreshCount = 0;
 
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -344,7 +395,8 @@ void main() {
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/secure';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/secure';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/auth_race.db',
         getAuthToken: () async => currentToken,
@@ -370,13 +422,16 @@ void main() {
       final push2 = await client.worker.pushBatch(batchSize: 10);
       expect(push2.status, equals(SyncPushStatus.success));
       expect(push2.applied, equals(3));
-      expect(authRefreshCount, equals(1), reason: 'Token refresh must not be called redundantly');
+      expect(authRefreshCount, equals(1),
+          reason: 'Token refresh must not be called redundantly');
 
       await client.close();
       await server.close();
     });
 
-    test('Scenario 8: Clock Skew / Manual Time Rollback (UUIDv7 preserves strict ascending monotonicity)', () {
+    test(
+        'Scenario 8: Clock Skew / Manual Time Rollback (UUIDv7 preserves strict ascending monotonicity)',
+        () {
       final ids = <String>[];
 
       // Generate 50 IDs
@@ -393,17 +448,21 @@ void main() {
       }
     });
 
-    test('Scenario 9: Captive Portal / HTML Interception Resilience (Safe rejection without table corruption)', () async {
+    test(
+        'Scenario 9: Captive Portal / HTML Interception Resilience (Safe rejection without table corruption)',
+        () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((HttpRequest req) async {
         // Hotel captive portal returns 200 with HTML login page instead of JSON API
         req.response.statusCode = HttpStatus.ok;
         req.response.headers.contentType = ContentType.html;
-        req.response.write('<!DOCTYPE html><html><body>Please sign in to Airport Wi-Fi</body></html>');
+        req.response.write(
+            '<!DOCTYPE html><html><body>Please sign in to Airport Wi-Fi</body></html>');
         await req.response.close();
       });
 
-      final targetUrl = 'http://${server.address.address}:${server.port}/api/tasks';
+      final targetUrl =
+          'http://${server.address.address}:${server.port}/api/tasks';
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/captive.db',
       );
@@ -423,7 +482,8 @@ void main() {
       await server.close();
     });
 
-    test('Scenario 10: Dynamic Schema Evolution with Rich Heterogeneous Types', () async {
+    test('Scenario 10: Dynamic Schema Evolution with Rich Heterogeneous Types',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/types.db',
       );
@@ -449,7 +509,9 @@ void main() {
       await client.close();
     });
 
-    test('Scenario 11: Transactional Atomicity (Rollback on failure leaves 0 partial writes)', () async {
+    test(
+        'Scenario 11: Transactional Atomicity (Rollback on failure leaves 0 partial writes)',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/atomic.db',
       );
@@ -458,7 +520,8 @@ void main() {
       // Attempt invalid write violating NOT NULL constraint
       try {
         await client.storage.db.writeTransaction((tx) async {
-          await tx.execute('INSERT INTO accounts (id, version, updated_at, balance) VALUES (?, ?, ?, ?)',
+          await tx.execute(
+              'INSERT INTO accounts (id, version, updated_at, balance) VALUES (?, ?, ?, ?)',
               ['acc-1', 1, 1000, null]);
           await tx.execute(
             "INSERT INTO _sync_outbox (mutation_id, entity_name, entity_id, op, created_at, status) VALUES (?, ?, ?, ?, ?, 'pending')",

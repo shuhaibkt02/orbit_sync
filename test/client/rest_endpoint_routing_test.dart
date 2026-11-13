@@ -28,19 +28,26 @@ void main() {
         const endpoint = RestEndpoint(path: '/orders');
 
         expect(endpoint.resolveCreatePath(), equals('/orders'));
-        expect(endpoint.resolveUpdatePath('ord-100'), equals('/orders/ord-100'));
-        expect(endpoint.resolveDeletePath('ord-100'), equals('/orders/ord-100'));
-        expect(endpoint.resolveDetailPath('ord-100'), equals('/orders/ord-100'));
+        expect(
+            endpoint.resolveUpdatePath('ord-100'), equals('/orders/ord-100'));
+        expect(
+            endpoint.resolveDeletePath('ord-100'), equals('/orders/ord-100'));
+        expect(
+            endpoint.resolveDetailPath('ord-100'), equals('/orders/ord-100'));
         expect(endpoint.resolveListPath(), equals('/orders'));
       });
 
       test('sanitizes trailing and leading slashes during path joining', () {
         const endpointWithTrailingSlash = RestEndpoint(path: '/orders/');
 
-        expect(endpointWithTrailingSlash.resolveCreatePath(), equals('/orders/'));
-        expect(endpointWithTrailingSlash.resolveUpdatePath('ord-100'), equals('/orders/ord-100'));
-        expect(endpointWithTrailingSlash.resolveDeletePath('/ord-100'), equals('/orders/ord-100'));
-        expect(endpointWithTrailingSlash.resolveDetailPath('ord-100'), equals('/orders/ord-100'));
+        expect(
+            endpointWithTrailingSlash.resolveCreatePath(), equals('/orders/'));
+        expect(endpointWithTrailingSlash.resolveUpdatePath('ord-100'),
+            equals('/orders/ord-100'));
+        expect(endpointWithTrailingSlash.resolveDeletePath('/ord-100'),
+            equals('/orders/ord-100'));
+        expect(endpointWithTrailingSlash.resolveDetailPath('ord-100'),
+            equals('/orders/ord-100'));
       });
 
       test('resolves full URLs using EndpointUrlResolver with baseUrl', () {
@@ -69,7 +76,9 @@ void main() {
         );
       });
 
-      test('TableEndpointResolver maps operations to standard HTTP verbs and URLs', () {
+      test(
+          'TableEndpointResolver maps operations to standard HTTP verbs and URLs',
+          () {
         const endpoint = RestEndpoint(path: '/orders');
         final tableResolver = TableEndpointResolver<TestOrder>(
           entityName: 'orders',
@@ -80,24 +89,29 @@ void main() {
         const order = TestOrder(id: 'ord-200', item: 'Tablet', price: 499.0);
 
         // CREATE -> POST /orders
-        final createRes = tableResolver.resolveSave(item: order, id: 'ord-200', isUpdate: false);
+        final createRes = tableResolver.resolveSave(
+            item: order, id: 'ord-200', isUpdate: false);
         expect(createRes.method, equals('POST'));
         expect(createRes.url, equals('https://api.acme.corp/v1/orders'));
 
         // UPDATE -> PUT /orders/ord-200
-        final updateRes = tableResolver.resolveSave(item: order, id: 'ord-200', isUpdate: true);
+        final updateRes = tableResolver.resolveSave(
+            item: order, id: 'ord-200', isUpdate: true);
         expect(updateRes.method, equals('PUT'));
-        expect(updateRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
+        expect(
+            updateRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
 
         // DELETE -> DELETE /orders/ord-200
         final deleteRes = tableResolver.resolveDelete(id: 'ord-200');
         expect(deleteRes.method, equals('DELETE'));
-        expect(deleteRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
+        expect(
+            deleteRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
 
         // DETAIL -> GET /orders/ord-200
         final detailRes = tableResolver.resolveDetail(id: 'ord-200');
         expect(detailRes.method, equals('GET'));
-        expect(detailRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
+        expect(
+            detailRes.url, equals('https://api.acme.corp/v1/orders/ord-200'));
 
         // LIST -> GET /orders
         final listRes = tableResolver.resolveList();
@@ -120,7 +134,8 @@ void main() {
         expect(endpoint.resolveDetailPath('123'), equals('/orders/123'));
       });
 
-      test('applies custom updatePath, deletePath, and detailPath builders', () {
+      test('applies custom updatePath, deletePath, and detailPath builders',
+          () {
         final endpoint = RestEndpoint(
           path: '/orders',
           createPath: '/orders/new',
@@ -130,13 +145,17 @@ void main() {
         );
 
         expect(endpoint.resolveCreatePath(), equals('/orders/new'));
-        expect(endpoint.resolveUpdatePath('ord-42'), equals('/orders/ord-42/modify'));
-        expect(endpoint.resolveDeletePath('ord-42'), equals('/orders/ord-42/archive'));
-        expect(endpoint.resolveDetailPath('ord-42'), equals('/orders/ord-42/summary'));
+        expect(endpoint.resolveUpdatePath('ord-42'),
+            equals('/orders/ord-42/modify'));
+        expect(endpoint.resolveDeletePath('ord-42'),
+            equals('/orders/ord-42/archive'));
+        expect(endpoint.resolveDetailPath('ord-42'),
+            equals('/orders/ord-42/summary'));
         expect(endpoint.resolveListPath(), equals('/orders'));
       });
 
-      test('resolves full URLs with custom overrides via EndpointUrlResolver', () {
+      test('resolves full URLs with custom overrides via EndpointUrlResolver',
+          () {
         final resolver = EndpointUrlResolver(baseUrl: baseUrl);
         final endpoint = RestEndpoint(
           path: '/orders',
@@ -166,7 +185,8 @@ void main() {
     });
 
     group('3. Dynamic Query Parameters Evaluation', () {
-      test('evaluates query parameters callback dynamically at execution time', () {
+      test('evaluates query parameters callback dynamically at execution time',
+          () {
         String currentBranch = 'branch_east';
         String currentStatus = 'active';
 
@@ -195,7 +215,8 @@ void main() {
         expect(url2, contains('status=pending'));
       });
 
-      test('merges dynamic query params with per-call additional parameters', () {
+      test('merges dynamic query params with per-call additional parameters',
+          () {
         final endpoint = RestEndpoint(
           path: '/orders',
           queryParams: () => {'tenant': 'corp_a', 'version': '2'},
@@ -215,7 +236,8 @@ void main() {
         expect(uri.queryParameters.containsKey('nullable'), isFalse);
       });
 
-      test('safely URI-encodes special characters in query parameter values', () {
+      test('safely URI-encodes special characters in query parameter values',
+          () {
         final endpoint = RestEndpoint(
           path: '/orders',
           queryParams: () => {'query': 'widgets & gadgets', 'tag': 'c++'},
@@ -230,7 +252,9 @@ void main() {
         expect(url, contains('query=widgets+%26+gadgets'));
       });
 
-      test('produces clean URL without question mark when queryParams is empty or null', () {
+      test(
+          'produces clean URL without question mark when queryParams is empty or null',
+          () {
         const endpoint = RestEndpoint(path: '/orders');
         final resolver = EndpointUrlResolver(baseUrl: baseUrl);
 
@@ -282,13 +306,15 @@ void main() {
         expect(h2['Authorization'], equals('Bearer token_v2_refreshed'));
       });
 
-      test('merges collection headers with per-call additional headers', () async {
+      test('merges collection headers with per-call additional headers',
+          () async {
         final endpoint = RestEndpoint(
           path: '/orders',
           headers: () => {'X-Base': 'true', 'X-Shared': 'from_endpoint'},
         );
 
-        final merged = await endpoint.resolveHeaders({'X-Shared': 'overridden', 'X-Extra': 'custom'});
+        final merged = await endpoint
+            .resolveHeaders({'X-Shared': 'overridden', 'X-Extra': 'custom'});
         expect(merged['X-Base'], equals('true'));
         expect(merged['X-Shared'], equals('overridden'));
         expect(merged['X-Extra'], equals('custom'));
@@ -310,7 +336,9 @@ void main() {
         }
       });
 
-      test('OrbitClient.collection with RestEndpoint writes clean REST paths and dynamic headers to outbox', () async {
+      test(
+          'OrbitClient.collection with RestEndpoint writes clean REST paths and dynamic headers to outbox',
+          () async {
         var tokenCount = 1;
         final client = await OrbitClient.initialize(
           databasePath: dbPath,
@@ -332,40 +360,55 @@ void main() {
         );
 
         // 1. Create (save new)
-        final id1 = await orders.save(const TestOrder(id: 'ord_1', item: 'Headphones', price: 99.0));
+        final id1 = await orders.save(
+            const TestOrder(id: 'ord_1', item: 'Headphones', price: 99.0));
         expect(id1, equals('ord_1'));
 
-        var records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        var records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(1));
         var r1 = records.first;
         expect(r1['http_method'], equals('POST'));
-        expect(r1['endpoint_url'], equals('https://backend.mycorp.com/api/orders/create_custom?scope=all'));
+        expect(
+            r1['endpoint_url'],
+            equals(
+                'https://backend.mycorp.com/api/orders/create_custom?scope=all'));
         expect(r1['headers_json'], contains('"X-Auth-Counter":"1"'));
         expect(r1['endpoint_url'].toString().contains('sync/pull'), isFalse);
         expect(r1['endpoint_url'].toString().contains('sync/push'), isFalse);
 
         // 2. Update (save existing)
-        await orders.save(const TestOrder(id: 'ord_1', item: 'Headphones Pro', price: 149.0));
-        records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        await orders.save(
+            const TestOrder(id: 'ord_1', item: 'Headphones Pro', price: 149.0));
+        records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(2));
         var r2 = records.last;
         expect(r2['http_method'], equals('PUT'));
-        expect(r2['endpoint_url'], equals('https://backend.mycorp.com/api/orders/update_custom/ord_1?scope=all'));
+        expect(
+            r2['endpoint_url'],
+            equals(
+                'https://backend.mycorp.com/api/orders/update_custom/ord_1?scope=all'));
         expect(r2['headers_json'], contains('"X-Auth-Counter":"2"'));
 
         // 3. Delete
         await orders.delete('ord_1');
-        records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(3));
         var r3 = records.last;
         expect(r3['http_method'], equals('DELETE'));
-        expect(r3['endpoint_url'], equals('https://backend.mycorp.com/api/orders/delete_custom/ord_1?scope=all'));
+        expect(
+            r3['endpoint_url'],
+            equals(
+                'https://backend.mycorp.com/api/orders/delete_custom/ord_1?scope=all'));
         expect(r3['headers_json'], contains('"X-Auth-Counter":"3"'));
 
         await client.close();
       });
 
-      test('OrbitClient.collection with default RestEndpoint conventions', () async {
+      test('OrbitClient.collection with default RestEndpoint conventions',
+          () async {
         final client = await OrbitClient.initialize(
           databasePath: dbPath,
           baseUrl: 'https://backend.mycorp.com',
@@ -378,25 +421,33 @@ void main() {
           toJson: (o) => o.toJson(),
         );
 
-        await items.save(const TestOrder(id: 'item_10', item: 'Keyboard', price: 80.0));
-        var records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        await items.save(
+            const TestOrder(id: 'item_10', item: 'Keyboard', price: 80.0));
+        var records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(1));
         expect(records.first['http_method'], equals('POST'));
-        expect(records.first['endpoint_url'], equals('https://backend.mycorp.com/api/v1/items'));
+        expect(records.first['endpoint_url'],
+            equals('https://backend.mycorp.com/api/v1/items'));
 
         // Update
-        await items.save(const TestOrder(id: 'item_10', item: 'Mechanical Keyboard', price: 120.0));
-        records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        await items.save(const TestOrder(
+            id: 'item_10', item: 'Mechanical Keyboard', price: 120.0));
+        records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(2));
         expect(records.last['http_method'], equals('PUT'));
-        expect(records.last['endpoint_url'], equals('https://backend.mycorp.com/api/v1/items/item_10'));
+        expect(records.last['endpoint_url'],
+            equals('https://backend.mycorp.com/api/v1/items/item_10'));
 
         // Delete
         await items.delete('item_10');
-        records = await client.storage.db.getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
+        records = await client.storage.db
+            .getAll("SELECT * FROM _sync_outbox ORDER BY sequence_id ASC");
         expect(records.length, equals(3));
         expect(records.last['http_method'], equals('DELETE'));
-        expect(records.last['endpoint_url'], equals('https://backend.mycorp.com/api/v1/items/item_10'));
+        expect(records.last['endpoint_url'],
+            equals('https://backend.mycorp.com/api/v1/items/item_10'));
 
         await client.close();
       });

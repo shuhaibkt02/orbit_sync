@@ -20,5 +20,9 @@ enum OrbitSyncStatus {
   failed;
 
   /// Returns true if this status represents an uncommitted local modification.
-  bool get isDirty => this == pending || this == inFlight || this == rejected || this == pendingDelete;
+  bool get isDirty =>
+      this == pending ||
+      this == inFlight ||
+      this == rejected ||
+      this == pendingDelete;
 }

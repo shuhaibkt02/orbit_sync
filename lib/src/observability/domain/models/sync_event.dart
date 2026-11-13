@@ -19,7 +19,11 @@ class ProbeTimeoutEvent extends SyncEvent {
   final String? targetUrl;
   final int latencyMs;
   final String? errorMessage;
-  const ProbeTimeoutEvent({required super.timestamp, this.targetUrl, this.latencyMs = 0, this.errorMessage});
+  const ProbeTimeoutEvent(
+      {required super.timestamp,
+      this.targetUrl,
+      this.latencyMs = 0,
+      this.errorMessage});
 }
 
 // 2. Storage Triggers
@@ -27,26 +31,38 @@ class MutationQueuedEvent extends SyncEvent {
   final String mutationId;
   final String entity;
   final String entityId;
-  const MutationQueuedEvent({required super.timestamp, required this.mutationId, required this.entity, required this.entityId});
+  const MutationQueuedEvent(
+      {required super.timestamp,
+      required this.mutationId,
+      required this.entity,
+      required this.entityId});
 }
 
 class MutationCoalescedEvent extends SyncEvent {
   final String mutationId;
   final String entity;
   final String entityId;
-  const MutationCoalescedEvent({required super.timestamp, required this.mutationId, required this.entity, required this.entityId});
+  const MutationCoalescedEvent(
+      {required super.timestamp,
+      required this.mutationId,
+      required this.entity,
+      required this.entityId});
 }
 
 class DatabasePrunedEvent extends SyncEvent {
   final int prunedCount;
   final String pruneType;
-  const DatabasePrunedEvent({required super.timestamp, required this.prunedCount, this.pruneType = 'expired'});
+  const DatabasePrunedEvent(
+      {required super.timestamp,
+      required this.prunedCount,
+      this.pruneType = 'expired'});
 }
 
 class StorageWarningEvent extends SyncEvent {
   final String message;
   final int? currentBytes;
-  const StorageWarningEvent({required super.timestamp, required this.message, this.currentBytes});
+  const StorageWarningEvent(
+      {required super.timestamp, required this.message, this.currentBytes});
 }
 
 // 3. SLA Monitor Triggers
@@ -56,7 +72,13 @@ class SlaWarningEvent extends SyncEvent {
   final String entityId;
   final Duration age;
   final Duration sla;
-  const SlaWarningEvent({required super.timestamp, required this.mutationId, required this.entity, required this.entityId, required this.age, required this.sla});
+  const SlaWarningEvent(
+      {required super.timestamp,
+      required this.mutationId,
+      required this.entity,
+      required this.entityId,
+      required this.age,
+      required this.sla});
 }
 
 class SlaBreachedEvent extends SyncEvent {
@@ -65,7 +87,13 @@ class SlaBreachedEvent extends SyncEvent {
   final String entityId;
   final Duration age;
   final Duration sla;
-  const SlaBreachedEvent({required super.timestamp, required this.mutationId, required this.entity, required this.entityId, required this.age, required this.sla});
+  const SlaBreachedEvent(
+      {required super.timestamp,
+      required this.mutationId,
+      required this.entity,
+      required this.entityId,
+      required this.age,
+      required this.sla});
 }
 
 // 4. Consensus & Engine Triggers
@@ -75,7 +103,13 @@ class ConflictDetectedEvent extends SyncEvent {
   final Map<String, dynamic> localRecord;
   final Map<String, dynamic> remoteRecord;
   final Map<String, dynamic>? mergedRecord;
-  const ConflictDetectedEvent({required super.timestamp, required this.entity, required this.entityId, this.localRecord = const {}, this.remoteRecord = const {}, this.mergedRecord});
+  const ConflictDetectedEvent(
+      {required super.timestamp,
+      required this.entity,
+      required this.entityId,
+      this.localRecord = const {},
+      this.remoteRecord = const {},
+      this.mergedRecord});
 }
 
 class PoisonPillQuarantinedEvent extends SyncEvent {
@@ -83,13 +117,21 @@ class PoisonPillQuarantinedEvent extends SyncEvent {
   final String entity;
   final String entityId;
   final String reason;
-  const PoisonPillQuarantinedEvent({required super.timestamp, required this.mutationId, required this.entity, required this.entityId, required this.reason});
+  const PoisonPillQuarantinedEvent(
+      {required super.timestamp,
+      required this.mutationId,
+      required this.entity,
+      required this.entityId,
+      required this.reason});
 }
 
 class CascadeFailureEvent extends SyncEvent {
   final String parentMutationId;
   final String childMutationId;
-  const CascadeFailureEvent({required super.timestamp, required this.parentMutationId, required this.childMutationId});
+  const CascadeFailureEvent(
+      {required super.timestamp,
+      required this.parentMutationId,
+      required this.childMutationId});
 }
 
 class SyncRejectedEvent extends SyncEvent {
@@ -97,14 +139,20 @@ class SyncRejectedEvent extends SyncEvent {
   final String entityId;
   final String errorMessage;
   final int? statusCode;
-  const SyncRejectedEvent({required super.timestamp, required this.entity, required this.entityId, required this.errorMessage, this.statusCode});
+  const SyncRejectedEvent(
+      {required super.timestamp,
+      required this.entity,
+      required this.entityId,
+      required this.errorMessage,
+      this.statusCode});
 }
 
 // 5. Transport Triggers
 class RateLimitedEvent extends SyncEvent {
   final int retryAfterSeconds;
   final String? endpoint;
-  const RateLimitedEvent({required super.timestamp, this.retryAfterSeconds = 1, this.endpoint});
+  const RateLimitedEvent(
+      {required super.timestamp, this.retryAfterSeconds = 1, this.endpoint});
 }
 
 class AuthExpiredEvent extends SyncEvent {

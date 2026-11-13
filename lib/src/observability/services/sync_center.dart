@@ -65,16 +65,17 @@ class OrbitSyncCenterImpl implements OrbitSyncCenter {
     if (_isDisposed || _summarySub != null) return;
     _refreshSummary();
     _summarySub = storage
-        .watch("SELECT status, COUNT(*) as cnt, MIN(created_at) as oldest FROM _sync_outbox GROUP BY status")
+        .watch(
+            "SELECT status, COUNT(*) as cnt, MIN(created_at) as oldest FROM _sync_outbox GROUP BY status")
         .leadingImmediateDebounce(const Duration(milliseconds: 100))
         .listen(
-          (rs) {
-            if (!_isDisposed) {
-              _summaryNotifier.value = OrbitSummary.fromRows(rs);
-            }
-          },
-          onError: (_) {},
-        );
+      (rs) {
+        if (!_isDisposed) {
+          _summaryNotifier.value = OrbitSummary.fromRows(rs);
+        }
+      },
+      onError: (_) {},
+    );
   }
 
   void _stopSummaryWatching() {
@@ -92,7 +93,8 @@ class OrbitSyncCenterImpl implements OrbitSyncCenter {
       List<dynamic> params = const [];
 
       if (filterStatus != null) {
-        query = 'SELECT * FROM _sync_outbox WHERE status = ? ORDER BY created_at DESC';
+        query =
+            'SELECT * FROM _sync_outbox WHERE status = ? ORDER BY created_at DESC';
         params = [_statusToDbString(filterStatus)];
       } else {
         query = 'SELECT * FROM _sync_outbox ORDER BY created_at DESC';
@@ -101,7 +103,9 @@ class OrbitSyncCenterImpl implements OrbitSyncCenter {
       final sub = storage
           .watch(query, parameters: params)
           .leadingImmediateDebounce(const Duration(milliseconds: 100))
-          .map((rs) => rs.map((r) => SyncItemInfo.fromRow(r, nowMs: nowMsProvider?.call())).toList())
+          .map((rs) => rs
+              .map((r) => SyncItemInfo.fromRow(r, nowMs: nowMsProvider?.call()))
+              .toList())
           .listen(
             multiController.addSync,
             onError: multiController.addErrorSync,

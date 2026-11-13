@@ -5,7 +5,8 @@ import 'package:orbit_sync/orbit_sync.dart';
 import 'storage_test_helpers.dart';
 
 void main() {
-  group('Ticket 05: Cooling-Off Window Coalescing & Zero-Network Local Undo', () {
+  group('Ticket 05: Cooling-Off Window Coalescing & Zero-Network Local Undo',
+      () {
     late Directory tempDir;
     late SyncStorage storage;
 
@@ -59,7 +60,8 @@ void main() {
       expect(dispatchAfterHold, lessThanOrEqualTo(now + 605000));
     });
 
-    test('2. Subsequent edits within cooling window coalesce in place', () async {
+    test('2. Subsequent edits within cooling window coalesce in place',
+        () async {
       final mut1 = await storage.save(
         entity: 'tasks',
         id: 'task-coalesce-1',
@@ -77,14 +79,17 @@ void main() {
       final outboxRows = await storage.db.getAll(
         "SELECT * FROM _sync_outbox WHERE entity_name = 'tasks' AND entity_id = 'task-coalesce-1';",
       );
-      expect(outboxRows.length, equals(1), reason: 'Must coalesce in place into 1 row');
+      expect(outboxRows.length, equals(1),
+          reason: 'Must coalesce in place into 1 row');
 
       final outbox1 = outboxRows.first;
-      final payload1 = jsonDecode(outbox1['payload_json'] as String) as Map<String, dynamic>;
+      final payload1 =
+          jsonDecode(outbox1['payload_json'] as String) as Map<String, dynamic>;
       expect(payload1['title'], equals('Draft v2'));
       expect(payload1['content'], equals('Second edit'));
 
-      final history1 = jsonDecode(outbox1['revision_history_json'] as String) as List<dynamic>;
+      final history1 = jsonDecode(outbox1['revision_history_json'] as String)
+          as List<dynamic>;
       expect(history1.length, equals(1));
       expect(history1[0]['snapshot']['title'], equals('Draft v1'));
       expect(history1[0]['snapshot']['content'], equals('Initial'));
@@ -104,10 +109,12 @@ void main() {
       expect(outboxRowsAfterThird.length, equals(1));
 
       final outbox2 = outboxRowsAfterThird.first;
-      final payload2 = jsonDecode(outbox2['payload_json'] as String) as Map<String, dynamic>;
+      final payload2 =
+          jsonDecode(outbox2['payload_json'] as String) as Map<String, dynamic>;
       expect(payload2['title'], equals('Draft v3'));
 
-      final history2 = jsonDecode(outbox2['revision_history_json'] as String) as List<dynamic>;
+      final history2 = jsonDecode(outbox2['revision_history_json'] as String)
+          as List<dynamic>;
       expect(history2.length, equals(2));
       expect(history2[0]['snapshot']['title'], equals('Draft v1'));
       expect(history2[1]['snapshot']['title'], equals('Draft v2'));
@@ -117,11 +124,13 @@ void main() {
         "SELECT id, version, updated_at, expires_at, data_json FROM tasks WHERE id = 'task-coalesce-1';",
       );
       expect(domainRow['id'], equals('task-coalesce-1'));
-      final domainData = jsonDecode(domainRow['data_json'] as String) as Map<String, dynamic>;
+      final domainData =
+          jsonDecode(domainRow['data_json'] as String) as Map<String, dynamic>;
       expect(domainData['title'], equals('Draft v3'));
     });
 
-    test('3. Candidate queue queries ignore rows where now < dispatch_after', () async {
+    test('3. Candidate queue queries ignore rows where now < dispatch_after',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // Mutation A: Held in cooling-off window (dispatch_after = now + 5 min)
@@ -149,7 +158,8 @@ void main() {
       ''';
 
       final candidatesNow = await storage.db.getAll(candidateSql, [now, now]);
-      final candidateIdsNow = candidatesNow.map((r) => r['entity_id'] as String).toList();
+      final candidateIdsNow =
+          candidatesNow.map((r) => r['entity_id'] as String).toList();
 
       expect(candidateIdsNow, contains('task-ready-now'));
       expect(candidateIdsNow, isNot(contains('task-cooling-active')),
@@ -157,14 +167,18 @@ void main() {
 
       // After cooling window elapses (simulated by passing now + 6 minutes)
       final futureTime = now + 360000;
-      final candidatesLater = await storage.db.getAll(candidateSql, [futureTime, futureTime]);
-      final candidateIdsLater = candidatesLater.map((r) => r['entity_id'] as String).toList();
+      final candidatesLater =
+          await storage.db.getAll(candidateSql, [futureTime, futureTime]);
+      final candidateIdsLater =
+          candidatesLater.map((r) => r['entity_id'] as String).toList();
 
       expect(candidateIdsLater, contains('task-cooling-active'));
       expect(candidateIdsLater, contains('task-ready-now'));
     });
 
-    test('4. undoDelete restores domain record from base_snapshot_json and cancels pending delete mutation', () async {
+    test(
+        '4. undoDelete restores domain record from base_snapshot_json and cancels pending delete mutation',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-undoable-1',
@@ -180,7 +194,8 @@ void main() {
       expect(deleteMutId, isNotNull);
 
       // Verify domain table is empty
-      final domainAfterDel = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-undoable-1';");
+      final domainAfterDel = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-undoable-1';");
       expect(domainAfterDel, isEmpty);
 
       // Verify outbox has delete mutation with base_snapshot_json
@@ -191,7 +206,8 @@ void main() {
       expect(deleteOutbox['base_snapshot_json'], isNotNull);
 
       // Undo delete
-      final undone = await storage.undoDelete(entity: 'tasks', id: 'task-undoable-1');
+      final undone =
+          await storage.undoDelete(entity: 'tasks', id: 'task-undoable-1');
       expect(undone, isTrue);
 
       // Verify pending delete mutation was removed from _sync_outbox
@@ -205,12 +221,14 @@ void main() {
         "SELECT id, version, updated_at, expires_at, data_json FROM tasks WHERE id = 'task-undoable-1';",
       );
       expect(restoredRow['id'], equals('task-undoable-1'));
-      final restoredData = jsonDecode(restoredRow['data_json'] as String) as Map<String, dynamic>;
+      final restoredData = jsonDecode(restoredRow['data_json'] as String)
+          as Map<String, dynamic>;
       expect(restoredData['title'], equals('Critical Task'));
       expect(restoredData['priority'], equals('high'));
 
       // Subsequent undoDelete returns false (no pending delete left)
-      final secondUndo = await storage.undoDelete(entity: 'tasks', id: 'task-undoable-1');
+      final secondUndo =
+          await storage.undoDelete(entity: 'tasks', id: 'task-undoable-1');
       expect(secondUndo, isFalse);
 
       // Verify undoDelete can also be called with just (id: ...) without entity
@@ -219,11 +237,13 @@ void main() {
         id: 'task-undoable-1',
         coolingTime: const Duration(minutes: 5),
       );
-      final undoneWithoutEntity = await storage.undoDelete(id: 'task-undoable-1');
+      final undoneWithoutEntity =
+          await storage.undoDelete(id: 'task-undoable-1');
       expect(undoneWithoutEntity, isTrue);
     });
 
-    test('5. undoDelete returns false when cooling window has passed', () async {
+    test('5. undoDelete returns false when cooling window has passed',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-expired-undo',
@@ -238,7 +258,8 @@ void main() {
       );
 
       // Attempt undo when dispatch_after has expired
-      final undone = await storage.undoDelete(entity: 'tasks', id: 'task-expired-undo');
+      final undone =
+          await storage.undoDelete(entity: 'tasks', id: 'task-expired-undo');
       expect(undone, isFalse);
 
       // Delete mutation is retained in outbox for sync dispatch
@@ -248,7 +269,9 @@ void main() {
       expect(outboxRows.length, equals(1));
     });
 
-    test('6. Rapid annihilation: newly created record deleted in cooling window is purged with zero outbox mutations', () async {
+    test(
+        '6. Rapid annihilation: newly created record deleted in cooling window is purged with zero outbox mutations',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-annihilate-1',
@@ -266,15 +289,19 @@ void main() {
       expect(deleteMut, isNull);
 
       // Domain table has 0 rows
-      final domainRows = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-annihilate-1';");
+      final domainRows = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-annihilate-1';");
       expect(domainRows, isEmpty);
 
       // Outbox has 0 mutations
-      final outboxRows = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-annihilate-1';");
+      final outboxRows = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-annihilate-1';");
       expect(outboxRows, isEmpty);
     });
 
-    test('7. Rapid annihilation works after multiple coalesced edits during cooling window', () async {
+    test(
+        '7. Rapid annihilation works after multiple coalesced edits during cooling window',
+        () async {
       await storage.save(
         entity: 'tasks',
         id: 'task-coalesce-annihilate',
@@ -306,14 +333,18 @@ void main() {
       expect(deleteMut, isNull);
 
       // Zero traces remain anywhere
-      final domainRows = await storage.db.getAll("SELECT * FROM tasks WHERE id = 'task-coalesce-annihilate';");
+      final domainRows = await storage.db
+          .getAll("SELECT * FROM tasks WHERE id = 'task-coalesce-annihilate';");
       expect(domainRows, isEmpty);
 
-      final outboxRows = await storage.db.getAll("SELECT * FROM _sync_outbox WHERE entity_id = 'task-coalesce-annihilate';");
+      final outboxRows = await storage.db.getAll(
+          "SELECT * FROM _sync_outbox WHERE entity_id = 'task-coalesce-annihilate';");
       expect(outboxRows, isEmpty);
     });
 
-    test('8. pruneSyncedOutbox: purges synced mutations older than retention while preserving active mutations', () async {
+    test(
+        '8. pruneSyncedOutbox: purges synced mutations older than retention while preserving active mutations',
+        () async {
       final now = DateTime.now().millisecondsSinceEpoch;
       final dayMs = const Duration(days: 1).inMilliseconds;
 
@@ -347,10 +378,14 @@ void main() {
 
       // 1. Default prune (7 days)
       final prunedCount = await storage.pruneSyncedOutbox();
-      expect(prunedCount, equals(1), reason: 'Only synced-old should be purged');
+      expect(prunedCount, equals(1),
+          reason: 'Only synced-old should be purged');
 
-      final remainingAfterFirstPrune = await storage.db.getAll('SELECT mutation_id, status FROM _sync_outbox ORDER BY mutation_id;');
-      final remainingIds = remainingAfterFirstPrune.map((r) => r['mutation_id'] as String).toSet();
+      final remainingAfterFirstPrune = await storage.db.getAll(
+          'SELECT mutation_id, status FROM _sync_outbox ORDER BY mutation_id;');
+      final remainingIds = remainingAfterFirstPrune
+          .map((r) => r['mutation_id'] as String)
+          .toSet();
 
       expect(remainingIds, isNot(contains('synced-old')));
       expect(remainingIds, contains('synced-recent'));
@@ -362,11 +397,16 @@ void main() {
       expect(remainingIds, contains('validation-error-old'));
 
       // 2. Custom retention prune (1 day)
-      final prunedCustom = await storage.pruneSyncedOutbox(retention: const Duration(days: 1));
-      expect(prunedCustom, equals(1), reason: 'synced-recent (2 days old) should now be purged');
+      final prunedCustom =
+          await storage.pruneSyncedOutbox(retention: const Duration(days: 1));
+      expect(prunedCustom, equals(1),
+          reason: 'synced-recent (2 days old) should now be purged');
 
-      final remainingAfterSecondPrune = await storage.db.getAll('SELECT mutation_id, status FROM _sync_outbox ORDER BY mutation_id;');
-      final remainingIds2 = remainingAfterSecondPrune.map((r) => r['mutation_id'] as String).toSet();
+      final remainingAfterSecondPrune = await storage.db.getAll(
+          'SELECT mutation_id, status FROM _sync_outbox ORDER BY mutation_id;');
+      final remainingIds2 = remainingAfterSecondPrune
+          .map((r) => r['mutation_id'] as String)
+          .toSet();
 
       expect(remainingIds2, isNot(contains('synced-recent')));
       // All non-synced mutations are strictly protected:

@@ -22,7 +22,8 @@ class OrderItem {
 }
 
 void main() {
-  group('Ticket 16: Unified Sync Center Diagnostic API & Memory-Safe Streams', () {
+  group('Ticket 16: Unified Sync Center Diagnostic API & Memory-Safe Streams',
+      () {
     late Directory tempDir;
 
     setUp(() {
@@ -35,7 +36,9 @@ void main() {
       }
     });
 
-    test('1. watchItems() streams processed SyncItemInfo with parsed fields and status', () async {
+    test(
+        '1. watchItems() streams processed SyncItemInfo with parsed fields and status',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/sync_items.db',
         profile: SyncProfile.standard,
@@ -69,7 +72,8 @@ void main() {
       await client.close();
     });
 
-    test('2. watchItems(filterStatus) filters outbox records by status', () async {
+    test('2. watchItems(filterStatus) filters outbox records by status',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/filter_status.db',
       );
@@ -81,8 +85,10 @@ void main() {
         toJson: (o) => o.toJson(),
       );
 
-      await table.save(OrderItem(id: 'ord-pending', title: 'Pending Order', amount: 10));
-      await table.save(OrderItem(id: 'ord-rejected', title: 'Rejected Order', amount: 20));
+      await table.save(
+          OrderItem(id: 'ord-pending', title: 'Pending Order', amount: 10));
+      await table.save(
+          OrderItem(id: 'ord-rejected', title: 'Rejected Order', amount: 20));
 
       // Simulate one item entering validation_error
       await client.storage.db.execute(
@@ -90,7 +96,9 @@ void main() {
       );
 
       // Filter by rejected
-      final rejectedItems = await client.syncCenter.watchItems(filterStatus: SyncItemStatus.rejected).first;
+      final rejectedItems = await client.syncCenter
+          .watchItems(filterStatus: SyncItemStatus.rejected)
+          .first;
       expect(rejectedItems.length, equals(1));
       expect(rejectedItems.first.entityId, equals('ord-rejected'));
       expect(rejectedItems.first.status, equals(SyncItemStatus.rejected));
@@ -98,14 +106,18 @@ void main() {
       expect(rejectedItems.first.canRetry, isTrue);
 
       // Filter by pending
-      final pendingItems = await client.syncCenter.watchItems(filterStatus: SyncItemStatus.pending).first;
+      final pendingItems = await client.syncCenter
+          .watchItems(filterStatus: SyncItemStatus.pending)
+          .first;
       expect(pendingItems.length, equals(1));
       expect(pendingItems.first.entityId, equals('ord-pending'));
 
       await client.close();
     });
 
-    test('3. Auto-pausing stream lifecycle: onCancel immediately detaches watcher', () async {
+    test(
+        '3. Auto-pausing stream lifecycle: onCancel immediately detaches watcher',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/auto_pause.db',
       );
@@ -117,7 +129,8 @@ void main() {
         toJson: (o) => o.toJson(),
       );
 
-      await table.save(OrderItem(id: 'ord-initial', title: 'Initial', amount: 1));
+      await table
+          .save(OrderItem(id: 'ord-initial', title: 'Initial', amount: 1));
 
       final stream = client.syncCenter.watchItems();
       var eventCount = 0;
@@ -132,7 +145,8 @@ void main() {
       await sub.cancel();
 
       // Subsequent database writes must not emit to canceled subscription
-      await table.save(OrderItem(id: 'ord-unmounted', title: 'No Leak', amount: 5));
+      await table
+          .save(OrderItem(id: 'ord-unmounted', title: 'No Leak', amount: 5));
       await Future<void>.delayed(const Duration(milliseconds: 150));
 
       expect(eventCount, equals(countAtListen));
@@ -140,7 +154,9 @@ void main() {
       await client.close();
     });
 
-    test('4. Microtask 100ms emission throttling during high-frequency mutation bursts', () async {
+    test(
+        '4. Microtask 100ms emission throttling during high-frequency mutation bursts',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/throttle.db',
       );
@@ -157,7 +173,8 @@ void main() {
 
       // Rapidly write 15 mutations within 50ms (burst)
       for (var i = 0; i < 15; i++) {
-        await table.save(OrderItem(id: 'ord-burst-$i', title: 'Burst Item $i', amount: i.toDouble()));
+        await table.save(OrderItem(
+            id: 'ord-burst-$i', title: 'Burst Item $i', amount: i.toDouble()));
       }
 
       // At 50ms, because of the 100ms throttle, emission count must be small (<= 2)
@@ -172,7 +189,9 @@ void main() {
       await client.close();
     });
 
-    test('5. ValueListenable<OrbitSummary> reflects outbox counts and health states', () async {
+    test(
+        '5. ValueListenable<OrbitSummary> reflects outbox counts and health states',
+        () async {
       final client = await OrbitClient.initialize(
         databasePath: '${tempDir.path}/summary_test.db',
       );
@@ -194,7 +213,8 @@ void main() {
       );
 
       // Save an item -> summary updates
-      await table.save(OrderItem(id: 'ord-sum-1', title: 'Summary Order', amount: 12));
+      await table
+          .save(OrderItem(id: 'ord-sum-1', title: 'Summary Order', amount: 12));
       await Future<void>.delayed(const Duration(milliseconds: 150));
 
       expect(summary.value.pending, equals(1));
@@ -214,7 +234,8 @@ void main() {
       await client.close();
     });
 
-    test('6. Action controls: syncNow(), retryItem(), retryAllFailed()', () async {
+    test('6. Action controls: syncNow(), retryItem(), retryAllFailed()',
+        () async {
       final faultClient = FaultInjectionHttpClient(
         script: [
           const ReturnStatus(500, body: 'Server Error'),
@@ -236,35 +257,45 @@ void main() {
         toJson: (o) => o.toJson(),
       );
 
-      await table.save(OrderItem(id: 'ord-retry-1', title: 'Item 1', amount: 50));
-      await table.save(OrderItem(id: 'ord-retry-2', title: 'Item 2', amount: 75));
+      await table
+          .save(OrderItem(id: 'ord-retry-1', title: 'Item 1', amount: 50));
+      await table
+          .save(OrderItem(id: 'ord-retry-2', title: 'Item 2', amount: 75));
 
       // 1st Push -> mut1 fails with 500, lane pauses
       await client.syncNow();
 
-      final outbox1 = await client.query("SELECT mutation_id, status FROM _sync_outbox WHERE entity_id = 'ord-retry-1'");
-      final outbox2 = await client.query("SELECT mutation_id, status FROM _sync_outbox WHERE entity_id = 'ord-retry-2'");
+      final outbox1 = await client.query(
+          "SELECT mutation_id, status FROM _sync_outbox WHERE entity_id = 'ord-retry-1'");
+      final outbox2 = await client.query(
+          "SELECT mutation_id, status FROM _sync_outbox WHERE entity_id = 'ord-retry-2'");
       final mut1 = outbox1.first['mutation_id'] as String;
       final mut2 = outbox2.first['mutation_id'] as String;
-      expect(outbox1.first['status'], equals('pending')); // in pending with retry_count = 1
+      expect(outbox1.first['status'],
+          equals('pending')); // in pending with retry_count = 1
 
       // 1-Tap Retry single item -> mut1 succeeds (200), mut2 encounters 422
       await client.retryItem(mut1);
-      final afterRetry1 = await client.query("SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut1]);
-      final afterRetry2 = await client.query("SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut2]);
+      final afterRetry1 = await client.query(
+          "SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut1]);
+      final afterRetry2 = await client.query(
+          "SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut2]);
       expect(afterRetry1.first['status'], equals('synced'));
       expect(afterRetry2.first['status'], equals('validation_error'));
 
       // 1-Tap Retry all failed -> mut2 is recovered and succeeds (200)
       await client.retryAllFailed();
-      final afterRetryAll = await client.query("SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut2]);
+      final afterRetryAll = await client.query(
+          "SELECT status FROM _sync_outbox WHERE mutation_id = ?", [mut2]);
       expect(afterRetryAll.first['status'], equals('synced'));
 
       await client.close();
       faultClient.close();
     });
 
-    test('7. Early-Warning SLA alerts trigger onSlaWarning and onSlaBreached callbacks', () async {
+    test(
+        '7. Early-Warning SLA alerts trigger onSlaWarning and onSlaBreached callbacks',
+        () async {
       int simulatedNow = 1000000;
       SlaWarningEvent? warningReceived;
       SlaBreachedEvent? breachReceived;

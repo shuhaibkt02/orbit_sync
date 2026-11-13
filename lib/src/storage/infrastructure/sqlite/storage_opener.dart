@@ -23,7 +23,9 @@ class StorageOpener {
     }
 
     if (backupShield != null && path != ':memory:') {
-      try { await backupShield(path); } catch (_) {}
+      try {
+        await backupShield(path);
+      } catch (_) {}
     }
 
     recovery.sniffAndQuarantineIfCorrupted(path, onDatabaseCorrupted);
@@ -34,22 +36,27 @@ class StorageOpener {
       lockTimeout: Duration(seconds: 30),
     );
 
-    SqliteDatabase db = SqliteDatabase(path: path, maxReaders: maxReaders, options: sqliteOptions);
+    SqliteDatabase db = SqliteDatabase(
+        path: path, maxReaders: maxReaders, options: sqliteOptions);
     bool deepCorrupt = false;
     try {
       await db.initialize();
       if (path != ':memory:' && File(path).existsSync()) {
         final check = await db.get('PRAGMA quick_check(1);');
-        if (check.values.first?.toString().toLowerCase() != 'ok') deepCorrupt = true;
+        if (check.values.first?.toString().toLowerCase() != 'ok')
+          deepCorrupt = true;
       }
     } catch (_) {
       deepCorrupt = true;
     }
 
     if (deepCorrupt && path != ':memory:') {
-      try { await db.close(); } catch (_) {}
+      try {
+        await db.close();
+      } catch (_) {}
       recovery.quarantineCorruptFiles(path, onDatabaseCorrupted);
-      db = SqliteDatabase(path: path, maxReaders: maxReaders, options: sqliteOptions);
+      db = SqliteDatabase(
+          path: path, maxReaders: maxReaders, options: sqliteOptions);
       await db.initialize();
     }
 

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:orbit_sync/orbit_sync.dart';
-import 'package:sync_server/sync_server.dart';
+import '../sync_server/lib/sync_server.dart';
 
 void main() {
   late Directory tempDir;
@@ -20,7 +20,9 @@ void main() {
   });
 
   group('Issue 09: SyncProfile Tiers (Basic, Standard, Enterprise)', () {
-    test('Test Case 1: SyncProfile.basic uses LWW conflict resolution and simple failure', () async {
+    test(
+        'Test Case 1: SyncProfile.basic uses LWW conflict resolution and simple failure',
+        () async {
       final dbPath = '${tempDir.path}/basic.db';
       final client = await OrbitClient.initialize(
         databasePath: dbPath,
@@ -62,12 +64,16 @@ void main() {
       // Pull from server: basic profile should execute LWW (server overwrites local, outbox marked conflict)
       await client.worker.pullAll();
 
-      final localRows = await client.query("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-1'");
-      expect(localRows.first['title'], 'Server Title', reason: 'LWW forces remote state to overwrite local');
+      final localRows = await client.query(
+          "SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-1'");
+      expect(localRows.first['title'], 'Server Title',
+          reason: 'LWW forces remote state to overwrite local');
       expect(localRows.first['status'], 'done');
 
-      final outboxRows = await client.query("SELECT status FROM _sync_outbox WHERE entity_id = 'task-1'");
-      expect(outboxRows.first['status'], 'conflict', reason: 'Overwritten local mutation marked conflict');
+      final outboxRows = await client
+          .query("SELECT status FROM _sync_outbox WHERE entity_id = 'task-1'");
+      expect(outboxRows.first['status'], 'conflict',
+          reason: 'Overwritten local mutation marked conflict');
 
       // Test poison pill handling in basic mode: should be marked 'failed' instead of 'dlq'
       await client.save(
@@ -78,13 +84,17 @@ void main() {
       final pushRes = await client.worker.pushBatch(chaos: 'bad_request');
       expect(pushRes.status, SyncPushStatus.poisonPill);
 
-      final poisonRows = await client.query("SELECT status FROM _sync_outbox WHERE entity_id = 'task-bad'");
-      expect(poisonRows.first['status'], 'failed', reason: 'Basic profile uses failed status instead of dlq');
+      final poisonRows = await client.query(
+          "SELECT status FROM _sync_outbox WHERE entity_id = 'task-bad'");
+      expect(poisonRows.first['status'], 'failed',
+          reason: 'Basic profile uses failed status instead of dlq');
 
       await client.close();
     });
 
-    test('Test Case 2: SyncProfile.standard uses 3-way column merge and routes to DLQ', () async {
+    test(
+        'Test Case 2: SyncProfile.standard uses 3-way column merge and routes to DLQ',
+        () async {
       final dbPath = '${tempDir.path}/standard.db';
       final client = await OrbitClient.initialize(
         databasePath: dbPath,
@@ -133,9 +143,12 @@ void main() {
       // Pull: Standard profile performs 3-way column merge
       await client.worker.pullAll();
 
-      final localRows = await client.query("SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-2'");
-      expect(localRows.first['title'], 'Local Updated Title', reason: '3-way merge preserved local non-conflicting field');
-      expect(localRows.first['status'], 'reviewed', reason: '3-way merge merged remote non-conflicting field');
+      final localRows = await client.query(
+          "SELECT json_extract(data_json, '\$.title') as title, json_extract(data_json, '\$.status') as status FROM tasks WHERE id = 'task-2'");
+      expect(localRows.first['title'], 'Local Updated Title',
+          reason: '3-way merge preserved local non-conflicting field');
+      expect(localRows.first['status'], 'reviewed',
+          reason: '3-way merge merged remote non-conflicting field');
 
       // Drain merged mutation to server
       await client.worker.pushBatch();
@@ -148,13 +161,17 @@ void main() {
       );
       await client.worker.pushBatch(chaos: 'bad_request');
 
-      final dlqRows = await client.query("SELECT status FROM _sync_outbox WHERE entity_id = 'task-poison'");
-      expect(dlqRows.first['status'], 'dlq', reason: 'Standard profile routes poison pill to DLQ');
+      final dlqRows = await client.query(
+          "SELECT status FROM _sync_outbox WHERE entity_id = 'task-poison'");
+      expect(dlqRows.first['status'], 'dlq',
+          reason: 'Standard profile routes poison pill to DLQ');
 
       await client.close();
     });
 
-    test('Test Case 3: SyncProfile.enterprise activates Parent-Child DAG selective holding', () async {
+    test(
+        'Test Case 3: SyncProfile.enterprise activates Parent-Child DAG selective holding',
+        () async {
       final dbPath = '${tempDir.path}/enterprise.db';
       final client = await OrbitClient.initialize(
         databasePath: dbPath,
@@ -167,7 +184,8 @@ void main() {
       );
 
       await client.registerTable('orders', {'title': 'TEXT'});
-      await client.registerTable('order_items', {'order_id': 'TEXT', 'item': 'TEXT'});
+      await client
+          .registerTable('order_items', {'order_id': 'TEXT', 'item': 'TEXT'});
 
       expect(client.profile, SyncProfile.enterprise);
 
@@ -201,13 +219,20 @@ void main() {
 
       // Push in Enterprise profile: child must be selectively held, unrelated pushes successfully
       final pushRes = await client.worker.pushBatch();
-      expect(pushRes.applied, 1, reason: 'Only the unrelated mutation should be applied');
+      expect(pushRes.applied, 1,
+          reason: 'Only the unrelated mutation should be applied');
 
-      final childRow = await client.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [childMutId]);
-      expect(childRow['status'], 'held', reason: 'Dependent child should be selectively held');
+      final childRow = await client.storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+          [childMutId]);
+      expect(childRow['status'], 'held',
+          reason: 'Dependent child should be selectively held');
 
-      final unrelatedRow = await client.storage.db.get('SELECT status FROM _sync_outbox WHERE mutation_id = ?', [unrelatedMutId]);
-      expect(unrelatedRow['status'], 'synced', reason: 'Unrelated order should sync without head-of-line blocking');
+      final unrelatedRow = await client.storage.db.get(
+          'SELECT status FROM _sync_outbox WHERE mutation_id = ?',
+          [unrelatedMutId]);
+      expect(unrelatedRow['status'], 'synced',
+          reason: 'Unrelated order should sync without head-of-line blocking');
 
       await client.close();
     });

@@ -45,11 +45,14 @@ class InMemorySyncTransport implements SyncTransport {
     required String idempotencyKey,
     String? chaos,
   }) async {
-    if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
-    if (pushError != null) return TransportResponse(statusCode: 0, error: pushError);
+    if (simulatedLatency > Duration.zero)
+      await Future<void>.delayed(simulatedLatency);
+    if (pushError != null)
+      return TransportResponse(statusCode: 0, error: pushError);
 
     pushedBatches.add(mutations);
-    return TransportResponse(statusCode: pushStatusCode, body: pushResponseBody);
+    return TransportResponse(
+        statusCode: pushStatusCode, body: pushResponseBody);
   }
 
   @override
@@ -62,8 +65,10 @@ class InMemorySyncTransport implements SyncTransport {
     String? entityId,
     Map<String, String>? headers,
   }) async {
-    if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
-    if (pushError != null) return TransportResponse(statusCode: 0, error: pushError);
+    if (simulatedLatency > Duration.zero)
+      await Future<void>.delayed(simulatedLatency);
+    if (pushError != null)
+      return TransportResponse(statusCode: 0, error: pushError);
 
     customPushes.add({
       'url': url,
@@ -74,7 +79,8 @@ class InMemorySyncTransport implements SyncTransport {
       'entityId': entityId,
       'headers': headers,
     });
-    return TransportResponse(statusCode: pushStatusCode, body: pushResponseBody);
+    return TransportResponse(
+        statusCode: pushStatusCode, body: pushResponseBody);
   }
 
   @override
@@ -90,8 +96,10 @@ class InMemorySyncTransport implements SyncTransport {
     Duration? timeout,
     void Function(int sent, int total)? onSendProgress,
   }) async {
-    if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
-    if (pushError != null) return TransportResponse(statusCode: 0, error: pushError);
+    if (simulatedLatency > Duration.zero)
+      await Future<void>.delayed(simulatedLatency);
+    if (pushError != null)
+      return TransportResponse(statusCode: 0, error: pushError);
 
     multipartPushes.add({
       'uri': uri,
@@ -104,7 +112,8 @@ class InMemorySyncTransport implements SyncTransport {
       'headers': headers,
       'timeout': timeout,
     });
-    return TransportResponse(statusCode: pushStatusCode, body: pushResponseBody);
+    return TransportResponse(
+        statusCode: pushStatusCode, body: pushResponseBody);
   }
 
   @override
@@ -115,15 +124,18 @@ class InMemorySyncTransport implements SyncTransport {
     bool snapshot = false,
     String? chaos,
   }) async {
-    if (simulatedLatency > Duration.zero) await Future<void>.delayed(simulatedLatency);
-    if (pullError != null) return TransportResponse(statusCode: 0, error: pullError);
+    if (simulatedLatency > Duration.zero)
+      await Future<void>.delayed(simulatedLatency);
+    if (pullError != null)
+      return TransportResponse(statusCode: 0, error: pullError);
 
     final payload = {
       'changes': cannedPullChanges,
       'next_cursor': pullNextCursor,
       'has_more': false,
     };
-    return TransportResponse(statusCode: pullStatusCode, body: jsonEncode(payload));
+    return TransportResponse(
+        statusCode: pullStatusCode, body: jsonEncode(payload));
   }
 
   void reset() {

@@ -17,7 +17,8 @@ class FakeSyncServer {
   int get port => server.port;
   String get baseUrl => 'http://127.0.0.1:$port';
 
-  static Future<FakeSyncServer> start({int port = 0, int retentionCursor = 0}) async {
+  static Future<FakeSyncServer> start(
+      {int port = 0, int retentionCursor = 0}) async {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
     final instance = FakeSyncServer._(server);
     instance.retentionCursor = retentionCursor;
@@ -40,9 +41,12 @@ class FakeSyncServer {
         final chaos = request.uri.queryParameters['chaos'];
 
         if (request.method == 'POST' && path == '/test/reset') {
-          final retention = int.tryParse(request.uri.queryParameters['retention_cursor'] ?? '') ?? 0;
+          final retention = int.tryParse(
+                  request.uri.queryParameters['retention_cursor'] ?? '') ??
+              0;
           reset(newRetentionCursor: retention);
-          _sendJson(request.response, HttpStatus.ok, {'status': 'reset', 'retention_cursor': retention});
+          _sendJson(request.response, HttpStatus.ok,
+              {'status': 'reset', 'retention_cursor': retention});
           return;
         }
 
@@ -54,11 +58,14 @@ class FakeSyncServer {
         if (path == '/orders' || path == '/tasks' || path == '/') {
           if (request.method == 'POST') {
             final bodyStr = await utf8.decoder.bind(request).join();
-            final data = bodyStr.isNotEmpty ? jsonDecode(bodyStr) as Map<String, dynamic> : <String, dynamic>{};
+            final data = bodyStr.isNotEmpty
+                ? jsonDecode(bodyStr) as Map<String, dynamic>
+                : <String, dynamic>{};
             final entity = path == '/' ? 'tasks' : path.substring(1);
             final id = data['id']?.toString() ?? '$entity-${records.length}';
             records['$entity:$id'] = data;
-            _sendJson(request.response, HttpStatus.created, {'id': id, 'status': 'created'});
+            _sendJson(request.response, HttpStatus.created,
+                {'id': id, 'status': 'created'});
             return;
           }
           if (request.method == 'GET') {
@@ -67,13 +74,15 @@ class FakeSyncServer {
                 .where((e) => e.key.startsWith('$entity:'))
                 .map((e) => e.value)
                 .toList();
-            _sendJson(request.response, HttpStatus.ok, {'items': entityList, 'count': entityList.length});
+            _sendJson(request.response, HttpStatus.ok,
+                {'items': entityList, 'count': entityList.length});
             return;
           }
         }
 
         if (request.method == 'POST' && path == '/sync/push') {
-          if (chaos == 'unauthorized' || request.headers.value('Authorization') == 'Bearer expired') {
+          if (chaos == 'unauthorized' ||
+              request.headers.value('Authorization') == 'Bearer expired') {
             _sendJson(request.response, HttpStatus.unauthorized, {
               'error': 'unauthorized',
               'detail': 'Access token expired or invalid',
@@ -113,10 +122,14 @@ class FakeSyncServer {
 
           final bodyStr = await utf8.decoder.bind(request).join();
           final dynamic body = bodyStr.isNotEmpty ? jsonDecode(bodyStr) : {};
-          final List<dynamic> rawMutations = body is List ? body : (body['mutations'] as List? ?? []);
+          final List<dynamic> rawMutations =
+              body is List ? body : (body['mutations'] as List? ?? []);
           final mutations = rawMutations.cast<Map<String, dynamic>>();
 
-          if (mutations.any((m) => m['id'] == 'poison-pill' || (m['payload'] is Map && m['payload']['customer'] == 'poison-pill'))) {
+          if (mutations.any((m) =>
+              m['id'] == 'poison-pill' ||
+              (m['payload'] is Map &&
+                  m['payload']['customer'] == 'poison-pill'))) {
             _sendJson(request.response, HttpStatus.badRequest, {
               'error': 'bad_request',
               'detail': 'Poison pill rejected by schema validator'
@@ -125,10 +138,12 @@ class FakeSyncServer {
           }
 
           // Minimum schema version floor check (HTTP 426)
-          if (mutations.any((m) => ((m['schema_version'] as int?) ?? 1) < minSchemaVersion)) {
+          if (mutations.any(
+              (m) => ((m['schema_version'] as int?) ?? 1) < minSchemaVersion)) {
             _sendJson(request.response, HttpStatus.upgradeRequired, {
               'error': 'client_too_old',
-              'detail': 'Schema version $minSchemaVersion required, older client schema rejected'
+              'detail':
+                  'Schema version $minSchemaVersion required, older client schema rejected'
             });
             return;
           }
@@ -139,7 +154,9 @@ class FakeSyncServer {
             final orderId = payload['order_id'];
             if (mut['entity'] == 'order_items' && orderId != null) {
               final parentExists = records.containsKey('orders:$orderId') ||
-                  mutations.any((m) => m['entity'] == 'orders' && m['id'].toString() == orderId.toString());
+                  mutations.any((m) =>
+                      m['entity'] == 'orders' &&
+                      m['id'].toString() == orderId.toString());
               if (!parentExists) {
                 _sendJson(request.response, HttpStatus.badRequest, {
                   'error': 'foreign_key_violation',
@@ -153,7 +170,8 @@ class FakeSyncServer {
           final idempotencyKey = request.headers.value('Idempotency-Key');
 
           // Idempotent deduplication check
-          if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
+          if (idempotencyKey != null &&
+              idempotencyCache.containsKey(idempotencyKey)) {
             final cached = idempotencyCache[idempotencyKey]!;
             _sendJson(request.response, HttpStatus.ok, cached);
             return;
@@ -222,7 +240,8 @@ class FakeSyncServer {
           if (chaos == 'expired_cursor') {
             _sendJson(request.response, HttpStatus.gone, {
               'error': 'cursor_expired',
-              'detail': 'Cursor falls behind compaction retention window; full resync required'
+              'detail':
+                  'Cursor falls behind compaction retention window; full resync required'
             });
             return;
           }
@@ -249,10 +268,13 @@ class FakeSyncServer {
             return;
           }
 
-          final since = int.tryParse(request.uri.queryParameters['since'] ?? '') ?? 0;
-          final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 50;
+          final since =
+              int.tryParse(request.uri.queryParameters['since'] ?? '') ?? 0;
+          final limit =
+              int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 50;
           final scopeStr = request.uri.queryParameters['scope'];
-          final Map<String, dynamic>? scope = scopeStr != null ? jsonDecode(scopeStr) : null;
+          final Map<String, dynamic>? scope =
+              scopeStr != null ? jsonDecode(scopeStr) : null;
 
           if (since < retentionCursor) {
             _sendJson(request.response, HttpStatus.gone, {
@@ -262,7 +284,8 @@ class FakeSyncServer {
             return;
           }
 
-          final changes = changelog.where((c) => (c['cursor'] as int) > since).toList();
+          final changes =
+              changelog.where((c) => (c['cursor'] as int) > since).toList();
           final page = changes.take(limit).toList();
           final hasMore = changes.length > limit;
           final nextCursor = page.isNotEmpty ? page.last['cursor'] : since;
@@ -295,16 +318,19 @@ class FakeSyncServer {
           return;
         }
 
-        _sendJson(request.response, HttpStatus.notFound, {'error': 'not_found'});
+        _sendJson(
+            request.response, HttpStatus.notFound, {'error': 'not_found'});
       } catch (e) {
         try {
-          _sendJson(request.response, HttpStatus.internalServerError, {'error': e.toString()});
+          _sendJson(request.response, HttpStatus.internalServerError,
+              {'error': e.toString()});
         } catch (_) {}
       }
     });
   }
 
-  void _sendJson(HttpResponse response, int statusCode, Map<String, dynamic> body) {
+  void _sendJson(
+      HttpResponse response, int statusCode, Map<String, dynamic> body) {
     final bytes = utf8.encode(jsonEncode(body));
     response.statusCode = statusCode;
     response.headers.contentType = ContentType.json;

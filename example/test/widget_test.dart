@@ -7,7 +7,8 @@ import 'package:example/ui/widgets/quick_add_bar.dart';
 import 'package:example/ui/widgets/undo_toast.dart';
 
 void main() {
-  testWidgets('AppleCheckbox toggles value and calls onChanged', (tester) async {
+  testWidgets('AppleCheckbox toggles value and calls onChanged',
+      (tester) async {
     bool isChecked = false;
     await tester.pumpWidget(
       MaterialApp(
