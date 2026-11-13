@@ -6,6 +6,10 @@ Your Flutter app works 100% offline. Instant local saves (0ms delay). Zero loadi
 
 Works with **any backend** (Node.js, Python, Go, Ruby, PHP, Java, Spring Boot, Django, Express, NestJS, FastAPI) — no proprietary databases or backend plugins required.
 
+> [!NOTE]
+> **Community-Driven & Open to Feedback:**
+> Offline synchronization across diverse mobile networks and backend architectures can encounter unique edge cases. While Orbit is thoroughly verified with 346 automated tests, if you encounter any unexpected behavior or network edge cases, please report them on our [GitHub Issues](https://github.com/shuhaibkt/orbit_sync/issues). Your feedback directly helps improve Orbit for the entire Flutter community!
+
 ---
 
 ## 💡 What Problem Does Orbit Solve?
@@ -328,6 +332,16 @@ Try the full Flutter task manager app with live outbox counters, offline toggle,
 cd example
 flutter run
 ```
+
+---
+
+## 💬 Community, Feedback & Bug Reports
+
+No distributed offline sync engine is 100% bug-free across every conceivable hardware, backend API, and cellular condition. 
+
+If you encounter an edge case, unexpected sync behavior, or have a feature request:
+- 🐛 **Report an Issue:** Open a ticket on our [GitHub Issue Tracker](https://github.com/shuhaibkt/orbit_sync/issues).
+- 🤝 **Contribute:** Pull requests and bug reproductions are warmly welcomed. Every report helps make Orbit more resilient for everyone!
 
 ---
 
