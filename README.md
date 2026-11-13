@@ -13,7 +13,7 @@ Instant local saves (0ms). Zero loading spinners. Automatic background cloud syn
 
 > [!TIP]
 > **Found an edge case or have feedback?**  
-> Mobile networks have endless real-world quirks. If you run into any unexpected behavior or have ideas for improvement, let us know on [GitHub Issues](https://github.com/shuhaibkt/orbit_sync/issues). We actively maintain and refine Orbit for the entire Flutter community!
+> Mobile networks have endless real-world quirks. If you run into any unexpected behavior or have ideas for improvement, let us know on [GitHub Issues](https://github.com/shuhaibkt02/orbit_sync/issues). We actively maintain and refine Orbit for the entire Flutter community!
 
 ---
 
