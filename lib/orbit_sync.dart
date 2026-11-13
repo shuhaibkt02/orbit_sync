@@ -1,3 +1,4 @@
+/// Universal zero-codegen offline-first synchronization engine for Flutter, SQLite, and REST APIs.
 library orbit_sync;
 
 export 'package:sqlite3/sqlite3.dart' show ResultSet;

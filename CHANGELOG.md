@@ -5,6 +5,14 @@ All notable changes to the `orbit_sync` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-13
+
+### Changed
+- Upgraded `sqlite_async` to `^0.14.8` and `sqlite3` to `^3.0.0` with `SqliteOptions.maxReaders`.
+- Updated `crypto` to `^3.0.8` and `collection` to `^1.19.1` for latest Dart SDK ecosystem compatibility.
+- Added top-level library documentation comments in `lib/orbit_sync.dart`.
+- Fixed flow-control brace styling and updated `CupertinoSwitch.activeTrackColor` in example app.
+
 ## [1.0.0] - 2026-10-25
 
 ### Added

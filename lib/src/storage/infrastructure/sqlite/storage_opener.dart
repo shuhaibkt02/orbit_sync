@@ -30,14 +30,14 @@ class StorageOpener {
 
     recovery.sniffAndQuarantineIfCorrupted(path, onDatabaseCorrupted);
 
-    const sqliteOptions = SqliteOptions(
+    final sqliteOptions = SqliteOptions(
       journalMode: SqliteJournalMode.wal,
       journalSizeLimit: 67108864, // 64 MB
-      lockTimeout: Duration(seconds: 30),
+      lockTimeout: const Duration(seconds: 30),
+      maxReaders: maxReaders,
     );
 
-    SqliteDatabase db = SqliteDatabase(
-        path: path, maxReaders: maxReaders, options: sqliteOptions);
+    SqliteDatabase db = SqliteDatabase(path: path, options: sqliteOptions);
     bool deepCorrupt = false;
     try {
       await db.initialize();
@@ -55,8 +55,7 @@ class StorageOpener {
         await db.close();
       } catch (_) {}
       recovery.quarantineCorruptFiles(path, onDatabaseCorrupted);
-      db = SqliteDatabase(
-          path: path, maxReaders: maxReaders, options: sqliteOptions);
+      db = SqliteDatabase(path: path, options: sqliteOptions);
       await db.initialize();
     }
 

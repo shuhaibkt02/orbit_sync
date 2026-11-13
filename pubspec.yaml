@@ -1,9 +1,9 @@
 name: orbit_sync
 description: Universal zero-codegen offline-first synchronization engine for Flutter, SQLite, and REST APIs.
-version: 1.0.0
-homepage: https://github.com/shuhaibkt/orbit_sync
-repository: https://github.com/shuhaibkt/orbit_sync
-issue_tracker: https://github.com/shuhaibkt/orbit_sync/issues
+version: 1.0.1
+homepage: https://github.com/shuhaibkt02/orbit_sync
+repository: https://github.com/shuhaibkt02/orbit_sync
+issue_tracker: https://github.com/shuhaibkt02/orbit_sync/issues
 topics:
   - offline-first
   - sqlite
@@ -14,12 +14,12 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  sqlite_async: ^0.9.0
-  sqlite3: ^2.4.0
+  sqlite_async: ^0.14.8
+  sqlite3: ^3.0.0
   http: ^1.6.0
   dio: ^5.11.1
-  crypto: ^3.0.3
-  collection: ^1.18.0
+  crypto: ^3.0.8
+  collection: ^1.19.1
 
 dev_dependencies:
   test: ^1.24.0

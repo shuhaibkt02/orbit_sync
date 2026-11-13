@@ -5,8 +5,8 @@
 Instant local saves (0ms). Zero loading spinners. Automatic background cloud sync with your existing REST API.
 
 [![pub package](https://img.shields.io/badge/pub.dev-orbit__sync%20v1.0.0-blue.svg)](https://pub.dev/packages/orbit_sync)
-[![test suite](https://img.shields.io/badge/tests-346%20passed%20(100%25)-brightgreen.svg)](https://github.com/shuhaibkt/orbit_sync)
-[![license](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/shuhaibkt/orbit_sync/blob/main/LICENSE)
+[![test suite](https://img.shields.io/badge/tests-346%20passed%20(100%25)-brightgreen.svg)](https://github.com/shuhaibkt02/orbit_sync)
+[![license](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/shuhaibkt02/orbit_sync/blob/main/LICENSE)
 [![platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-teal.svg)](https://flutter.dev)
 
 ---
@@ -400,7 +400,7 @@ flutter run
 
 No distributed offline sync engine is 100% bug-free across every conceivable device, radio chip, and backend API.
 
-- 🐛 **Found a bug or edge case?** [Open an issue on GitHub](https://github.com/shuhaibkt/orbit_sync/issues).
+- 🐛 **Found a bug or edge case?** [Open an issue on GitHub](https://github.com/shuhaibkt02/orbit_sync/issues).
 - 💡 **Feature requests & discussions:** Feel free to share your thoughts and use cases. Every report helps make Orbit better for everyone!
 
 ---
