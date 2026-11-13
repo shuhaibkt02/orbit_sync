@@ -317,7 +317,3 @@ class FakeSyncServer {
     await server.close(force: true);
   }
 }
-
-extension on List<Map<String, dynamic>> {
-  void append(Map<String, dynamic> item) => add(item);
-}

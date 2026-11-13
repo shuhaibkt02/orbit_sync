@@ -24,4 +24,4 @@ dependencies:
 dev_dependencies:
   test: ^1.24.0
   sync_server:
-    path: tool/sync_server
+    path: test/sync_server
