@@ -114,6 +114,80 @@ tasks.watchById('task-101').listen((task) {
 
 ---
 
+## 📖 How to Retrieve & Query Local Cached Data
+
+Offline-first is as much about **instant reads** as it is about saving. Orbit makes retrieving cached data effortless and instant (0ms):
+
+### 1. Reactive Live Stream (`watch`)
+Ideal for lists and dashboards. Directly binds to Flutter's `StreamBuilder`. It emits the cached data **immediately upon screen open (0ms)** and updates automatically whenever local edits happen or remote changes arrive from the server:
+
+```dart
+StreamBuilder<List<Task>>(
+  stream: tasks.watch(where: 'completed = ?', whereArgs: [false]),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData) return const CircularProgressIndicator();
+    final openTasks = snapshot.data!;
+    return ListView.builder(
+      itemCount: openTasks.length,
+      itemBuilder: (ctx, i) => TaskTile(task: openTasks[i]),
+    );
+  },
+);
+```
+
+### 2. Fast One-Shot Queries (`query`)
+Use when you need a single snapshot of local data (e.g., button clicks, form validation, reports):
+
+```dart
+// Filter by any field in your JSON document:
+final urgentTasks = await tasks.query(
+  where: 'priority = ? AND due_date < ?',
+  whereArgs: ['HIGH', DateTime.now().toIso8601String()],
+  orderBy: 'due_date ASC',
+  limit: 10,
+);
+```
+
+### 3. Single-Item Reactive Stream (`watchById`)
+Perfect for detail or edit screens. If another device or background sync modifies this record, the screen updates in real time:
+
+```dart
+StreamBuilder<Task?>(
+  stream: tasks.watchById('task-101'),
+  builder: (context, snapshot) {
+    final task = snapshot.data;
+    if (task == null) return const Text('Task not found');
+    return Text('Title: ${task.title}');
+  },
+);
+```
+
+### 4. Pull-to-Refresh & Server Hydration (`refresh`)
+Connects seamlessly with Flutter's standard `RefreshIndicator` widget to pull fresh data from your REST endpoint:
+
+```dart
+RefreshIndicator(
+  onRefresh: () async {
+    // Quietly fetches latest changes from your REST API & merges into local cache
+    await tasks.refresh();
+  },
+  child: TaskListView(),
+);
+```
+
+### 5. Offline Pinning (`pin`)
+If you have critical records (e.g., active user profile, company policies) that must **never** be pruned or evicted from the local cache:
+
+```dart
+// Pins record locally so it remains cached permanently
+await tasks.pin('user-profile-001');
+
+// Unpin when no longer critical:
+await tasks.unpin('user-profile-001');
+```
+
+---
+
 ## 🎯 Flexible Business Rules (Per Collection)
 
 Instead of complex global settings, you can declare business rules per collection in plain English:
@@ -191,39 +265,50 @@ StreamBuilder<SyncStatusSummary>(
 
 ---
 
-## 🔄 How Data Moves (The End-to-End Flow)
+## 🔄 How Data Moves (Two-Way Sync Architecture)
 
-Here is what happens behind the scenes from the moment a user taps Save to when the data arrives safely in your cloud REST API:
+Here is the complete picture showing both **how data is saved and pushed**, and **how cached data is retrieved and updated**:
 
 ```text
- 📱 1. FLUTTER USER INTERFACE
-    User taps Save: `tasks.save(Task(title: 'Ship App'))`
-    │
-    ▼ (Instant 0ms response — UI updates immediately, no spinners)
- ⚡ 2. LOCAL SQLITE DATABASE (WAL Mode)
-    ├── tasks table: Saved locally for instant offline display
-    └── _sync_outbox table: Queued with Priority, SLA, and Headers
-         │
-         ▼
- 📶 3. NETWORK & CONNECTIVITY CHECK
-    ├── [Offline] ──► Preserved safely in SQLite until connection returns
-    └── [Online]  ──► Canary probe confirms true internet (not captive portal)
-         │
-         ▼
- 🚦 4. MULTI-LANE CONSENSUS DISPATCHER
-    • High Priority queues dispatch first (Critical ──► High ──► Normal)
-    • Parents send first; Children wait for server parent ID
-    • Smart auto-merge prevents concurrent edits from overwriting
-    • Invalid items (HTTP 422) isolate safely to Dead-Letter Queue
-         │
-         ▼
- 🌐 5. TRANSPORT GATEWAY (Standard REST or Dio)
-    POST /tasks • PUT /tasks/:id • DELETE /tasks/:id
-    Sends 100% pure domain JSON (zero metadata clutter sent to your server)
-         │
-         ▼
- ☁️ 6. YOUR EXISTING REST BACKEND
-    (Any standard REST API: Node, Python, Go, Java, PHP, Rails, etc.)
+                          ┌───────────────────────────┐
+                          │   FLUTTER USER INTERFACE  │
+                          └─────────────┬─────────────┘
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             │ WRITE PATH (0ms Instant Save)                       │ READ PATH (0ms Instant Cache)
+             ▼                                                     ▲
+ ┌───────────────────────┐                               ┌─────────┴─────────────┐
+ │ tasks.save(task)      │                               │ tasks.watch()         │
+ │ tasks.delete(id)      │                               │ tasks.query(where: ..)│
+ └───────────┬───────────┘                               │ tasks.watchById(id)   │
+             │                                           └─────────▲─────────────┘
+             ▼                                                     │ (0ms instant local stream)
+ ┌─────────────────────────────────────────────────────────────────┴───────────────────┐
+ │                            LOCAL SQLITE DATABASE (WAL Mode)                         │
+ │                                                                                     │
+ │  ┌─────────────────────────────────────────┐  ┌──────────────────────────────────┐  │
+ │  │        Local Entity Storage (Cache)     │  │        _sync_outbox Queue        │  │
+ │  │  Stores pure JSON documents locally     │  │  Stores pending uploads with     │  │
+ │  │  Serves UI reads instantly with zero lag│  │  Priority, SLA, and Headers      │  │
+ │  └────────────────────▲────────────────────┘  └────────────────┬─────────────────┘  │
+ └───────────────────────┼────────────────────────────────────────┼────────────────────┘
+                         │                                        │
+                         │ ◄── [PULL: New cloud changes merged]   │ [PUSH: Upload mutations]
+                         │                                        ▼
+ ┌───────────────────────┴─────────────────────────────────────────────────────────────┐
+ │                         CONNECTIVITY & CONSENSUS DISPATCHER                         │
+ │                                                                                     │
+ │    • Offline? ──► Reads stay instant; Outbox safely holds until connection returns  │
+ │    • Online?  ──► Dispatches high-priority outbox queues & pulls remote changes     │
+ │    • Smart Auto-Merge: Seamlessly merges server updates into local cache            │
+ │    • Error Quarantine: Bad items (HTTP 422) isolate to DLQ without blocking queue   │
+ └───────────────────────────────────────▲─────────────────────────────────────────────┘
+                                         │
+                                         ▼
+ ┌─────────────────────────────────────────────────────────────────────────────────────┐
+ │                             YOUR CLOUD REST API BACKEND                             │
+ │                              (Standard JSON Endpoints)                              │
+ └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
