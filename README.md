@@ -2,40 +2,22 @@
 
 **Universal zero-codegen offline-first synchronization engine for Flutter, SQLite, and REST APIs.**
 
-Your Flutter app works 100% offline. Instant local saves (0ms). Zero loading spinners. When internet returns, Orbit syncs everything with your cloud server invisibly in the background.
+Your Flutter app works 100% offline. Instant local saves (0ms delay). Zero loading spinners. When the device reconnects to Wi-Fi or cellular, Orbit quietly syncs all changes with your REST API in the background.
 
-Works with **any backend** (Node.js, Python, Go, Ruby, PHP, Java, C#, Spring Boot, Django, Express, NestJS) — no specialized cloud databases or proprietary servers required.
+Works with **any backend** (Node.js, Python, Go, Ruby, PHP, Java, Spring Boot, Django, Express, NestJS, FastAPI) — no proprietary databases or backend plugins required.
 
 ---
 
 ## 💡 What Problem Does Orbit Solve?
 
-### The Traditional App Problem:
-> A user enters an order or fills a form, walks into an elevator or subway, taps **Submit**, and the app shows a spinning loader for 30 seconds before crashing with `"Connection Timeout"`. All user input is lost.
+### ❌ The Traditional Problem:
+A field agent enters an order, steps into an elevator, taps **Submit**, and the app shows a spinning loading icon for 30 seconds before failing with `"Connection Timeout"`. The user loses all entered data and has to start over.
 
-### The Business SLA Problem:
-> Transactions made today MUST sync to the server within 1 hour. If automated sync fails due to bad connectivity or server errors, managers need a mobile dashboard showing what failed, why it failed, and a 1-tap manual override.
-
-### How Orbit Solves Both:
-1. **Instant Saves (0ms delay):** When the user taps Save, data is saved locally to SQLite WAL in 1 millisecond. No spinners.
-2. **Invisible Background Sync:** When Wi-Fi or cellular returns, Orbit quietly uploads changes to your REST API.
-3. **Zero-SQL Admin Dashboard:** Build a complete Sync Center in 15 lines of Flutter code to inspect pending items, monitor 1-hour business SLAs, and trigger manual retries with zero raw SQL queries.
-
-```text
-  📱 User taps "Save"
-         │
-         ▼
-  ⚡ Saved instantly to local storage (0ms, zero spinner)
-         │
-         ▼
-  📦 Queued safely in local outbox (SQLite WAL)
-         │
-         ├── 🌐 Online?  ──► Invisibly uploads to standard REST API ☁️
-         └── 📴 Offline? ──► Safely preserved until reconnected
-                                 │
-                                 ├── Routine reconnect: Auto-syncs seamlessly!
-                                 └── Critical failure / SLA breach: Alerts user with 1-tap retry!
-```
+### ✅ The Orbit Solution:
+1. **Instant Saves (0ms):** When the user taps Save, data writes directly to local SQLite storage in 1 millisecond. No loading spinners, no waiting.
+2. **Invisible Background Sync:** When internet connectivity returns, Orbit automatically uploads queued mutations in the background.
+3. **Smart Auto-Merge:** If two teammates edit different fields of the same record offline, Orbit merges both edits without overwriting anyone's work.
+4. **Zero-SQL Mobile Dashboard:** Build a complete Sync Center in a few lines of Flutter code to monitor pending items, alert on overdue syncs, and retry failed items with a single tap.
 
 ---
 
@@ -50,18 +32,15 @@ In your Flutter app's `pubspec.yaml`:
 ```yaml
 dependencies:
   orbit_sync: ^1.0.0
-  sqlite3_flutter_libs: ^0.5.24 # Required: Native SQLite C-binaries with WAL support
+  sqlite3_flutter_libs: ^0.5.24 # Required: Native SQLite C-binaries with WAL mode
   path_provider: ^2.1.2         # Required: Persistent app database storage path
 ```
 
 > [!IMPORTANT]
-> **Flutter Platform Dependencies:**
-> `orbit_sync` is a pure Dart package powered by `sqlite_async`.
-> On Flutter (Android, iOS, macOS, Windows, Linux), you **must** include:
-> - `sqlite3_flutter_libs`: bundles native SQLite C-libraries with WAL support so queries don't fail at runtime with `Missing native binary`.
-> - `path_provider`: resolves your app's persistent documents directory.
+> **Flutter Platform Requirement:**
+> `sqlite3_flutter_libs` bundles native SQLite binaries for Android, iOS, macOS, Windows, and Linux. `path_provider` resolves your app's persistent storage directory.
 
-### 2. Initialize and Save
+### 2. Initialize Orbit & Define Collections
 
 ```dart
 import 'package:flutter/widgets.dart';
@@ -92,378 +71,252 @@ class Order {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Orbit (clean & zero-boilerplate)
+  // 1. Initialize Orbit
   final dir = await getApplicationDocumentsDirectory();
   final orbit = await OrbitClient.initialize(
     databasePath: p.join(dir.path, 'app.db'),
-    baseUrl: 'https://api.yourcompany.com', // or simply pass `dio: myDio`!
+    baseUrl: 'https://api.yourcompany.com', // or pass your existing Dio instance: `dio: myDio`
   );
 
-  // 2. Register collection with REST endpoint (Zero-Codegen!)
+  // 2. Register Collection (Pure Dart models, Zero SQL)
   final orders = orbit.collection<Order>(
     name: 'orders',
     endpoint: '/orders',
-    cacheTtl: const Duration(minutes: 15), // Auto-refreshes when empty or expired
     fromJson: Order.fromJson,
     toJson: (o) => o.toJson(),
+    
+    // Optional Business Rules:
+    priority: Priority.high,                 // Critical, High, Normal, Background
+    sla: const Duration(hours: 1),           // Alert if unsynced for longer than 1 hour
+    coolingTime: const Duration(minutes: 2), // 2-minute editing window before uploading
   );
 
   // 3. Save! Works 100% offline or online (0ms delay)
   await orders.save(Order(customer: 'Acme Corp', total: 250.0));
 
-  // 4. Reactive streaming queries with native Dart types (booleans & DateTimes auto-sanitized!)
-  orders.watch(
-    where: 'total > ?',
-    whereArgs: [100.0],
-  ).listen((items) {
-    print('Orders in local database: ${items.length}');
+  // 4. Reactive UI Stream: Updates instantly whenever local data changes
+  orders.watch().listen((items) {
+    print('Orders currently in database: ${items.length}');
   });
 
-  // Query with Dart booleans or DateTimes directly (no SQLite type errors!):
-  final active = await orders.query(where: 'total > ?', whereArgs: [50.0]);
+  // 5. Query with normal Dart types (booleans and DateTimes work automatically)
+  final highValue = await orders.query(
+    where: 'total > ?',
+    whereArgs: [100.0],
+    orderBy: 'total DESC',
+  );
 
-  // 5. Retrieve table anywhere in your app without re-registering:
-  final cachedOrders = orbit.table<Order>('orders');
-
-  // 6. Watch single record reactively:
-  cachedOrders.watchById('order-101').listen((order) => print(order?.customer));
-
-  // 7. Explicit push mutations to backend
-  await orbit.sync();
+  // 6. Watch a single record reactively:
+  orders.watchById('order-101').listen((order) {
+    print('Order updated: ${order?.customer}');
+  });
 }
 ```
 
 ---
 
-## 🛠️ Complete CRUD Recipe (Copy & Paste for Any Flutter App)
+## 🛠️ Complete Everyday CRUD Guide
 
-Whether building a simple to-do list or an enterprise POS system, this single pattern covers the entire offline-first lifecycle:
+Orbit gives you simple, type-safe methods for everyday operations:
 
 ```dart
 // ==========================================
-// 1. CONFIGURE ONCE AT APP STARTUP
+// 1. SAVE / INSERT (Instant 0ms local save)
 // ==========================================
-final orders = orbit.collection<Order>(
-  name: 'orders',
-  endpoint: '/api/v1/orders',
-  fromJson: Order.fromJson,
-  toJson: (o) => o.toJson(),
-
-  // Optional: Custom REST Verbs & Endpoints
-  createMethod: HttpMethod.post,               // Default: POST
-  updateMethod: HttpMethod.patch,              // Default: PUT (or PATCH)
-  updateEndpoint: '/api/v1/orders/:id',        // Auto-interpolates :id
-  deleteMethod: HttpMethod.delete,             // Default: DELETE
-
-  // Pluggable Server ID Harvesting (Postgres integer, Mongo _id, ERP codes):
-  idExtractor: (json) => json['order_id'] ?? json['id'] ?? json['data']?['id'],
-
-  // High-performance B-tree Expression Indexes on JSON fields:
-  indexes: ['customer_id', 'status', 'created_at'],
-
-  // Custom entity headers:
-  headers: {'X-Client-Version': '2.1.0'},
+final savedId = await orders.save(
+  Order(customer: 'Alice', total: 120.0),
+  // Optional: Custom HTTP headers for this specific operation
+  headers: {'X-Audit-Reason': 'Special discount applied'},
 );
 
 // ==========================================
-// 2. DAY-TO-DAY CRUD OPERATIONS (0ms delay)
+// 2. UPDATE (Updates local database & queues sync)
 // ==========================================
+await orders.save(existingOrder.copyWith(total: 180.0));
 
-// CREATE (Instant 0ms local save; zero fake IDs sent to server)
-final newId = await orders.save(Order(customer: 'Alice', total: 120.0));
+// ==========================================
+// 3. DELETE (Instant local delete + queues server DELETE)
+// ==========================================
+await orders.delete('order-101');
 
-// UPDATE (Auto-coalesces in outbox if still offline)
-await orders.save(existingOrder.copyWith(total: 150.0));
+// Optional Soft Delete with Undo Window:
+await orders.delete('order-101', undoWindow: const Duration(seconds: 10));
 
-// DELETE (Instant local delete + queues REST DELETE)
-await orders.delete(orderId);
-
-// ONE-SHOT QUERY (Transparent JSON filtering & pagination)
-final pending = await orders.query(
-  where: 'status = ? AND total > ?',
-  whereArgs: ['PENDING', 50.0],
-  limit: 20,
-  orderBy: 'created_at DESC',
+// ==========================================
+// 4. ONE-SHOT QUERY (Fast JSON filtering)
+// ==========================================
+final results = await orders.query(
+  where: 'customer = ? AND total > ?',
+  whereArgs: ['Alice', 50.0],
+  limit: 25,
+  orderBy: 'total DESC',
 );
 
-// REACTIVE STREAM (Direct UI binding to Flutter StreamBuilder)
-Stream<List<Order>> liveOrders = orders.watch(
-  where: 'status = ?',
-  whereArgs: ['ACTIVE'],
-  orderBy: 'created_at DESC',
+// ==========================================
+// 5. REACTIVE STREAM (Direct Flutter StreamBuilder binding)
+// ==========================================
+Stream<List<Order>> stream = orders.watch(
+  where: 'total > ?',
+  whereArgs: [50.0],
+  orderBy: 'total DESC',
 );
 ```
 
 ---
 
-## 🕒 Grace Periods & Audit Trails (`holdFor` & `previousData`)
+## 🎯 Declarative Collection Rules
 
-When a user edits an item offline, you can grant an editing grace window before it syncs to the backend:
+Instead of rigid global profiles, Orbit allows you to set business rules per collection:
 
 ```dart
-// 1. Save with a 5-minute hold (coalesces intermediate edits without network spam)
-await orders.save(
-  Order(customer: 'Acme Corp', total: 300.0),
-  holdFor: const Duration(minutes: 5),
-  headers: {'X-Audit-Reason': 'Manager approved override'}, // Persisted into outbox!
-);
+final invoices = orbit.collection<Invoice>(
+  name: 'invoices',
+  endpoint: '/api/v1/invoices',
+  fromJson: Invoice.fromJson,
+  toJson: (i) => i.toJson(),
 
-// 2. Watch records with automatic audit trail
-orders.watchRecords().listen((records) {
-  for (final record in records) {
-    print('Current: ${record.data}');
-    if (record.hasPreviousData) {
-      print('Changed from: ${record.previousData}');
-    }
-  }
-});
+  // 1. Priority Dispatch
+  // Higher priority collections upload before lower priority ones.
+  priority: Priority.critical, // Critical, High, Normal, Background
+
+  // 2. Business SLA Deadlines
+  // Orbit triggers an alert if a transaction remains unsynced past this duration.
+  sla: const Duration(hours: 2),
+
+  // 3. Local Cooling-Off Window
+  // Gives users time to make edits or undo actions before network transmission.
+  coolingTime: const Duration(minutes: 5),
+
+  // 4. Custom Server ID Harvesting
+  // If your server returns SAP codes, MongoDB `_id`, or Postgres integer IDs:
+  idExtractor: (json) => json['invoice_number'] ?? json['id'],
+);
 ```
 
 ---
 
-## 🌐 Enterprise Dio & Interceptor Integration
+## 🛡️ Built-in Resilience Features
 
-If your app uses `dio` with automated token refresh interceptors, pass `SyncTransport.dio`:
+### 1. Smart 3-Way Auto-Merge
+If Alice updates the order total while offline and Bob marks the order paid on the server, Orbit compares both edits against the original baseline snapshot and automatically merges them. Neither user loses work.
+
+### 2. Parent-Child Relationship Safety
+If a user creates an **Invoice** and three **Invoice Items** offline:
+1. Orbit assigns temporary local keys so the local database maintains integrity.
+2. When online, Orbit sends the parent invoice first.
+3. Once the server returns the real ID (`inv_772`), Orbit automatically updates all pending child items before sending them. Zero foreign key errors (HTTP 422).
+
+### 3. Poison-Pill Quarantine (Dead-Letter Queue)
+If one bad mutation fails server validation (e.g. an expired coupon code):
+- Orbit moves only that specific bad mutation to a Dead-Letter Queue (`status: 'dlq'`).
+- Other healthy mutations continue uploading without being blocked.
+- Your app's admin dashboard can alert the user with the exact server error message.
+
+### 4. Flap Guard & Captive Portal Detection
+- **Flap Guard:** Prevents battery drain when driving through spotty cell towers by using a 3-second debounce on reconnection.
+- **Canary Probe:** Verifies actual internet access (detecting hotel and airport login portals) before attempting to sync.
+
+---
+
+## 🎛️ Zero-SQL Mobile Sync Dashboard
+
+Build a full sync management screen in Flutter with no raw SQL queries:
 
 ```dart
-final dio = Dio();
-
-// Attach your app's token refresh interceptors
-dio.interceptors.add(
-  InterceptorsWrapper(
-    onError: (DioException error, handler) async {
-      if (error.response?.statusCode == 401) {
-        final newToken = await authRepository.refreshToken();
-        // Retry failed request with new token
-        return handler.resolve(await dio.fetch(retryOptions));
-      }
-      return handler.next(error);
-    },
-  ),
-);
-
-// Initialize Orbit with your custom Dio:
-// Option A (One-liner): Automatically inherits dio.options.baseUrl & interceptors
-final orbit = await OrbitClient.initialize(
-  databasePath: dbPath,
-  dio: dio,
-);
-
-// Option B: Explicit transport
-final orbit = await OrbitClient.initialize(
-  databasePath: dbPath,
-  transport: SyncTransport.dio(dio: dio),
-);
-```
-
----
-
-## 👨‍👩‍👧 Parent-Child Relations & Server ID Harvesting
-
-When a user creates an order with order items offline:
-1. Orbit saves the order with a local UUID (e.g., `temp-001`) and order items referencing `order_id: temp-001`.
-2. When online, `POST /orders` sends the order. The server returns its generated ID (`{"id": "ord_998"}`).
-3. **Automatic ID Harvesting:** Orbit automatically registers `temp-001 -> ord_998`, updates the local SQLite database, and rewrites pending child mutations in the outbox (`/orders/ord_998/items` and `order_id: ord_998`) before they are sent to the server.
-4. **Zero Foreign Key Violations (HTTP 422):** Child items are guaranteed to reference the valid server ID.
-```
-
----
-
-## 📦 Pure JSON Document Store & Zero-Pollution Wire
-
-Orbit is engineered as a **Pure JSON Document Store on SQLite WAL** with zero metadata pollution over HTTP:
-
-1. **Zero Schema Migrations or Relational Bloat:** 
-   Local tables (`orders`, `invoices`) store rich nested objects directly into `data_json`. Orbit never runs slow dynamic `ALTER TABLE ADD COLUMN` queries.
-2. **Auto-Generated Internal Tracking IDs:**
-   When a user creates a new record offline with clean JSON (no `id`), Orbit automatically generates an internal tracking ID (UUIDv7), assigns it to local SQLite, and returns `internalId` to Flutter. Your outgoing HTTP payload remains 100% pure and untouched.
-3. **Zero URL Duplication:**
-   Configure your endpoint once at app startup (`orders = client.collection(name: 'orders', endpoint: '/api/v1/orders')`). Daily CRUD operations (`orders.save(data)`) automatically inherit the URL without repetitive boilerplate.
-4. **Pluggable `idExtractor` (Zero Backend Guessing):**
-   Compatible with any backend schema without framework magic. If your backend returns MongoDB `_id` or custom SAP `orderNumber`, declare it in 1 line:
-   ```dart
-   final orders = client.collection(
-     name: 'orders',
-     endpoint: '/api/v1/orders',
-     idExtractor: (json) => json['order_number'] ?? json['id'],
-   );
-   ```
-5. **Transparent JSON Querying & Pagination:**
-   Write standard Dart queries with optional limits. Orbit transparently translates field filters to SQLite `json_extract`:
-   ```dart
-   final active = await orders.query(
-     where: 'status = ?',
-     whereArgs: ['processing'],
-     limit: 20,
-     orderBy: 'created_at DESC',
-   );
-   ```
-
----
-
-## 🏗️ How Orbit Works: The 6 Clean Layers
-
-Orbit does not use complex proprietary cloud databases or mandatory code generators. It is designed as a transparent 6-layer pipeline where each layer has a single responsibility:
-
-```text
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │  LAYER 5: Application Facade                                                │
- │  `OrbitClient` & `OrbitTable<T>` • Reactive streams • Type sanitization      │
- ├─────────────────────────────────────────────────────────────────────────────┤
- │  LAYER 6: Observability & Telemetry                                         │
- │  `orbit.observer` • Live SLA warnings • Circular log buffer • KPI counters  │
- ├─────────────────────────────────────────────────────────────────────────────┤
- │  LAYER 1: Local Storage Engine                                              │
- │  SQLite WAL • Transactional Outbox • 0ms instant local writes • UUIDv7      │
- ├─────────────────────────────────────────────────────────────────────────────┤
- │  LAYER 3: Connectivity & Flap Guard                                         │
- │  3s flap debounce • Captive portal canary probes • Instant app resume wakeup│
- ├─────────────────────────────────────────────────────────────────────────────┤
- │  LAYER 2: Consensus & Outbox Replayer                                       │
- │  FIFO queue • Exponential backoff with jitter • Poison pill (DLQ) isolation │
- ├─────────────────────────────────────────────────────────────────────────────┤
- │  LAYER 4: Transport & REST Gateway                                          │
- │  Host Dio/Http adapter • Pure domain JSON (no metadata leaks) • Rate limits │
- └─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-                       YOUR EXISTING REST BACKEND
-                       (Node.js, Django, Go, Rails, Spring Boot)
-```
-
-| Layer | Responsibility | Developer Touchpoint |
-| :--- | :--- | :--- |
-| **Layer 5: Application Facade** | High-level Flutter API. Provides typed tables (`OrbitTable<T>`), automated SQLite type sanitization, and debounced reactive streams (`watch()`). | `orbit.registerTypedTable<Task>(...)` |
-| **Layer 6: Observability** | System telemetry radar. Broadcasts 14 typed events (`onOnline`, `onSlaBreached`), circular log buffer, and dashboard summary streams. | `orbit.observer.events` & `orbit.watchSummary()` |
-| **Layer 1: Local Storage** | Fast local persistence. Writes data to SQLite WAL in 0ms with monotonic UUIDv7 keys and atomic outbox envelopes (`_sync_outbox`). | `table.save(item)` |
-| **Layer 3: Connectivity** | Smart network monitor. 3s flap guard prevents radio thrashing; canary HTTP probes detect captive portals (airport/hotel logins). | `orbit.simulateOffline` (for testing) |
-| **Layer 2: Consensus** | Ordered outbox dispatcher. Replays mutations sequentially (FIFO) with exponential backoff; quarantines poison pills (HTTP 422) to DLQ without blocking other queues. | `orbit.sync()` & `orbit.retryAllFailed()` |
-| **Layer 4: Transport** | REST HTTP pipe. Uses your existing `Dio` or `http.Client`. Keeps outbox metadata strictly in HTTP headers so server request bodies stay 100% pure JSON. | `httpClient: myDio` |
-
-### How Data Moves in 3 Steps:
-1. **User saves offline:** `Layer 5` sanitizes the data $\to$ `Layer 1` commits to local SQLite table and outbox in **1 millisecond**. Zero spinners.
-2. **Signal returns:** `Layer 3` verifies genuine internet reachability $\to$ wakes up `Layer 2`.
-3. **Seamless sync:** `Layer 2` reads pending mutations in FIFO order $\to$ `Layer 4` sends standard HTTP requests (`POST /tasks`) via your app's Dio $\to$ `Layer 6` updates the live UI counters.
-
----
-
-## 🎛️ Zero-SQL Sync Dashboard & Telemetry
-
-You never have to write SQL queries, inspect internal tables, or parse JSON strings. Orbit provides high-level, strongly-typed Dart APIs:
-
-### 1. Real-Time Dashboard KPI Card
-
-Show how many records are pending, synced, or failed in a live Flutter widget:
-
-```dart
+// 1. Live Counters Stream (Pending, Synced, Failed, DLQ)
 StreamBuilder<SyncStatusSummary>(
   stream: orbit.watchSummary(),
   builder: (context, snapshot) {
     final s = snapshot.data;
     if (s == null) return const CircularProgressIndicator();
 
-    return Card(
-      child: ListTile(
-        leading: Icon(
-          s.isClean ? Icons.cloud_done : Icons.cloud_upload,
-          color: s.hasFailures ? Colors.red : Colors.blue,
-        ),
-        title: Text("Sync Status: ${s.isClean ? 'All Synced' : 'Syncing...'}"),
-        subtitle: Text("Pending: ${s.pending} | Synced: ${s.synced} | Failed: ${s.failed}"),
-      ),
+    return ListTile(
+      leading: Icon(s.isClean ? Icons.cloud_done : Icons.cloud_upload),
+      title: Text(s.isClean ? 'All Synced' : 'Syncing changes...'),
+      subtitle: Text('Pending: ${s.pending} | Synced: ${s.synced} | Failed: ${s.failed}'),
     );
   },
 );
-```
 
-### 2. Business SLA & Stale Data Alerts (e.g. 60 Minutes)
-
-Alert the user if transactions haven't synced within a business time window:
-
-```dart
-// Check for mutations unsynced for longer than 60 minutes:
-final staleItems = await orbit.getStaleRecords(maxAge: const Duration(minutes: 60));
-
-// Or listen continuously for SLA breaches to fire local alerts:
-orbit.watchStaleRecords(maxAge: const Duration(minutes: 60)).listen((breached) {
-  if (breached.isNotEmpty) {
-    showNotification(
-      title: "Sync SLA Warning",
-      body: "${breached.length} transaction(s) have been offline for over 1 hour!",
-    );
-  }
-});
-```
-
-### 3. Observability & Event Streaming (`orbit.observer`)
-
-Tap directly into typed runtime events across all system layers:
-
-```dart
-// Unified stream:
-orbit.observer.events.listen((event) {
-  print('Sync telemetry: $event');
+// 2. Listen for SLA Breaches (e.g. Offline for over 1 hour)
+orbit.observer.onSlaBreached.listen((event) {
+  showNotification(
+    title: 'Sync Delay Alert',
+    body: 'Transaction ${event.mutationId} has not synced within the 1-hour SLA.',
+  );
 });
 
-// Specific event streams:
-orbit.observer.onOnline.listen((_) => print('Network back online!'));
-orbit.observer.onOffline.listen((_) => print('Switched to offline mode'));
-orbit.observer.onSlaBreached.listen((e) => print('SLA breach for mutation: ${e.mutationId}'));
-orbit.observer.onConflictDetected.listen((e) => print('Conflict resolved: ${e.entity}'));
-orbit.observer.onSyncRejected.listen((e) => print('Server rejected: ${e.errorMessage}'));
-```
-
-### 4. One-Tap Manual Overrides
-
-```dart
-// Retry all failed/quarantined items immediately:
-await orbit.retryAllFailed(syncNow: true);
-
-// Retry a specific item:
-await orbit.retryMutation(item.mutationId, syncNow: true);
-
-// Cancel/discard an invalid local draft:
-await orbit.cancelMutation(item.mutationId);
-
-// Mark resolved if handled out-of-band:
-await orbit.markSynced(item.mutationId);
-```
-
----
-
-## 🎯 3 Sync Profiles for Any App
-
-| Profile | Best For | How It Works |
-| :--- | :--- | :--- |
-| **`SyncProfile.basic`** | **Personal Notes & To-Do Lists** | Last write wins. The simplest setup. |
-| **`SyncProfile.standard`** *(Default)* | **Shared Team Lists & Collaboration** | **Smart Auto-Merge:** If Alice edits the title and Bob checks the box, both edits are preserved without overwriting! |
-| **`SyncProfile.enterprise`** | **Invoicing, POS, Banking & Operations** | Auto-merge + relational safety. If an invoice fails, dependent invoice items hold safely in queue. |
-
-```dart
-final orbit = await OrbitClient.initialize(
-  databasePath: dbPath,
-  baseUrl: 'https://api.yourcompany.com',
-  profile: SyncProfile.standard,
+// 3. One-Tap Manual Retries
+ElevatedButton(
+  onPressed: () => orbit.retryAllFailed(syncNow: true),
+  child: const Text('Retry All Failed'),
 );
 ```
 
 ---
 
-## 🛡️ Resilience Guarantees
+## 🔄 How Data Moves Through Orbit
 
-1. **OS Kill (`SIGKILL`) & Battery Death:** Atomic SQLite WAL commits ensure zero orphaned outbox records.
-2. **Server 422 / 400 (Poison Pill):** Quarantined to Dead-Letter Queue (DLQ) without blocking other sync queues.
-3. **Flaky Radios & Captive Portals:** Asymmetric flap guard (3s reconnect debounce, 0ms disconnect) and canary HTTP probes prevent radio hammering.
-4. **Rate Limiting:** Automatic RFC 7231 `Retry-After` header parsing with full jitter backoff on HTTP 429.
-5. **Zero Metadata Pollution:** Internal outbox IDs and DAG metadata remain strictly in HTTP headers; request bodies contain 100% pure domain JSON.
+Here is the complete end-to-end flow from local user interaction to your cloud REST API:
+
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                           1. FLUTTER USER INTERFACE                         │
+ │                                                                             │
+ │    User taps "Save"  ──►  orders.save(Order(customer: 'Acme', total: 250))   │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │ (Instant 0ms save)
+                                        ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                        2. LOCAL SQLITE WAL STORAGE                          │
+ │                                                                             │
+ │  ┌─────────────────────────────────┐   ┌─────────────────────────────────┐  │
+ │  │        orders table (WAL)       │   │       _sync_outbox table        │  │
+ │  │  Stores pure JSON document      │   │  Queues pending mutation with   │  │
+ │  │  Local UI updates immediately!  │   │  Priority, SLA, and Headers     │  │
+ │  └─────────────────────────────────┘   └────────────────┬────────────────┘  │
+ └─────────────────────────────────────────────────────────┼───────────────────┘
+                                                           │
+                                                           ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                         3. CONNECTIVITY & FLAP GUARD                        │
+ │                                                                             │
+ │       [Offine?] ──► Safe in SQLite outbox until connection returns          │
+ │       [Online?] ──► Canary probe verifies true internet (no captive portal) │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                   4. MULTI-LANE CONSENSUS DISPATCHER                        │
+ │                                                                             │
+ │   • High Priority queues dispatch first (Critical ──► High ──► Normal)      │
+ │   • Parent entities send first; Child items await server parent ID          │
+ │   • 3-Way Auto-Merge protects concurrent server updates from overwrites     │
+ │   • Bad items (HTTP 422) quarantine to DLQ without blocking other queues    │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                    5. TRANSPORT LAYER (Standard REST / Dio)                 │
+ │                                                                             │
+ │        POST /orders • PUT /orders/:id • DELETE /orders/:id                  │
+ │        Pure domain JSON payload (zero metadata leaks to your server)        │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                          6. YOUR CLOUD REST API                             │
+ │           (Node.js, Python, Django, Go, Java, Spring Boot, etc.)            │
+ └─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 🧪 Verification & Stability
+## 🧪 Verification & Test Suite
 
-- **346 Passing Tests:** Unit tests, process crash durability, network failure injection, concurrency, Dio interceptor integration, ID harvesting, and real-world sync scenarios.
-- **Physical OS Kill Verified:** Verified across hard Android process terminations with dirty SQLite WAL.
-- **Zero Warnings:** Clean `flutter analyze`.
+- **346 Passing Tests (100% Green):** Complete test coverage across SQLite WAL persistence, crash durability, network failure injection, concurrency, and real-world sync scenarios.
+- **Automated Mock Test Server:** In-process test server boots automatically on `dart test` and stops on completion — zero manual setup required.
+- **Zero Warnings:** Clean `dart analyze` and clean `dart pub publish --dry-run`.
 
 ---
 
