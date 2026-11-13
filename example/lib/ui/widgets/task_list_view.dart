@@ -43,8 +43,9 @@ class TaskListView extends StatelessWidget {
         final uniqueMap = <String, OrbitRecord<Task>>{};
         for (final r in raw) {
           final id = r.data.id ?? r.data.title;
-          if (!uniqueMap.containsKey(id) || r.status != OrbitSyncStatus.synced)
+          if (!uniqueMap.containsKey(id) || r.status != OrbitSyncStatus.synced) {
             uniqueMap[id] = r;
+          }
         }
         final all = uniqueMap.values.toList()
           ..sort((a, b) => a.data.isDone != b.data.isDone
@@ -52,10 +53,12 @@ class TaskListView extends StatelessWidget {
               : b.data.createdAt.compareTo(a.data.createdAt));
         final active = all.where((r) => !r.data.isDone).length;
         final filtered = all.where((r) {
-          if (selectedFilter == TaskFilter.active && r.data.isDone)
+          if (selectedFilter == TaskFilter.active && r.data.isDone) {
             return false;
-          if (selectedFilter == TaskFilter.completed && !r.data.isDone)
+          }
+          if (selectedFilter == TaskFilter.completed && !r.data.isDone) {
             return false;
+          }
           return searchQuery.isEmpty ||
               r.data.title.toLowerCase().contains(searchQuery.toLowerCase());
         }).toList();

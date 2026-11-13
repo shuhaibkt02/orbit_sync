@@ -62,14 +62,17 @@ class _TaskScreenState extends State<TaskScreen> {
           endpoint: '/tasks',
           fromJson: Task.fromJson,
           toJson: (t) => t.toJson());
-      if (mounted)
+      if (mounted) {
         setState(() {
           _orbit = client;
           _tasks = table;
           _initError = null;
         });
+      }
     } catch (e) {
-      if (mounted) setState(() => _initError = e.toString());
+      if (mounted) {
+        setState(() => _initError = e.toString());
+      }
     }
   }
 

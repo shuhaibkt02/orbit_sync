@@ -381,7 +381,7 @@ class _SyncTelemetrySheetState extends State<SyncTelemetrySheet>
                             ),
                             CupertinoSwitch(
                               value: widget.client.simulateOffline,
-                              activeColor: AppleTheme.warning(context),
+                              activeTrackColor: AppleTheme.warning(context),
                               onChanged: (val) {
                                 HapticFeedback.selectionClick();
                                 setState(() {
