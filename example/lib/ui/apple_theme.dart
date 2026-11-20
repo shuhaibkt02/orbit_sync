@@ -5,6 +5,8 @@ class AppleTheme {
   // Apple System Palette
   static const Color systemBlue = Color(0xFF007AFF);
   static const Color systemBlueDark = Color(0xFF0A84FF);
+  static const Color accentBlue = systemBlue;
+  static const Color scaffoldBg = Color(0xFFF2F2F7);
 
   static const Color systemGreen = Color(0xFF34C759);
   static const Color systemGreenDark = Color(0xFF30D158);

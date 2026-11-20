@@ -28,7 +28,7 @@ class OrbitSyncExampleApp extends StatelessWidget {
         fontFamily: '.SF Pro Text',
         useMaterial3: true,
       ),
-      home: const TaskScreen(),
+      home: const ErpScreen(),
     );
   }
 }

@@ -117,6 +117,7 @@ class OrbitTable<T> {
     String? userId,
     String? dependsOnMutationId,
   }) async {
+    await _ensureTable();
     final rawMap = toJson(item);
     final targetId = id ??
         (rawMap[primaryKey] ?? rawMap['id'] ?? rawMap['_id'])?.toString() ??
