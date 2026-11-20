@@ -1,10 +1,10 @@
-# 🛰️ Orbit Sync
+# 🛰️ Orbit Sync: Offline Sync Engine for Flutter & SQLite
 
-### Make your Flutter app work 100% offline. Without the headaches.
+### Offline sync engine for Flutter apps. Zero-codegen offline-first synchronization with SQLite and REST APIs.
 
 Instant local saves (0ms). Zero loading spinners. Automatic background cloud sync with your existing REST API.
 
-[![pub package](https://img.shields.io/badge/pub.dev-orbit__sync%20v1.0.0-blue.svg)](https://pub.dev/packages/orbit_sync)
+[![pub package](https://img.shields.io/badge/pub.dev-orbit__sync%20v1.0.3-blue.svg)](https://pub.dev/packages/orbit_sync)
 [![test suite](https://img.shields.io/badge/tests-346%20passed%20(100%25)-brightgreen.svg)](https://github.com/shuhaibkt02/orbit_sync)
 [![license](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/shuhaibkt02/orbit_sync/blob/main/LICENSE)
 [![platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-teal.svg)](https://flutter.dev)
